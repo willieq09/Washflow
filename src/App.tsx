@@ -216,14 +216,12 @@ export default function App() {
                 active={view === 'dashboard'} 
                 onClick={() => setView('dashboard')} 
               />
-              {profile?.role === 'worker' && (
-                <NavItem 
-                  icon={<Plus size={20} />} 
-                  label="Log Wash" 
-                  active={view === 'log'} 
-                  onClick={() => setView('log')} 
-                />
-              )}
+              <NavItem 
+                icon={<Plus size={20} />} 
+                label="Log Wash" 
+                active={view === 'log'} 
+                onClick={() => setView('log')} 
+              />
               <NavItem 
                 icon={<Briefcase size={20} />} 
                 label="History" 
@@ -268,7 +266,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && profile && (
-              <DashboardView profile={profile} />
+              <DashboardView profile={profile} onLogWash={() => setView('log')} />
             )}
             {view === 'log' && profile && (
               <LogWashForm profile={profile} onComplete={() => setView('history')} />
@@ -473,7 +471,7 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 
 // --- View Components ---
 
-function DashboardView({ profile }: { profile: UserProfile }) {
+function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: () => void }) {
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
 
@@ -551,7 +549,10 @@ function DashboardView({ profile }: { profile: UserProfile }) {
         </div>
 
         {/* Action Card */}
-        <div className="md:col-span-1 bento-card bg-accent border-none flex flex-col items-center justify-center text-center cursor-pointer hover:bg-accent/90 active:scale-95 group">
+        <div 
+          onClick={onLogWash}
+          className="md:col-span-1 bento-card bg-accent border-none flex flex-col items-center justify-center text-center cursor-pointer hover:bg-accent/90 active:scale-95 group"
+        >
            <div className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white mb-3 group-hover:scale-110 transition">
              <Plus size={24} />
            </div>
