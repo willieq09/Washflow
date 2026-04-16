@@ -299,6 +299,10 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
+function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse bg-white/5 rounded-xl", className)} />;
+}
+
 function SyncStatus({ isOnline }: { isOnline: boolean }) {
   return (
     <div className={cn(
@@ -474,6 +478,7 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: () => void }) {
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const q = profile.role === 'owner' 
@@ -495,8 +500,33 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
         todayCount: todayWashes.length,
         totalCount: washes.length 
       });
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'washes'));
+      setLoading(false);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'washes');
+      setLoading(false);
+    });
   }, [profile]);
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <header className="flex justify-between items-end">
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <Skeleton className="h-8 w-32 rounded-full" />
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 h-[500px]">
+          <Skeleton className="md:col-span-2 md:row-span-1" />
+          <Skeleton className="md:col-span-1" />
+          <Skeleton className="md:col-span-1" />
+          <Skeleton className="md:col-span-2" />
+          <Skeleton className="md:col-span-2" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
@@ -786,8 +816,16 @@ function OwnerPerformanceView() {
   }, []);
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <div className="text-accent animate-pulse font-black uppercase tracking-widest">Aggregating Team Ledger...</div>
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+      <header className="space-y-3">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-4 w-96" />
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map(i => (
+          <Skeleton key={i} className="h-80 w-full" />
+        ))}
+      </div>
     </div>
   );
 
@@ -859,6 +897,7 @@ function OwnerPerformanceView() {
 function HistoryView({ profile }: { profile: UserProfile }) {
   const [washes, setWashes] = useState<WashJob[]>([]);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -887,6 +926,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 
     return onSnapshot(q, (snap) => {
       setWashes(snap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob)));
+      setLoading(false);
     });
   }, [profile]);
 
@@ -930,6 +970,25 @@ function HistoryView({ profile }: { profile: UserProfile }) {
       desc: prev.field === field ? !prev.desc : true
     }));
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-48 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto pb-20">
