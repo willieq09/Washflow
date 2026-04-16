@@ -9,7 +9,7 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc
 } from 'firebase/firestore';
 import { 
-  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2
+  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from './lib/utils';
@@ -794,9 +794,30 @@ function OwnerPerformanceView() {
 
 function HistoryView({ profile }: { profile: UserProfile }) {
   const [washes, setWashes] = useState<WashJob[]>([]);
+  const [workers, setWorkers] = useState<UserProfile[]>([]);
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    workerId: 'all',
+    status: 'all'
+  });
+  const [sort, setSort] = useState<{ field: 'timestamp' | 'price' | 'rating', desc: boolean }>({
+    field: 'timestamp',
+    desc: true
+  });
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
-    const q = profile.role === 'owner' 
+    if (profile.role === 'owner') {
+      const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+        setWorkers(snap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker'));
+      });
+      return () => unsubUsers();
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    let q = profile.role === 'owner' 
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
 
@@ -805,16 +826,161 @@ function HistoryView({ profile }: { profile: UserProfile }) {
     });
   }, [profile]);
 
+  const filteredAndSortedWashes = washes
+    .filter(wash => {
+      if (filters.workerId !== 'all' && wash.workerId !== filters.workerId) return false;
+      if (filters.status !== 'all' && wash.status !== filters.status) return false;
+      if (filters.startDate) {
+        const start = new Date(filters.startDate);
+        if (wash.timestamp?.toDate() < start) return false;
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+        if (wash.timestamp?.toDate() > end) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      let valA: any = a[sort.field];
+      let valB: any = b[sort.field];
+
+      if (sort.field === 'timestamp') {
+        valA = a.timestamp?.toDate().getTime() || 0;
+        valB = b.timestamp?.toDate().getTime() || 0;
+      }
+      
+      // Handle missing ratings
+      if (sort.field === 'rating') {
+        valA = a.rating || 0;
+        valB = b.rating || 0;
+      }
+
+      const comparison = valA > valB ? 1 : -1;
+      return sort.desc ? -comparison : comparison;
+    });
+
+  const toggleSort = (field: 'timestamp' | 'price' | 'rating') => {
+    setSort(prev => ({
+      field,
+      desc: prev.field === field ? !prev.desc : true
+    }));
+  };
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto">
-      <header className="mb-10">
-        <h2 className="text-4xl font-black text-white tracking-tight">Operational History</h2>
-        <p className="text-text-dim mt-2">Full ledger of service transactions.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto pb-20">
+      <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-4xl font-black text-white tracking-tight">Operational History</h2>
+          <p className="text-text-dim mt-2">Full ledger of service transactions.</p>
+        </div>
+        <button 
+          onClick={() => setIsFilterOpen(!isFilterOpen)}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl transition font-bold text-sm",
+            isFilterOpen ? "bg-accent text-white shadow-lg shadow-accent/20" : "bg-card text-text-dim border border-border hover:text-white"
+          )}
+        >
+          {isFilterOpen ? <X size={18} /> : <Filter size={18} />}
+          {isFilterOpen ? 'Close Controls' : 'Filter & Sort'}
+        </button>
       </header>
 
+      <AnimatePresence>
+        {isFilterOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+            animate={{ height: 'auto', opacity: 1, marginBottom: 40 }}
+            exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bento-card bg-card/50 backdrop-blur-sm border-accent/20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
+                  <Calendar size={12} /> Date Range
+                </label>
+                <div className="flex flex-col gap-2">
+                  <input 
+                    type="date" 
+                    value={filters.startDate}
+                    onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+                  />
+                  <input 
+                    type="date" 
+                    value={filters.endDate}
+                    onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+                  />
+                </div>
+              </div>
+
+              {profile.role === 'owner' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
+                    <Users size={12} /> Filter by Worker
+                  </label>
+                  <select 
+                    value={filters.workerId}
+                    onChange={e => setFilters(prev => ({ ...prev, workerId: e.target.value }))}
+                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent appearance-none"
+                  >
+                    <option value="all">All Workers</option>
+                    {workers.map(w => <option key={w.uid} value={w.uid}>{w.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
+                  <Gauge size={12} /> Sort Ledger
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'Date', field: 'timestamp' },
+                    { label: 'Price', field: 'price' },
+                    { label: 'Rating', field: 'rating' }
+                  ].map(s => (
+                    <button 
+                      key={s.field}
+                      onClick={() => toggleSort(s.field as any)}
+                      className={cn(
+                        "flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition",
+                        sort.field === s.field ? "bg-accent text-white" : "bg-bg text-text-dim border border-border hover:text-white"
+                      )}
+                    >
+                      {s.label}
+                      {sort.field === s.field && (sort.desc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-end">
+                <button 
+                  onClick={() => {
+                    setFilters({ startDate: '', endDate: '', workerId: 'all', status: 'all' });
+                    setSort({ field: 'timestamp', desc: true });
+                  }}
+                  className="w-full bg-bg border border-border text-text-dim hover:text-white py-2 rounded-lg text-xs font-bold transition"
+                >
+                  Reset Defaults
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="space-y-4">
-        {washes.map(wash => (
-          <div key={wash.id} className="bento-card">
+        {filteredAndSortedWashes.map(wash => (
+          <motion.div 
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            key={wash.id} 
+            className="bento-card"
+          >
             <div className="flex justify-between items-start mb-6">
               <div className="flex gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent">
@@ -828,9 +994,18 @@ function HistoryView({ profile }: { profile: UserProfile }) {
               </div>
               <div className="text-right">
                 <p className="text-2xl font-black text-white tracking-tighter">{formatCurrency(wash.price)}</p>
-                <span className="inline-block px-3 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-md mt-3 tracking-widest border border-success/20">
-                  {wash.status}
-                </span>
+                <div className="flex flex-col items-end gap-2 mt-2">
+                  <span className="inline-block px-3 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-md tracking-widest border border-success/20">
+                    {wash.status}
+                  </span>
+                  {wash.rating && (
+                    <div className="flex items-center gap-1 text-yellow-400">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} size={10} fill={i < wash.rating! ? "currentColor" : "none"} strokeWidth={3} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -855,11 +1030,11 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                 <span className="bg-white/5 px-2 py-0.5 rounded">ID: {wash.id.slice(0, 8)}</span>
               </div>
             )}
-          </div>
+          </motion.div>
         ))}
-        {washes.length === 0 && (
+        {filteredAndSortedWashes.length === 0 && (
           <div className="bento-card text-center py-20 border-dashed">
-            <p className="text-text-dim italic">No service history found.</p>
+            <p className="text-text-dim italic">No service history found matching current filters.</p>
           </div>
         )}
       </div>
