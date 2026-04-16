@@ -84,6 +84,7 @@ export default function App() {
   const [user, setUser] = useState(auth.currentUser);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance'>('dashboard');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -101,38 +102,50 @@ export default function App() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        const docRef = doc(db, 'users', u.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
+      try {
+        setUser(u);
+        if (u) {
+          const docRef = doc(db, 'users', u.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data() as UserProfile);
+          } else {
+            const isOwnerEmail = u.email === 'oumawillis09@gmail.com';
+            const newProfile: UserProfile = {
+              uid: u.uid,
+              name: u.displayName || 'Anonymous User',
+              email: u.email || '',
+              role: isOwnerEmail ? 'owner' : 'worker',
+              photoUrl: u.photoURL || undefined
+            };
+            await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
+            setProfile(newProfile);
+          }
         } else {
-          // New user logic - defaults to worker unless it matches the owner email
-          const isOwnerEmail = u.email === 'oumawillis09@gmail.com';
-          const newProfile: UserProfile = {
-            uid: u.uid,
-            name: u.displayName || 'Anonymous User',
-            email: u.email || '',
-            role: isOwnerEmail ? 'owner' : 'worker',
-            photoUrl: u.photoURL || undefined
-          };
-          await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
-          setProfile(newProfile);
+          setProfile(null);
         }
-      } else {
-        setProfile(null);
+      } catch (error) {
+        console.error("Auth handler error:", error);
+      } finally {
+        setLoading(false);
+        setAuthLoading(false);
       }
-      setLoading(false);
     });
   }, []);
 
   const login = async () => {
+    setAuthLoading(true);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      setAuthLoading(false);
+      if (error.code === 'auth/popup-blocked') {
+        alert("Authentication failed because the login popup was blocked by your browser. Please enable popups or try a different browser.");
+      } else {
+        alert("Authentication failed: " + (error.message || "Unknown error"));
+      }
     }
   };
 
@@ -161,7 +174,7 @@ export default function App() {
     );
   }
 
-  if (!user) return <LandingPage onLogin={login} />;
+  if (!user) return <LandingPage onLogin={login} authLoading={authLoading} />;
 
   return (
     <ErrorBoundary>
@@ -363,7 +376,7 @@ function CustomerRatingView({ jobId }: { jobId: string }) {
   );
 }
 
-function LandingPage({ onLogin }: { onLogin: () => void }) {
+function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoading: boolean }) {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-white text-center">
       <motion.div 
@@ -383,11 +396,26 @@ function LandingPage({ onLogin }: { onLogin: () => void }) {
         </p>
         <button 
           onClick={onLogin}
-          className="bg-white text-bg px-10 py-5 rounded-2xl font-black flex items-center gap-4 mx-auto hover:bg-accent hover:text-white transition-all shadow-xl active:scale-95 text-lg"
+          disabled={authLoading}
+          className="bg-white text-bg px-10 py-5 rounded-2xl font-black flex items-center gap-4 mx-auto hover:bg-accent hover:text-white transition-all shadow-xl active:scale-95 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <img src="https://www.google.com/favicon.ico" className="w-6 h-6" />
-          Authenticate Session
+          {authLoading ? (
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
+              <span>Authenticating...</span>
+            </div>
+          ) : (
+            <>
+              <img src="https://www.google.com/favicon.ico" className="w-6 h-6" />
+              Authenticate Session
+            </>
+          )}
         </button>
+        {authLoading && (
+          <p className="mt-4 text-xs text-accent font-bold animate-pulse">
+            If the popup doesn't appear, check your browser's address bar for blocked popups.
+          </p>
+        )}
         
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
           <FeatureCard title="Transparency" desc="Stop revenue leakage. Every wash is recorded instantly." />
