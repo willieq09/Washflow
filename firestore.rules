@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (owner|worker) (required)
+    //   - photoUrl: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: washes
+    // Document ID: {id}
+    // Fields:
+    //   - workerId: string (required)
+    //   - workerName: string (optional)
+    //   - carModel: string (optional)
+    //   - plateNumber: string (optional)
+    //   - price: number (required, positive)
+    //   - timestamp: timestamp (required)
+    //   - status: string (completed) (required)
+    //   - rating: number (optional, 1-5)
+    //   - review: string (optional, max 500 chars)
+    //   - maintenanceTip: string (optional)
+    //
+    // Collection: incentives
+    // Document ID: {id}
+    // Fields:
+    //   - workerId: string (required)
+    //   - washId: string (optional)
+    //   - amount: number (required, positive)
+    //   - reason: string (required)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAppOwner() {
+      return isAuthenticated() && 
+             (getUserRole() == 'owner' || 
+              (request.auth.token.email == 'oumawillis09@gmail.com' && request.auth.token.email_verified == true));
+    }
+
+    function isWorker() {
+      return isAuthenticated() && getUserRole() == 'worker';
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
+             data.uid is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['owner', 'worker'];
+    }
+
+    function isValidWash(data) {
+      return data.keys().hasAll(['workerId', 'price', 'timestamp', 'status']) &&
+             data.workerId is string &&
+             data.price is number && data.price >= 0 &&
+             data.status == 'completed' &&
+             (!('rating' in data) || (data.rating is number && data.rating >= 1 && data.rating <= 5)) &&
+             (!('review' in data) || (data.review is string && data.review.size() <= 500));
+    }
+
+    function isValidIncentive(data) {
+      return data.keys().hasAll(['workerId', 'amount', 'reason', 'timestamp']) &&
+             data.workerId is string &&
+             data.amount is number && data.amount > 0 &&
+             data.reason is string && data.reason.size() > 0;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAppOwner());
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'worker' || request.auth.token.email == 'oumawillis09@gmail.com');
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+    }
+
+    match /washes/{washId} {
+      allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner());
+      allow get: if true; // Allow customers to view a specific job to rate it
+      
+      allow create: if isAuthenticated() && (isWorker() || isAppOwner()) && isValidWash(request.resource.data) && request.resource.data.workerId == request.auth.uid;
+      allow update: if isAppOwner() || 
+                    (isAuthenticated() && resource.data.workerId == request.auth.uid && isValidWash(request.resource.data)) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'review']) && 
+                     !('rating' in resource.data)); // Allow one-time public rating
+    }
+
+    match /incentives/{id} {
+      allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner());
+      allow create: if isAppOwner() && isValidIncentive(request.resource.data);
+      allow delete: if isAppOwner();
+    }
+  }
+}

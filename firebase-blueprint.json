@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User account information including role and display details.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique identifier." },
+        "name": { "type": "string", "description": "Display name of the user." },
+        "email": { "type": "string", "description": "Email address of the user." },
+        "role": { "type": "string", "enum": ["owner", "worker"], "description": "Role determining access levels." },
+        "photoUrl": { "type": "string", "description": "Profile picture URL." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "WashJob": {
+      "title": "Wash Job",
+      "description": "Details of a single car wash transaction.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the job." },
+        "workerId": { "type": "string", "description": "UID of the worker who performed the job." },
+        "workerName": { "type": "string", "description": "Name of the worker for quick display." },
+        "carModel": { "type": "string", "description": "Model of the car washed." },
+        "plateNumber": { "type": "string", "description": "Plate number of the car for transparency." },
+        "price": { "type": "number", "description": "Amount charged for the wash." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the job was logged." },
+        "status": { "type": "string", "enum": ["completed"], "description": "Status of the job." },
+        "rating": { "type": "number", "description": "Customer rating from 1 to 5." },
+        "review": { "type": "string", "description": "Optional customer review comment." },
+        "maintenanceTip": { "type": "string", "description": "AI-generated tip for the customer's car." }
+      },
+      "required": ["workerId", "price", "timestamp", "status"]
+    },
+    "Incentive": {
+      "title": "Incentive",
+      "description": "Bonus payments to workers based on performance.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier." },
+        "workerId": { "type": "string", "description": "UID of the worker receiving the incentive." },
+        "washId": { "type": "string", "description": "Reference to the wash job that triggered it." },
+        "amount": { "type": "number", "description": "Bonus amount." },
+        "reason": { "type": "string", "description": "Reason for the incentive (e.g., 'High Rating', 'Job Count Milestone')." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the incentive was awarded." }
+      },
+      "required": ["workerId", "amount", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents stored by UID."
+    },
+    "/washes/{id}": {
+      "schema": "WashJob",
+      "description": "Car wash records."
+    },
+    "/incentives/{id}": {
+      "schema": "Incentive",
+      "description": "Performance bonuses records."
+    }
+  }
+}
