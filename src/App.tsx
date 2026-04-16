@@ -3,7 +3,12 @@ import {
   auth, db, OperationType, handleFirestoreError 
 } from './lib/firebase';
 import { 
-  signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { 
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc
@@ -136,16 +141,31 @@ export default function App() {
   const login = async () => {
     setAuthLoading(true);
     const provider = new GoogleAuthProvider();
+    // Force select_account to ensure the popup requires explicit interaction
+    provider.setCustomParameters({ prompt: 'select_account' });
+    
     try {
-      await signInWithPopup(auth, provider);
+      // Ensure local persistence is set before login
+      await setPersistence(auth, browserLocalPersistence);
+      const result = await signInWithPopup(auth, provider);
+      console.log("Manual authentication success:", result.user.email);
     } catch (error: any) {
       console.error("Login failed:", error);
       setAuthLoading(false);
+      
+      let message = "Authentication failed. ";
+      
       if (error.code === 'auth/popup-blocked') {
-        alert("Authentication failed because the login popup was blocked by your browser. Please enable popups or try a different browser.");
+        message += "The login popup was blocked by your browser. Please enable popups and try again.";
+      } else if (error.code === 'auth/unauthorized-domain') {
+        message += "This domain is not authorized in your Firebase console. Please add 'run.app' and your specific App URL to the Authorized Domains list in Firebase Authentication settings.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        message += "The login window was closed before completion.";
       } else {
-        alert("Authentication failed: " + (error.message || "Unknown error"));
+        message += error.message || "Unknown error";
       }
+      
+      alert(message);
     }
   };
 
@@ -412,9 +432,24 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
           )}
         </button>
         {authLoading && (
-          <p className="mt-4 text-xs text-accent font-bold animate-pulse">
-            If the popup doesn't appear, check your browser's address bar for blocked popups.
-          </p>
+          <div className="mt-8 p-6 bg-accent/10 border border-accent/20 rounded-2xl max-w-lg mx-auto">
+            <p className="text-sm text-accent font-black animate-pulse mb-4 tracking-wide uppercase">
+              Authentication in progress...
+            </p>
+            <div className="text-left space-y-3">
+              <p className="text-xs text-text-dim leading-relaxed">
+                <span className="text-white font-bold">1. Blocked Popup?</span> Check your browser's address bar for a "popup blocked" icon and permit it.
+              </p>
+              <p className="text-xs text-text-dim leading-relaxed">
+                <span className="text-white font-bold">2. Iframe Restricted?</span> If the popup closes immediately, try opening the app in a 
+                <span className="text-white font-bold"> New Tab</span> using the icon in the top right of the preview.
+              </p>
+              <p className="text-xs text-text-dim leading-relaxed font-mono">
+                <span className="text-white font-bold">3. Authorized Domain?</span> Ensure <code className="bg-white/10 px-1 rounded">run.app</code> is added to the 
+                Authorized Domains in your Firebase Auth settings.
+              </p>
+            </div>
+          </div>
         )}
         
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">

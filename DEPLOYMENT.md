@@ -16,6 +16,7 @@ Vercel is the easiest for React apps. We have already prepared a `vercel.json` f
 2.  Set the **Framework Preset** to **Vite**.
 3.  Add the `GEMINI_API_KEY` in the **Environment Variables** section.
 4.  Click **Deploy**.
+5.  **CRITICAL**: Copy your Vercel URL (e.g., `washflow.vercel.app`) and add it to **Firebase Console** -> **Authentication** -> **Settings** -> **Authorized Domains**.
 
 ---
 
