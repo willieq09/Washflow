@@ -14,11 +14,11 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc
 } from 'firebase/firestore';
 import { 
-  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X
+  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from './lib/utils';
-import { getMaintenanceTip } from './services/geminiService';
+import { getMaintenanceTip, scanVehicleInfo } from './services/geminiService';
 
 // --- Types ---
 interface UserProfile {
@@ -299,8 +299,8 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse bg-white/5 rounded-xl", className)} />;
+function Skeleton({ className, ...props }: { className?: string; [key: string]: any }) {
+  return <div className={cn("animate-pulse bg-white/5 rounded-xl", className)} {...props} />;
 }
 
 function SyncStatus({ isOnline }: { isOnline: boolean }) {
@@ -647,6 +647,66 @@ function LogWashForm({ profile, onComplete }: { profile: UserProfile, onComplete
   const [form, setForm] = useState({ carModel: '', plateNumber: '', price: '20' });
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  const startCamera = async () => {
+    setCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      alert("Could not access camera. Please check permissions.");
+      setCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setCameraActive(false);
+  };
+
+  const captureAndScan = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsScanning(true);
+    const context = canvasRef.current.getContext('2d');
+    if (context) {
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      context.drawImage(videoRef.current, 0, 0);
+      
+      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
+      
+      try {
+        const result = await scanVehicleInfo(base64Image);
+        if (result.plate || result.vehicle) {
+          setForm(prev => ({
+            ...prev,
+            carModel: result.vehicle || prev.carModel,
+            plateNumber: result.plate || prev.plateNumber
+          }));
+          stopCamera();
+        } else {
+          alert("Could not detect vehicle info. Please try again or enter manually.");
+        }
+      } catch (error) {
+        alert("Scan failed. Please ensure you have a clear view of the plate.");
+      } finally {
+        setIsScanning(false);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -725,6 +785,60 @@ function LogWashForm({ profile, onComplete }: { profile: UserProfile, onComplete
       </header>
 
       <form onSubmit={handleSubmit} className="bento-card space-y-6">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={cameraActive ? stopCamera : startCamera}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition",
+              cameraActive ? "bg-red-500/10 text-red-500" : "bg-accent/10 text-accent"
+            )}
+          >
+            {cameraActive ? <X size={14} /> : <Camera size={14} />}
+            {cameraActive ? "Cancel Scan" : "Scan Plate (AI)"}
+          </button>
+        </div>
+
+        {cameraActive && (
+          <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border-2 border-accent/20">
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            
+            <div className="absolute inset-0 border-2 border-accent/40 rounded-2xl m-8 pointer-events-none">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-accent rounded-tl-lg" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-accent rounded-tr-lg" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-accent rounded-bl-lg" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-accent rounded-br-lg" />
+            </div>
+
+            <div className="absolute bottom-4 left-0 right-0 px-4">
+              <button
+                type="button"
+                disabled={isScanning}
+                onClick={captureAndScan}
+                className="w-full bg-accent text-white font-black py-3 rounded-xl shadow-2xl flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isScanning ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={18} />
+                    Analyzing Image...
+                  </>
+                ) : (
+                  <>
+                    <Camera size={18} />
+                    Capture & Identify
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-2">Car Model</label>
           <input 
