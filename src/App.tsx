@@ -14,7 +14,7 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc
 } from 'firebase/firestore';
 import { 
-  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw
+  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from './lib/utils';
@@ -27,6 +27,7 @@ interface UserProfile {
   role: 'owner' | 'worker';
   email: string;
   photoUrl?: string;
+  plan?: 'starter' | 'standard' | 'elite';
 }
 
 interface WashJob {
@@ -91,7 +92,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance' | 'billing'>('dashboard');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
 
@@ -153,6 +154,19 @@ export default function App() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const plan = params.get('plan') as 'starter' | 'standard' | 'elite';
+    
+    if (success === 'true' && plan && profile && profile.role === 'owner') {
+      updateDoc(doc(db, 'users', profile.uid), { plan }).then(() => {
+        setProfile(prev => prev ? { ...prev, plan } : null);
+        window.history.replaceState({}, '', window.location.pathname);
+      });
+    }
+  }, [profile]);
 
   const login = async () => {
     setAuthLoading(true);
@@ -245,12 +259,26 @@ export default function App() {
                 onClick={() => setView('history')} 
               />
               {profile?.role === 'owner' && (
-                <NavItem 
-                  icon={<Users size={20} />} 
-                  label="Team" 
-                  active={view === 'performance'} 
-                  onClick={() => setView('performance')} 
-                />
+                <>
+                  <NavItem 
+                    icon={<Users size={20} />} 
+                    label="Team" 
+                    active={view === 'performance'} 
+                    onClick={() => {
+                      if (profile.plan === 'standard' || profile.plan === 'elite') {
+                        setView('performance');
+                      } else {
+                        setView('billing');
+                      }
+                    }} 
+                  />
+                  <NavItem 
+                    icon={<CreditCard size={20} />} 
+                    label="Subscription" 
+                    active={view === 'billing'} 
+                    onClick={() => setView('billing')} 
+                  />
+                </>
               )}
             </div>
           </div>
@@ -285,13 +313,16 @@ export default function App() {
               <DashboardView profile={profile} onLogWash={() => setView('log')} />
             )}
             {view === 'log' && profile && (
-              <LogWashForm profile={profile} onComplete={() => setView('history')} />
+              <LogWashForm profile={profile} onComplete={() => setView('history')} setView={setView} />
             )}
             {view === 'history' && profile && (
               <HistoryView profile={profile} />
             )}
             {view === 'performance' && profile?.role === 'owner' && (
               <OwnerPerformanceView />
+            )}
+            {view === 'billing' && profile?.role === 'owner' && (
+              <SubscriptionView profile={profile} />
             )}
           </AnimatePresence>
         </main>
@@ -700,7 +731,142 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode, label:
   );
 }
 
-function LogWashForm({ profile, onComplete }: { profile: UserProfile, onComplete: () => void }) {
+function SubscriptionView({ profile }: { profile: UserProfile }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleSubscribe = async (plan: 'starter' | 'standard' | 'elite') => {
+    setLoading(plan);
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan,
+          userId: profile.uid,
+          userEmail: profile.email
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Checkout failed");
+      }
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const tiers = [
+    {
+      id: 'starter',
+      name: 'Starter',
+      price: '$19',
+      description: 'Perfect for solo operators logging basic traffic.',
+      features: ['Real-time Log Sync', 'Worker Dashboards', 'Customer Rating Links', 'Offline Queue Mode'],
+      color: 'bg-white/5',
+      icon: <Zap size={24} className="text-white/40" />
+    },
+    {
+      id: 'standard',
+      name: 'Professional',
+      price: '$49',
+      description: 'The standard for growing wash stations.',
+      features: ['Everything in Starter', 'AI Maintenance Tips', 'Team Performance Ledger', 'Incentive Tracking'],
+      color: 'bg-accent/10 border-accent/40',
+      icon: <Sparkles size={24} className="text-accent" />,
+      popular: true
+    },
+    {
+      id: 'elite',
+      name: 'Elite',
+      price: '$99',
+      description: 'Total automation for high-volume enterprises.',
+      features: ['Everything in Pro', 'AI License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
+      color: 'bg-white text-bg',
+      icon: <ShieldCheck size={24} className="text-bg" />
+    }
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto pb-20">
+      <header className="text-center mb-16">
+        <h2 className="text-5xl font-black text-white tracking-tighter uppercase mb-4">Scale Your Flow.</h2>
+        <p className="text-text-dim text-lg">Choose a plan that matches your business velocity.</p>
+        <div className="mt-8 inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-accent/20">
+          <Sparkles size={14} />
+          Your current plan: {profile.plan || 'Free Trial (Starter)'}
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {tiers.map((tier) => (
+          <div 
+            key={tier.id} 
+            className={cn(
+              "p-8 rounded-[2rem] border relative flex flex-col",
+              tier.color,
+              tier.id !== 'elite' ? "border-border" : "border-transparent"
+            )}
+          >
+            {tier.popular && (
+              <div className="absolute top-0 right-8 -translate-y-1/2 bg-accent text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                Most Popular
+              </div>
+            )}
+            
+            <div className="mb-8">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center mb-6",
+                tier.id === 'elite' ? "bg-bg" : "bg-bg/50"
+              )}>
+                {tier.icon}
+              </div>
+              <h3 className={cn("text-2xl font-black mb-2 uppercase", tier.id === 'elite' ? "text-bg" : "text-white")}>{tier.name}</h3>
+              <div className="flex items-baseline gap-1">
+                <span className={cn("text-4xl font-black", tier.id === 'elite' ? "text-bg" : "text-white")}>{tier.price}</span>
+                <span className={cn("text-sm font-bold opacity-60", tier.id === 'elite' ? "text-bg" : "text-white")}>/MO</span>
+              </div>
+              <p className={cn("mt-4 text-sm leading-relaxed", tier.id === 'elite' ? "text-bg/70" : "text-text-dim lowercase")}>{tier.description}</p>
+            </div>
+
+            <ul className="space-y-4 mb-10 flex-1">
+              {tier.features.map((feature, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  <Check size={16} className={cn(tier.id === 'elite' ? "text-bg" : "text-accent")} />
+                  <span className={cn("text-sm font-medium", tier.id === 'elite' ? "text-bg" : "text-white/80")}>{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              onClick={() => handleSubscribe(tier.id as any)}
+              disabled={loading !== null || profile.plan === tier.id}
+              className={cn(
+                "w-full py-4 rounded-2xl font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50 disabled:active:scale-100",
+                tier.id === 'elite' 
+                  ? "bg-bg text-white hover:bg-accent" 
+                  : "bg-white text-bg hover:bg-accent hover:text-white"
+              )}
+            >
+              {loading === tier.id ? "Initialising..." : profile.plan === tier.id ? "Current Plan" : `Select ${tier.name}`}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-20 text-center">
+        <p className="text-text-dim text-sm max-w-lg mx-auto leading-relaxed">
+          Secure billing powered by <span className="text-white font-bold">Stripe</span>. 
+          Plans can be cancelled or upgraded at any time from your dashboard.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, onComplete: () => void, setView: (v: any) => void }) {
   const [form, setForm] = useState({ carModel: '', plateNumber: '', price: '20' });
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
@@ -710,6 +876,10 @@ function LogWashForm({ profile, onComplete }: { profile: UserProfile, onComplete
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   const startCamera = async () => {
+    if (profile.plan !== 'elite') {
+      setView('billing');
+      return;
+    }
     setCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -770,7 +940,10 @@ function LogWashForm({ profile, onComplete }: { profile: UserProfile, onComplete
     setSubmitting(true);
     
     try {
-      const tip = await getMaintenanceTip(form.carModel);
+      const tip = (profile.plan === 'standard' || profile.plan === 'elite')
+        ? await getMaintenanceTip(form.carModel)
+        : "Regular washing keeps your vehicle looking pristine!";
+        
       const washData = {
         workerId: profile.uid,
         workerName: profile.name,
