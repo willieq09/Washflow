@@ -41,6 +41,7 @@ interface WashJob {
   rating?: number;
   review?: string;
   maintenanceTip?: string;
+  isPending?: boolean;
 }
 
 interface Incentive {
@@ -92,8 +93,23 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance'>('dashboard');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingSync, setPendingSync] = useState(0);
 
   const rateJobId = new URLSearchParams(window.location.search).get('rate');
+
+  useEffect(() => {
+    if (!user) {
+      setPendingSync(0);
+      return;
+    }
+    
+    // Track pending writes in the foreground
+    const q = query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(20));
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      const pending = snap.docs.filter(doc => doc.metadata.hasPendingWrites).length;
+      setPendingSync(pending);
+    });
+  }, [user]);
 
   useEffect(() => {
     const handleStatus = () => setIsOnline(navigator.onLine);
@@ -249,7 +265,7 @@ export default function App() {
             </div>
             
             <div className="px-2 mb-4">
-              <SyncStatus isOnline={isOnline} />
+              <SyncStatus isOnline={isOnline} pendingCount={pendingSync} />
             </div>
 
             <button 
@@ -303,14 +319,48 @@ function Skeleton({ className, ...props }: { className?: string; [key: string]: 
   return <div className={cn("animate-pulse bg-white/5 rounded-xl", className)} {...props} />;
 }
 
-function SyncStatus({ isOnline }: { isOnline: boolean }) {
+function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCount: number }) {
+  const isSyncing = pendingCount > 0;
+  
   return (
     <div className={cn(
-      "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border",
-      isOnline ? "bg-success/5 text-success border-success/20" : "bg-red-500/5 text-red-500 border-red-500/20"
+      "flex flex-col gap-2 p-3 rounded-xl border transition-all duration-300",
+      !isOnline 
+        ? "bg-red-500/10 border-red-500/20" 
+        : isSyncing 
+          ? "bg-accent/10 border-accent/20" 
+          : "bg-success/5 border-success/20"
     )}>
-      <div className={cn("w-2 h-2 rounded-full animate-pulse", isOnline ? "bg-success" : "bg-red-500")} />
-      {isOnline ? "System Online" : "Working Offline"}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            !isOnline ? "bg-red-500 animate-pulse" : isSyncing ? "bg-accent animate-spin" : "bg-success"
+          )} />
+          <span className={cn(
+            "text-[10px] font-black uppercase tracking-widest",
+            !isOnline ? "text-red-500" : isSyncing ? "text-accent" : "text-success"
+          )}>
+            {!isOnline ? "Offline Mode" : isSyncing ? "Syncing..." : "Synced"}
+          </span>
+        </div>
+        {pendingCount > 0 && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+            {pendingCount}
+          </span>
+        )}
+      </div>
+      
+      {!isOnline && (
+        <p className="text-[9px] text-red-500/70 font-medium leading-tight">
+          Logs are being queued locally and will sync when reconnected.
+        </p>
+      )}
+      {isOnline && isSyncing && (
+        <p className="text-[9px] text-accent/70 font-medium leading-tight">
+          Uploading queued data to the ledger...
+        </p>
+      )}
     </div>
   );
 }
@@ -485,8 +535,12 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(50))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(50));
 
-    return onSnapshot(q, (snap) => {
-      const washes = snap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob));
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      const washes = snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(), 
+        isPending: d.metadata.hasPendingWrites 
+      } as WashJob));
       setRecentWashes(washes.slice(0, 10));
       
       const today = new Date();
@@ -613,12 +667,15 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
             {recentWashes.slice(0, 3).map(wash => (
               <div key={wash.id} className="flex items-center justify-between text-sm group">
                 <div className="flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 bg-accent rounded-full" />
+                  <div className={cn("w-1.5 h-1.5 rounded-full", wash.isPending ? "bg-accent animate-pulse" : "bg-accent")} />
                   <span className="font-medium">{wash.carModel}</span>
                   <span className="text-text-dim text-xs select-none">•</span>
                   <span className="text-text-dim text-xs font-mono">{wash.plateNumber}</span>
+                  {wash.isPending && <RefreshCw size={10} className="text-accent animate-spin" />}
                 </div>
-                <span className="text-xs text-text-dim group-hover:text-white transition">{wash.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-xs text-text-dim group-hover:text-white transition">
+                  {wash.isPending ? "Queued" : wash.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             ))}
             {recentWashes.length === 0 && (
@@ -1038,8 +1095,12 @@ function HistoryView({ profile }: { profile: UserProfile }) {
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
 
-    return onSnapshot(q, (snap) => {
-      setWashes(snap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob)));
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      setWashes(snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        isPending: d.metadata.hasPendingWrites 
+      } as WashJob)));
       setLoading(false);
     });
   }, [profile]);
@@ -1232,9 +1293,16 @@ function HistoryView({ profile }: { profile: UserProfile }) {
               <div className="text-right">
                 <p className="text-2xl font-black text-white tracking-tighter">{formatCurrency(wash.price)}</p>
                 <div className="flex flex-col items-end gap-2 mt-2">
-                  <span className="inline-block px-3 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-md tracking-widest border border-success/20">
-                    {wash.status}
-                  </span>
+                  {wash.isPending ? (
+                    <div className="flex items-center gap-1.5 text-accent animate-pulse font-black text-[8px] uppercase tracking-widest bg-accent/5 px-2 py-1 rounded border border-accent/20">
+                      <RefreshCw size={8} className="animate-spin" /> 
+                      Queued for Sync
+                    </div>
+                  ) : (
+                    <span className="inline-block px-3 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-md tracking-widest border border-success/20">
+                      {wash.status}
+                    </span>
+                  )}
                   {wash.rating && (
                     <div className="flex items-center gap-1 text-yellow-400">
                       {[...Array(5)].map((_, i) => (
