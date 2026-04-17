@@ -11,7 +11,7 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { 
-  doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc
+  doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
   Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
@@ -32,7 +32,7 @@ interface UserProfile {
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
-  vehicles?: { make: string; model: string; year: string; intensity: 'low' | 'high' }[];
+  vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
 }
 
 interface Business {
@@ -386,7 +386,7 @@ export default function App() {
             {view === 'settings' && profile?.role === 'owner' && (
               <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
-            {view === 'my-cars' && <CustomerVehicleView profile={profile!} />}
+            {view === 'my-cars' && <CustomerVehicleView profile={profile!} onUpdate={(p) => setProfile(p)} />}
           </AnimatePresence>
         </main>
       </div>
@@ -813,7 +813,10 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
 }
 
 function RoleSelection({ uid, name, email }: { uid: string, name: string, email: string }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
   const setRole = async (role: 'owner' | 'customer' | 'worker') => {
+    setLoading(role);
     try {
       await setDoc(doc(db, 'users', uid), {
         uid,
@@ -823,56 +826,114 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
         createdAt: serverTimestamp(),
         plan: role === 'owner' ? 'starter' : undefined
       }, { merge: true });
-      window.location.reload();
-    } catch (error) {
+      
+      // We use a small delay and a reload to ensure Firestore syncs 
+      // and the auth state refresh picks up the new document.
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (error: any) {
       console.error("Role Error:", error);
+      alert(`Could not set role: ${error.message}`);
+      setLoading(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-6">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-6">
-        <RoleCard 
-          icon={<Briefcase size={40} />} 
-          title="Business Owner" 
-          desc="Manage stations, workers, and track SaaS performance."
-          onClick={() => setRole('owner')}
-        />
-        <RoleCard 
-          icon={<Car size={40} />} 
-          title="Car Owner" 
-          desc="Track car health, get AI maintenance tips, and find top washes."
-          onClick={() => setRole('customer')}
-          highlight
-        />
-        <RoleCard 
-          icon={<Users size={40} />} 
-          title="Wash Worker" 
-          desc="Log washes, scan plates, and track your performance bonuses."
-          onClick={() => setRole('worker')}
-        />
+    <div className="min-h-screen bg-bg flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
+      
+      <div className="max-w-6xl w-full z-10">
+        <header className="text-center mb-16">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 px-4 py-2 rounded-full mb-6"
+          >
+            <Sparkles size={14} className="text-accent" />
+            <span className="text-[10px] font-black uppercase text-accent tracking-widest">Identify Your Role</span>
+          </motion.div>
+          <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase mb-4 leading-none">
+            Choose Your <br />
+            <span className="text-accent">Operation Mode.</span>
+          </h2>
+          <p className="text-text-dim max-w-lg mx-auto lowercase font-medium">Select the path that matches your position in the vehicle transparency ecosystem.</p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <RoleCard 
+            icon={<Briefcase size={40} />} 
+            title="Business Owner" 
+            desc="Manage stations, monitor teams, and scale your wash empire with AI insight."
+            onClick={() => setRole('owner')}
+            loading={loading === 'owner'}
+            disabled={loading !== null}
+          />
+          <RoleCard 
+            icon={<Car size={40} />} 
+            title="Car Owner" 
+            desc="Personalized maintenance logs, AI health alerts, and verified wash history."
+            onClick={() => setRole('customer')}
+            loading={loading === 'customer'}
+            disabled={loading !== null}
+            highlight
+          />
+          <RoleCard 
+            icon={<Users size={40} />} 
+            title="Wash Worker" 
+            desc="Log jobs instantly, verify plates, and track your performance rewards."
+            onClick={() => setRole('worker')}
+            loading={loading === 'worker'}
+            disabled={loading !== null}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function RoleCard({ icon, title, desc, onClick, highlight }: { icon: any, title: string, desc: string, onClick: () => void, highlight?: boolean }) {
+function RoleCard({ icon, title, desc, onClick, highlight, loading, disabled }: { icon: any, title: string, desc: string, onClick: () => void, highlight?: boolean, loading?: boolean, disabled?: boolean }) {
   return (
     <motion.button
-      whileHover={{ y: -10 }}
+      whileHover={!disabled ? { y: -10, scale: 1.02 } : {}}
+      whileTap={!disabled ? { scale: 0.98 } : {}}
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "p-8 rounded-[2.5rem] border text-left flex flex-col items-start transition-all duration-500",
-        highlight ? "bg-white border-transparent text-bg" : "bg-card border-border text-white hover:border-accent/40"
+        "group p-10 rounded-[3rem] border text-left flex flex-col items-start transition-all duration-500 relative overflow-hidden",
+        highlight 
+          ? "bg-white border-transparent text-bg shadow-2xl shadow-white/10" 
+          : "bg-card border-border text-white hover:border-accent/40",
+        disabled && "opacity-50 cursor-not-allowed"
       )}
     >
-      <div className={cn("w-20 h-20 rounded-3xl flex items-center justify-center mb-10", highlight ? "bg-bg text-white" : "bg-white/5 text-accent")}>
+      {loading && (
+        <div className="absolute inset-0 bg-accent/20 backdrop-blur-sm flex items-center justify-center z-20">
+          <RefreshCw className="w-10 h-10 text-white animate-spin" />
+        </div>
+      )}
+      
+      <div className={cn(
+        "w-24 h-24 rounded-[2rem] flex items-center justify-center mb-12 transition-transform duration-500 group-hover:rotate-6", 
+        highlight ? "bg-bg text-white" : "bg-white/5 text-accent"
+      )}>
         {icon}
       </div>
-      <h3 className="text-2xl font-black mb-4 uppercase tracking-tighter">{title}</h3>
-      <p className={cn("text-sm leading-relaxed mb-8", highlight ? "text-bg/60" : "text-text-dim lowercase")}>{desc}</p>
-      <div className={cn("mt-auto flex items-center gap-2 text-xs font-black uppercase tracking-widest", highlight ? "text-accent" : "text-white")}>
-        Get Started <ChevronRight size={14} />
+      
+      <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter leading-none">{title}</h3>
+      <p className={cn(
+        "text-sm leading-relaxed mb-10 font-medium", 
+        highlight ? "text-bg/60" : "text-text-dim lowercase"
+      )}>
+        {desc}
+      </p>
+      
+      <div className={cn(
+        "mt-auto flex items-center gap-3 text-sm font-black uppercase tracking-widest", 
+        highlight ? "text-accent" : "text-white group-hover:text-accent transition-colors"
+      )}>
+        initialize system <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
       </div>
     </motion.button>
   );
@@ -1023,16 +1084,39 @@ function AIProactiveSchedule({ vehicle, washHistoryCount }: { vehicle: any, wash
   );
 }
 
-function CustomerVehicleView({ profile }: { profile: UserProfile }) {
+function CustomerVehicleView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
+  const [showAdd, setShowAdd] = useState(false);
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
+  const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' as 'low' | 'high' });
+  const [saving, setSaving] = useState(false);
   const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
 
   useEffect(() => {
     if (vehicles.length > 0) {
-      // Logic for high-frequency usage check
       getPredictiveTips(vehicles[0], 4).then(setPredictive);
     }
   }, [vehicles]);
+
+  const handleAddVehicle = async () => {
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.plate) {
+      alert("Please fill all required fields.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updatedVehicles = [...vehicles, newVehicle];
+      await updateDoc(doc(db, 'users', profile.uid), { vehicles: updatedVehicles });
+      onUpdate({ ...profile, vehicles: updatedVehicles });
+      setVehicles(updatedVehicles);
+      setShowAdd(false);
+      setNewVehicle({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' });
+    } catch (error) {
+      console.error("Error adding vehicle:", error);
+      alert("Failed to add vehicle.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -1041,10 +1125,63 @@ function CustomerVehicleView({ profile }: { profile: UserProfile }) {
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">My Garage.</h2>
           <p className="text-text-dim text-sm lowercase">Manage your vehicles and track AI maintenance health.</p>
         </div>
-        <button className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center gap-2">
+        <button 
+          onClick={() => setShowAdd(true)}
+          className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center gap-2"
+        >
            <Plus size={16} /> Add Vehicle
         </button>
       </header>
+
+      <AnimatePresence>
+        {showAdd && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-bg/90 backdrop-blur-xl">
+             <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-card border border-border w-full max-w-md rounded-[2.5rem] p-10 space-y-8"
+             >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-white uppercase italic">Vehicle Registry</h3>
+                  <button onClick={() => setShowAdd(false)} className="p-2 hover:bg-white/5 rounded-full"><X size={20} className="text-text-dim" /></button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Make</label>
+                       <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="Toyota" />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Model</label>
+                       <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="Camry" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Plate Number</label>
+                     <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="ABC-1234" />
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Usage Intensity</label>
+                     <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'low' }))} className={cn("py-3 rounded-xl text-[10px] font-black uppercase border", newVehicle.intensity === 'low' ? "bg-accent text-white border-transparent" : "bg-bg text-text-dim border-border")}>Weekend Driver</button>
+                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'high' }))} className={cn("py-3 rounded-xl text-[10px] font-black uppercase border", newVehicle.intensity === 'high' ? "bg-accent text-white border-transparent" : "bg-bg text-text-dim border-border")}>High Usage</button>
+                     </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleAddVehicle}
+                  disabled={saving}
+                  className="w-full bg-white text-bg py-4 rounded-xl font-black uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50"
+                >
+                   {saving ? "Registering..." : "Add to Garage"}
+                </button>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {vehicles.length === 0 ? (
         <div className="bento-card py-20 text-center border-dashed">
@@ -1826,9 +1963,25 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   }, [profile]);
 
   useEffect(() => {
-    let q = profile.role === 'owner' 
-      ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'))
-      : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
+    let q: Query<DocumentData>;
+    const washesRef = collection(db, 'washes');
+
+    if (profile.role === 'owner') {
+      q = query(washesRef, orderBy('timestamp', 'desc'));
+    } else if (profile.role === 'worker') {
+      q = query(washesRef, where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
+    } else {
+      // For customers, filter by their vehicle plate numbers
+      const plates = (profile.vehicles || []).map(v => v.plate).filter(Boolean);
+      if (plates.length > 0) {
+        q = query(washesRef, where('plateNumber', 'in', plates.slice(0, 10)), orderBy('timestamp', 'desc'));
+      } else {
+        // If no vehicles, show empty
+        setWashes([]);
+        setLoading(false);
+        return;
+      }
+    }
 
     return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
       setWashes(snap.docs.map(d => ({ 

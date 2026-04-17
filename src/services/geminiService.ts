@@ -68,7 +68,7 @@ export async function getMaintenanceTip(carModel: string) {
   }
 }
 
-export async function getPredictiveTips(vehicleInfo: { make: string, model: string, year: string }, washHistoryCount: number) {
+export async function getPredictiveTips(vehicleInfo: { make: string, model: string, year: number | string }, washHistoryCount: number) {
   if (!process.env.GEMINI_API_KEY) return { nextWash: "Keep a regular schedule.", maintenance: "Check your essentials." };
 
   try {

@@ -71,7 +71,7 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
              data.uid is string &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.email is string &&
              data.role in ['owner', 'worker', 'customer'];
     }
 
@@ -100,7 +100,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAppOwner() || isWorker());
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == resource.data.role || !('role' in resource.data) || resource.data.role == null);
     }
 
     match /washes/{washId} {
