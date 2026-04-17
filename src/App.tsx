@@ -500,7 +500,7 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 // --- View Components ---
 
 function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: () => void }) {
-  const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0 });
+  const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<string | null>(null);
@@ -540,13 +540,24 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
       setStats({ 
         todayRevenue: rev, 
         todayCount: todayWashes.length,
-        totalCount: washes.length 
+        totalCount: washes.length,
+        incentives: 0
       });
       setLoading(false);
     }, (err) => {
       handleFirestoreError(err, OperationType.LIST, 'washes');
       setLoading(false);
     });
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile.role === 'worker') {
+      const q = query(collection(db, 'incentives'), where('workerId', '==', profile.uid));
+      return onSnapshot(q, (snap) => {
+        const total = snap.docs.reduce((acc, curr) => acc + (curr.data().amount || 0), 0);
+        setStats(prev => ({ ...prev, incentives: total }));
+      });
+    }
   }, [profile]);
 
   if (loading) {
@@ -588,7 +599,9 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
         {/* Main Stat: Today's Revenue */}
         <div className="md:col-span-2 md:row-span-1 bento-card flex flex-col justify-between border-t-4 border-t-accent">
           <div>
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">Live: Today's Revenue</span>
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">
+              {profile.role === 'worker' ? "Personal Unit Output" : "Live: Today's Revenue"}
+            </span>
             <div className="text-6xl font-black mt-2 tracking-tighter">{formatCurrency(stats.todayRevenue)}</div>
             <p className="text-xs text-text-dim mt-2 font-medium">Synced from {stats.todayCount} service units completed today.</p>
           </div>
@@ -603,21 +616,39 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
           </div>
         </div>
 
-        {/* Counter Stat */}
+        {/* Counter Stat or Incentives for Workers */}
         <div className="md:col-span-1 bento-card flex flex-col justify-between">
-          <div>
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Volume (24h)</span>
-            <div className="text-5xl font-black mt-2 tracking-tighter text-white">{stats.todayCount}</div>
-          </div>
-          <div className="mt-4">
-             <div className="text-[10px] font-bold text-success flex items-center gap-1">
-               <TrendingUp size={12} />
-               <span>Scaling up</span>
-             </div>
-             <div className="w-full bg-white/5 h-1 rounded-full mt-2 overflow-hidden">
-                <div className="bg-success h-full w-[65%]" />
-             </div>
-          </div>
+          {profile.role === 'worker' ? (
+            <>
+              <div>
+                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Earned Bonuses</span>
+                <div className="text-5xl font-black mt-2 tracking-tighter text-success">{formatCurrency(stats.incentives)}</div>
+              </div>
+              <div className="mt-4">
+                <div className="text-[10px] font-bold text-success flex items-center gap-1">
+                  <Award size={12} />
+                  <span>Performance Incentive</span>
+                </div>
+                <p className="text-[9px] text-text-dim mt-1 lowercase">Calculated from peak efficiency and quality ratings.</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Volume (24h)</span>
+                <div className="text-5xl font-black mt-2 tracking-tighter text-white">{stats.todayCount}</div>
+              </div>
+              <div className="mt-4">
+                <div className="text-[10px] font-bold text-success flex items-center gap-1">
+                  <TrendingUp size={12} />
+                  <span>Scaling up</span>
+                </div>
+                <div className="w-full bg-white/5 h-1 rounded-full mt-2 overflow-hidden">
+                    <div className="bg-success h-full w-[65%]" />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Action Card */}
