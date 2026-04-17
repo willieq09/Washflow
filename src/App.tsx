@@ -187,7 +187,7 @@ export default function App() {
               name: u.displayName || 'Anonymous User',
               email: u.email || '',
               role: isOwnerEmail ? 'owner' : null,
-              photoUrl: u.photoURL || undefined
+              photoUrl: u.photoURL || null
             };
             if (isOwnerEmail) {
                await setDoc(docRef, { ...newProfile, role: 'owner', createdAt: serverTimestamp() });
@@ -818,14 +818,19 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
   const setRole = async (role: 'owner' | 'customer' | 'worker') => {
     setLoading(role);
     try {
-      await setDoc(doc(db, 'users', uid), {
+      const userData: any = {
         uid,
         name,
         email,
         role,
         createdAt: serverTimestamp(),
-        plan: role === 'owner' ? 'starter' : undefined
-      }, { merge: true });
+      };
+      
+      if (role === 'owner') {
+        userData.plan = 'starter';
+      }
+
+      await setDoc(doc(db, 'users', uid), userData, { merge: true });
       
       // We use a small delay and a reload to ensure Firestore syncs 
       // and the auth state refresh picks up the new document.
