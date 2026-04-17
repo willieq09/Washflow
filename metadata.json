@@ -1,6 +1,6 @@
 {
   "name": "WashFlow",
   "description": "A SaaS platform for car wash transparency, real-time tracking, and worker incentives.",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "geolocation"],
   "majorCapabilities": []
 }

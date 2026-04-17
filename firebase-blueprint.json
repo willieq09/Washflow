@@ -10,7 +10,10 @@
         "email": { "type": "string", "description": "Email address of the user." },
         "role": { "type": "string", "enum": ["owner", "worker"], "description": "Role determining access levels." },
         "photoUrl": { "type": "string", "description": "Profile picture URL." },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." }
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." },
+        "businessLat": { "type": "number", "description": "Owner set latitude for geofencing." },
+        "businessLng": { "type": "number", "description": "Owner set longitude for geofencing." },
+        "businessRadius": { "type": "number", "description": "Allowed radius in meters." }
       },
       "required": ["uid", "name", "email", "role"]
     },
@@ -29,7 +32,9 @@
         "status": { "type": "string", "enum": ["completed"], "description": "Status of the job." },
         "rating": { "type": "number", "description": "Customer rating from 1 to 5." },
         "review": { "type": "string", "description": "Optional customer review comment." },
-        "maintenanceTip": { "type": "string", "description": "AI-generated tip for the customer's car." }
+        "maintenanceTip": { "type": "string", "description": "AI-generated tip for the customer's car." },
+        "lat": { "type": "number", "description": "Worker latitude at time of log." },
+        "lng": { "type": "number", "description": "Worker longitude at time of log." }
       },
       "required": ["workerId", "price", "timestamp", "status"]
     },

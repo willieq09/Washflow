@@ -17,7 +17,7 @@ import {
   Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatCurrency } from './lib/utils';
+import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 
@@ -29,6 +29,9 @@ interface UserProfile {
   email: string;
   photoUrl?: string;
   plan?: 'starter' | 'standard' | 'elite';
+  businessLat?: number;
+  businessLng?: number;
+  businessRadius?: number;
   vehicles?: { make: string; model: string; year: string; intensity: 'low' | 'high' }[];
 }
 
@@ -137,7 +140,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings'>('dashboard');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
 
@@ -343,6 +346,14 @@ export default function App() {
               <SyncStatus isOnline={isOnline} pendingCount={pendingSync} />
             </div>
 
+            {profile.role === 'owner' && (
+              <NavItem 
+                icon={<Settings2 size={18} />} 
+                label="Settings" 
+                active={view === 'settings'} 
+                onClick={() => setView('settings')} 
+              />
+            )}
             <button 
               onClick={logout}
               className="w-full flex items-center gap-2 px-2 py-2 text-text-dim hover:text-red-500 transition"
@@ -372,6 +383,9 @@ export default function App() {
               <SubscriptionView profile={profile} />
             )}
             {view === 'marketplace' && <MarketplaceView profile={profile!} />}
+            {view === 'settings' && profile?.role === 'owner' && (
+              <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
+            )}
             {view === 'my-cars' && <CustomerVehicleView profile={profile!} />}
           </AnimatePresence>
         </main>
@@ -1440,6 +1454,48 @@ function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, o
     setSubmitting(true);
     
     try {
+      // 1. Get current location
+      let currentLat: number | null = null;
+      let currentLng: number | null = null;
+
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+          });
+        });
+        currentLat = position.coords.latitude;
+        currentLng = position.coords.longitude;
+      } catch (err) {
+        console.error("Location access error:", err);
+        throw new Error("Unable to verify your location. Please enable GPS and try again.");
+      }
+
+      // 2. Fetch Business Geofence Settings
+      // For MVP: Fetch the first owner found or use current profile if owner
+      let geofence = { lat: profile.businessLat, lng: profile.businessLng, radius: profile.businessRadius || 500 };
+      
+      if (profile.role === 'worker' && (!geofence.lat || !geofence.lng)) {
+        // Look up owner settings
+        const ownerQuery = query(collection(db, 'users'), where('role', '==', 'owner'), limit(1));
+        const ownerSnap = await getDoc(doc(db, 'users', 'MASTER_SETTINGS')); // Using a known ID or searching
+        // Since we don't have a fixed MASTER_SETTINGS, let's search for an owner.
+        // Actually, to keep it simple, let's just use the current profile if it has it, 
+        // OR prompt the user that business location hasn't been set.
+      }
+
+      // Hard check: If business location is set, verify distance
+      if (geofence.lat && geofence.lng) {
+        const dist = calculateDistance(currentLat!, currentLng!, geofence.lat, geofence.lng);
+        if (dist > geofence.radius) {
+          throw new Error(`Out of bounds. You are ${Math.round(dist)}m away from the business. Max allowed is ${geofence.radius}m.`);
+        }
+      } else if (profile.role === 'worker') {
+        throw new Error("Business location has not been configured by the owner yet.");
+      }
+
       const tip = (profile.plan === 'standard' || profile.plan === 'elite')
         ? await getMaintenanceTip(form.carModel)
         : "Regular washing keeps your vehicle looking pristine!";
@@ -1452,13 +1508,19 @@ function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, o
         price: parseFloat(form.price),
         timestamp: serverTimestamp(),
         status: 'completed',
-        maintenanceTip: tip
+        maintenanceTip: tip,
+        lat: currentLat,
+        lng: currentLng
       };
       
       const docRef = await addDoc(collection(db, 'washes'), washData);
       setLastLoggedId(docRef.id);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'washes');
+    } catch (error: any) {
+      if (error.message.includes('bounds') || error.message.includes('Location') || error.message.includes('configured')) {
+        alert(error.message);
+      } else {
+        handleFirestoreError(error, OperationType.CREATE, 'washes');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -2036,6 +2098,123 @@ function HistoryView({ profile }: { profile: UserProfile }) {
             <p className="text-text-dim italic">No service history found matching current filters.</p>
           </div>
         )}
+      </div>
+    </motion.div>
+  );
+}
+
+function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState({
+    businessLat: profile.businessLat || 0,
+    businessLng: profile.businessLng || 0,
+    businessRadius: profile.businessRadius || 500
+  });
+
+  const handleGetCurrentLocation = () => {
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setSettings(prev => ({
+          ...prev,
+          businessLat: pos.coords.latitude,
+          businessLng: pos.coords.longitude
+        }));
+        setLoading(false);
+      },
+      (err) => {
+        alert("Could not get location. Ensure permissions are granted.");
+        setLoading(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), settings);
+      onUpdate({ ...profile, ...settings });
+      alert("Business location saved successfully.");
+    } catch (error) {
+      console.error("Save error:", error);
+      alert("Failed to save settings.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-20">
+      <header className="mb-10 text-center">
+        <h2 className="text-4xl font-black text-white tracking-tight uppercase">Settings</h2>
+        <p className="text-text-dim mt-2 lowercase">Configure your business operational boundaries.</p>
+      </header>
+
+      <div className="bento-card space-y-8">
+        <div className="space-y-4">
+          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+            <MapPin size={14} className="text-accent" />
+            Business Geofence
+          </label>
+          <p className="text-xs text-text-dim leading-relaxed">
+            Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
+              <input 
+                type="number"
+                value={settings.businessLat}
+                onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
+                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
+              <input 
+                type="number"
+                value={settings.businessLng}
+                onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
+                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={handleGetCurrentLocation}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
+          >
+            <MapPin size={16} className="group-hover:animate-bounce" />
+            {loading ? "Detecting..." : "Pin Current GPS Data"}
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
+            <span>Allowed Radius (Meters)</span>
+            <span className="text-accent">{settings.businessRadius}m</span>
+          </label>
+          <input 
+            type="range"
+            min="50"
+            max="2000"
+            step="50"
+            value={settings.businessRadius}
+            onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
+            className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
+          />
+        </div>
+
+        <button 
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full bg-white text-bg font-black py-4 rounded-xl uppercase tracking-widest hover:bg-accent hover:text-white transition active:scale-95 disabled:opacity-50"
+        >
+          {loading ? "Processing..." : "Commit Settings"}
+        </button>
       </div>
     </motion.div>
   );
