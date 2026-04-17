@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from './lib/utils';
-import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport } from './services/geminiService';
+import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 
 // --- Types ---
 interface UserProfile {
@@ -438,7 +438,7 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
         <p className="text-xl text-text-dim mb-12 max-w-xl mx-auto font-medium">
-          The bento-style transparency layer for car wash hubs. Track, incentivize, and scale with real-time AI insights.
+          The transparency layer for car wash hubs. Track, incentivize, and scale with real-time AI insights.
         </p>
         <button 
           onClick={onLogin}
@@ -922,6 +922,54 @@ function FilterBtn({ label, active }: { label: string, active?: boolean }) {
   );
 }
 
+function AIProactiveSchedule({ vehicle, washHistoryCount }: { vehicle: any, washHistoryCount: number }) {
+  const [schedule, setSchedule] = useState<{ suggestion: string, reasoning: string, optimalDay: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulated weather forecast for the next 5 days
+    const weatherForecast = "Partly cloudy with showers expected on Wednesday and Thursday. Sunny weekend ahead.";
+    const lastWashDays = 4; // Mocked
+
+    getWeatherOptimizedSchedule(vehicle, weatherForecast, lastWashDays).then(res => {
+      setSchedule(res);
+      setLoading(false);
+    });
+  }, [vehicle]);
+
+  if (loading) return (
+    <div className="animate-pulse space-y-3">
+      <div className="h-4 bg-white/20 rounded w-1/2" />
+      <div className="h-20 bg-white/20 rounded-2xl w-full" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
+        <div className="flex items-center gap-2 mb-3">
+          <Calendar size={14} className="opacity-60" />
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Optimal Next Wash</span>
+        </div>
+        <p className="text-xl font-black uppercase tracking-tighter mb-1 leading-none">{schedule?.optimalDay}</p>
+        <p className="text-[10px] font-bold opacity-80">{schedule?.suggestion}</p>
+      </div>
+      
+      <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
+        <div className="flex items-center gap-2 mb-3">
+          <Info size={14} className="opacity-60" />
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">AI Reasoning</span>
+        </div>
+        <p className="text-xs leading-relaxed font-medium italic">"{schedule?.reasoning}"</p>
+      </div>
+
+      <button className="w-full bg-bg text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border border-white/20 hover:bg-white hover:text-bg transition mt-2">
+        Book for {schedule?.optimalDay}
+      </button>
+    </div>
+  );
+}
+
 function CustomerVehicleView({ profile }: { profile: UserProfile }) {
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
   const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
@@ -987,39 +1035,26 @@ function CustomerVehicleView({ profile }: { profile: UserProfile }) {
           </div>
 
           <aside className="space-y-6">
-            <div className="bg-accent p-8 rounded-[2.5rem] text-bg">
-              <div className="flex items-center gap-2 mb-6">
+            <div className="bg-accent p-8 rounded-[2.5rem] text-bg shadow-2xl shadow-accent/20">
+              <div className="flex items-center gap-2 mb-8">
                 <Sparkles size={20} />
-                <h3 className="font-black uppercase tracking-widest text-sm">AI Pulse Insights</h3>
+                <h3 className="font-black uppercase tracking-widest text-sm">Proactive Scheduling</h3>
               </div>
               
-              <div className="space-y-8">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">Wash Prediction</p>
-                  <p className="text-lg font-bold leading-tight uppercase tracking-tighter">{predictive?.nextWash || "Calculating..."}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">Maintenance Suggestion</p>
-                  <p className="text-lg font-bold leading-tight uppercase tracking-tighter">{predictive?.maintenance || "Analyzing usage..."}</p>
-                </div>
-              </div>
-              
-              <button className="w-full mt-10 bg-bg text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition">
-                 Approve Schedule
-              </button>
+              <AIProactiveSchedule vehicle={vehicles[0]} washHistoryCount={4} />
             </div>
 
             <div className="bg-card p-8 rounded-[2.5rem] border border-border">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <Bell size={16} className="text-accent" />
-                  <h3 className="font-black uppercase tracking-widest text-xs text-white">Alerts</h3>
+                  <ShieldCheck size={16} className="text-accent" />
+                  <h3 className="font-black uppercase tracking-widest text-xs text-white">System Status</h3>
                 </div>
-                <div className="w-2 h-2 rounded-full bg-accent animate-ping" />
+                <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               </div>
               <div className="space-y-4">
                 <p className="text-xs text-text-dim leading-relaxed lowercase">
-                   Rain expected in your area this Saturday. <span className="text-white font-bold">Reschedule Friday’s wash?</span>
+                   Your {vehicles[0].model} is within optimal maintenance parameters. <span className="text-white font-bold">No issues detected.</span>
                 </p>
               </div>
             </div>

@@ -125,3 +125,47 @@ export async function generateAnalyticsReport(stats: any, recentWashes: any[]) {
     return "Failed to generate report. Your wash volume is steady, but ensure worker incentives are applied to keep performance high.";
   }
 }
+
+export async function getWeatherOptimizedSchedule(vehicle: any, weatherInfo: string, lastWashDays: number) {
+  if (!process.env.GEMINI_API_KEY) {
+    return {
+      suggestion: "Maintain a weekly wash schedule.",
+      reasoning: "Regular maintenance is key.",
+      optimalDay: "Saturday"
+    };
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.intensity} usage).
+      Last Wash: ${lastWashDays} days ago.
+      Weather Forecast: ${weatherInfo}
+      
+      Task: Suggest the optimal next day for a car wash this week. 
+      Consider: If it's going to rain, suggest washing AFTER the rain. If it's sunny, suggest washing sooner. 
+      Return JSON with keys: "suggestion", "reasoning", "optimalDay".`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            suggestion: { type: Type.STRING },
+            reasoning: { type: Type.STRING },
+            optimalDay: { type: Type.STRING }
+          },
+          required: ["suggestion", "reasoning", "optimalDay"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Gemini Weather Schedule Error:", error);
+    return {
+      suggestion: "Schedule for the upcoming weekend.",
+      reasoning: "Standard maintenance window.",
+      optimalDay: "Saturday"
+    };
+  }
+}
