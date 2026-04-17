@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from './lib/utils';
+import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 
 // --- Types ---
@@ -76,30 +77,53 @@ interface Incentive {
 
 // --- Components ---
 
+// --- Utils ---
+const Logger = {
+  log: (...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[WASHFLOW]', ...args);
+    }
+  },
+  error: (...args: any[]) => {
+    console.error('[WASHFLOW ERROR]', ...args);
+    // Here you would typically send to Sentry or another error reporting tool
+  }
+};
+
 function ErrorBoundary({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const handleError = (e: ErrorEvent) => setError(e.error);
+    const handleError = (e: ErrorEvent) => {
+      Logger.error(e.error);
+      setError(e.error);
+    };
     window.addEventListener('error', handleError);
     return () => window.removeEventListener('error', handleError);
   }, []);
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-6">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-red-100">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
-          <p className="text-gray-600 mb-6">We've encountered an error. Our team has been notified.</p>
+      <div className="min-h-screen flex items-center justify-center bg-bg p-6 font-sans">
+        <div className="max-w-md w-full bg-card rounded-[2.5rem] border border-red-500/20 shadow-2xl p-10 text-center">
+          <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8">
+            <X size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">Application Crash</h2>
+          <p className="text-text-dim text-sm mb-8 leading-relaxed lowercase">We've encountered a critical error. The tracking systems have logged the incident for review.</p>
           <button 
             onClick={() => window.location.reload()}
-            className="w-full bg-red-600 text-white font-semibold py-3 rounded-xl hover:bg-red-700 transition"
+            className="w-full bg-white text-bg font-black py-4 rounded-2xl hover:bg-red-500 hover:text-white transition-all uppercase tracking-widest text-xs"
           >
-            Retry Application
+            Reboot Interface
           </button>
-          <pre className="mt-6 p-4 bg-gray-900 text-gray-300 text-xs rounded-lg overflow-auto max-h-40">
-            {error.message}
-          </pre>
+          
+          <details className="mt-8 text-left">
+            <summary className="text-[10px] font-black uppercase text-text-dim/40 cursor-pointer hover:text-text-dim transition">Technical Core Dump</summary>
+            <pre className="mt-4 p-4 bg-bg border border-border text-[10px] text-red-400 font-mono rounded-xl overflow-auto max-h-40 lowercase">
+              {error.message}
+            </pre>
+          </details>
         </div>
       </div>
     );
@@ -708,11 +732,26 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
                     <X size={20} className="text-text-dim" />
                   </button>
                 </div>
-                <div className="p-8 max-h-[60vh] overflow-y-auto">
-                  <div className="prose prose-invert max-w-none">
-                    <div className="whitespace-pre-wrap text-white/90 leading-relaxed font-medium">
+                <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  <div className="prose prose-invert max-w-none text-white/80">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-6 mt-2 pb-2 border-b border-white/10">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-xl font-bold text-accent uppercase tracking-widest mt-8 mb-4">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-lg font-bold text-white mb-2">{children}</h3>,
+                        p: ({ children }) => <p className="mb-4 leading-relaxed text-sm font-medium">{children}</p>,
+                        ul: ({ children }) => <ul className="space-y-3 mb-6">{children}</ul>,
+                        li: ({ children }) => (
+                          <li className="flex gap-3 text-sm">
+                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                            <span>{children}</span>
+                          </li>
+                        ),
+                        strong: ({ children }) => <span className="text-white font-bold">{children}</span>,
+                      }}
+                    >
                       {report}
-                    </div>
+                    </ReactMarkdown>
                   </div>
                 </div>
                 <div className="p-8 bg-bg/50 border-t border-border flex justify-end">
@@ -1709,7 +1748,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
     workerId: 'all',
     status: 'all'
   });
-  const [sort, setSort] = useState<{ field: 'timestamp' | 'price' | 'rating', desc: boolean }>({
+  const [sort, setSort] = useState<{ field: 'timestamp' | 'price' | 'workerRating', desc: boolean }>({
     field: 'timestamp',
     desc: true
   });
@@ -1770,16 +1809,16 @@ function HistoryView({ profile }: { profile: UserProfile }) {
       }
       
       // Handle missing ratings
-      if (sort.field === 'rating') {
-        valA = a.rating || 0;
-        valB = b.rating || 0;
+      if (sort.field === 'workerRating') {
+        valA = a.workerRating || 0;
+        valB = b.workerRating || 0;
       }
 
       const comparison = valA > valB ? 1 : -1;
       return sort.desc ? -comparison : comparison;
     });
 
-  const toggleSort = (field: 'timestamp' | 'price' | 'rating') => {
+  const toggleSort = (field: 'timestamp' | 'price' | 'workerRating') => {
     setSort(prev => ({
       field,
       desc: prev.field === field ? !prev.desc : true
@@ -1892,7 +1931,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   {[
                     { label: 'Date', field: 'timestamp' },
                     { label: 'Price', field: 'price' },
-                    { label: 'Rating', field: 'rating' }
+                    { label: 'Rating', field: 'workerRating' }
                   ].map(s => (
                     <button 
                       key={s.field}
