@@ -38,8 +38,18 @@ Since you already have a Firebase project, this keeps everything in one place. W
 
 ---
 
-## Pre-configured Files
-We've added the following files to your project to make this work:
-- `vercel.json`: Handles Single Page Application (SPA) routing for Vercel.
-- `firebase.json` & `.firebaserc`: Configuration for Firebase Hosting.
-- `.env.example`: Reference for required secrets.
+## 5. Automated CI/CD (GitHub Actions)
+The repository is configured with an automated pipeline. If your builds are failing on GitHub, you likely need to add the following **Secrets** to your GitHub repository (**Settings > Secrets and variables > Actions**):
+
+### Vercel Secrets
+*   `VERCEL_TOKEN`: Your Vercel Personal Access Token.
+*   `VERCEL_ORG_ID`: Found in your Vercel Account/Team settings.
+*   `VERCEL_PROJECT_ID`: Found in your Vercel Project settings.
+
+### Firebase Secrets
+*   `FIREBASE_SERVICE_ACCOUNT_WASHFLOW_APP`: JSON key from Firebase Console > Project Settings > Service accounts.
+*   `FIREBASE_PROJECT_ID`: Your Firebase project ID (e.g., `washflow-12345`).
+
+### Application Build Secrets
+*   `GEMINI_API_KEY`: Required for the AI functionality.
+*   `VITE_STRIPE_PUBLIC_KEY`: Used during the build for Stripe integration.

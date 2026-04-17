@@ -49,7 +49,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build
-        run: npm run build
+        run: |
+          if [ -z "${{ secrets.VITE_STRIPE_PUBLIC_KEY }}" ]; then echo "Error: VITE_STRIPE_PUBLIC_KEY is missing"; exit 1; fi
+          if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then echo "Error: GEMINI_API_KEY is missing"; exit 1; fi
+          npm run build
         env:
           VITE_STRIPE_PUBLIC_KEY: ${{ secrets.VITE_STRIPE_PUBLIC_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -66,6 +69,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to Vercel
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then echo "Error: VERCEL_TOKEN is missing"; exit 1; fi
+          if [ -z "${{ secrets.VERCEL_ORG_ID }}" ]; then echo "Error: VERCEL_ORG_ID is missing"; exit 1; fi
+          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then echo "Error: VERCEL_PROJECT_ID is missing"; exit 1; fi
+        shell: bash
+      - name: Vercel Action
         uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -73,6 +82,8 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: ${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
           working-directory: .
+          alias-domains: |
+            washflow-app.vercel.app
 
   deploy-firebase:
     runs-on: ubuntu-latest
@@ -86,9 +97,13 @@ jobs:
           name: build-output
           path: dist/
       - name: Deploy to Firebase
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_WASHFLOW_APP }}" ]; then echo "Error: FIREBASE_SERVICE_ACCOUNT_WASHFLOW_APP is missing"; exit 1; fi
+        shell: bash
+      - name: Firebase Action
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_WASHFLOW_APP }}
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID || 'gen-lang-client-0240146258' }}
           channelId: ${{ github.ref == 'refs/heads/main' && 'live' || 'staging' }}
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
