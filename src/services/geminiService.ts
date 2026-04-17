@@ -67,3 +67,61 @@ export async function getMaintenanceTip(carModel: string) {
     return "Check your owner's manual for specific maintenance schedules.";
   }
 }
+
+export async function getPredictiveTips(vehicleInfo: { make: string, model: string, year: string }, washHistoryCount: number) {
+  if (!process.env.GEMINI_API_KEY) return { nextWash: "Keep a regular schedule.", maintenance: "Check your essentials." };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `User vehicle: ${vehicleInfo.year} ${vehicleInfo.make} ${vehicleInfo.model}. 
+      Frequency: ${washHistoryCount} washes this month. 
+      Generate 2 insights:
+      1. Predicting the next ideal wash day based on high-frequency usage (people wash cars multiple times weekly).
+      2. A maintenance suggestion specific to this car type.
+      Return JSON with keys "nextWash" and "maintenance".`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            nextWash: { type: Type.STRING },
+            maintenance: { type: Type.STRING }
+          },
+          required: ["nextWash", "maintenance"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Gemini Predictive Error:", error);
+    return { nextWash: "Wash every 3-4 days for peak shine.", maintenance: "Wax frequently to protect paint." };
+  }
+}
+
+export async function generateAnalyticsReport(stats: any, recentWashes: any[]) {
+  if (!process.env.GEMINI_API_KEY) return "AI analytics is currently unavailable. Please check back later.";
+
+  try {
+    const washSummary = recentWashes.map(w => `${w.carModel} (${w.price})`).join(", ");
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Context: Car Wash SaaS Dashboard.
+      Today's Revenue: ${stats.todayRevenue}
+      Today's Volume: ${stats.todayCount}
+      Recent Activities: ${washSummary}
+      
+      Task: Provide a high-level performance summary and 2 actionable business insights to help the owner scale. 
+      Format: Professional, motivational, and concise. Use bullet points for insights.`,
+      config: {
+        systemInstruction: "You are a business intelligence agent for a car wash SaaS. Your reports are concise, professional, and data-driven.",
+      }
+    });
+
+    return response.text || "Your business is currently performing within normal parameters. Continue monitoring volume trends.";
+  } catch (error) {
+    console.error("Gemini Analytics Error:", error);
+    return "Failed to generate report. Your wash volume is steady, but ensure worker incentives are applied to keep performance high.";
+  }
+}

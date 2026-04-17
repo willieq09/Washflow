@@ -24,24 +24,32 @@ async function startServer() {
   });
 
   app.post("/api/create-checkout-session", async (req, res) => {
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe is not configured on the server." });
-    }
-
-    const { plan, userId, userEmail } = req.body;
-
-    const plans = {
-      starter: { name: "WashFlow Starter", price: 1900 }, // $19.00
-      standard: { name: "WashFlow Professional", price: 4900 }, // $49.00
-      elite: { name: "WashFlow Elite", price: 9900 }, // $99.00
-    };
-
-    const selectedPlan = plans[plan as keyof typeof plans];
-    if (!selectedPlan) {
-      return res.status(400).json({ error: "Invalid plan selected." });
-    }
-
     try {
+      const { plan, userId, userEmail } = req.body;
+      console.log(`[Stripe] Creating session for ${userEmail} (Plan: ${plan})`);
+      
+      if (!stripe) {
+        console.error("[Stripe] Missing API Key");
+        return res.status(500).json({ error: "Stripe is not configured. Please add STRIPE_SECRET_KEY to Settings > Secrets." });
+      }
+
+      if (!plan || !userId || !userEmail) {
+        return res.status(400).json({ error: "Missing required fields: plan, userId, or userEmail" });
+      }
+
+      const plans = {
+        starter: { name: "WashFlow Starter", price: 1900 },
+        standard: { name: "WashFlow Professional", price: 4900 },
+        elite: { name: "WashFlow Elite", price: 9900 },
+      };
+
+      const selectedPlan = plans[plan as keyof typeof plans];
+      if (!selectedPlan) {
+        return res.status(400).json({ error: `Invalid plan: ${plan}` });
+      }
+
+      const origin = req.headers.origin || req.headers.referer || `http://localhost:${PORT}`;
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: [
@@ -59,8 +67,8 @@ async function startServer() {
           },
         ],
         mode: "subscription",
-        success_url: `${req.headers.origin}/?session_id={CHECKOUT_SESSION_ID}&success=true&plan=${plan}`,
-        cancel_url: `${req.headers.origin}/?canceled=true`,
+        success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}&success=true&plan=${plan}`,
+        cancel_url: `${origin}/?canceled=true`,
         customer_email: userEmail,
         metadata: {
           userId: userId,
@@ -68,10 +76,11 @@ async function startServer() {
         },
       });
 
-      res.json({ url: session.url });
+      console.log("[Stripe] Session created:", session.id);
+      return res.json({ url: session.url });
     } catch (error: any) {
-      console.error("Stripe Session Error:", error);
-      res.status(500).json({ error: error.message });
+      console.error("[Stripe] Error:", error.message);
+      return res.status(500).json({ error: error.message });
     }
   });
 
