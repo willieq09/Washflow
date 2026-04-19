@@ -55,7 +55,7 @@ service cloud.firestore {
 
     function isAppOwner() {
       return isAuthenticated() && 
-             (getUserRole() == 'owner' || 
+             (getUserRole() == 'owner' || getUserRole() == 'admin' ||
               (request.auth.token.email == 'oumawillis09@gmail.com' && request.auth.token.email_verified == true));
     }
 
@@ -67,57 +67,79 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'customer';
     }
 
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
              data.uid is string &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string &&
-             data.role in ['owner', 'worker', 'customer'];
+             data.role in ['owner', 'worker', 'customer', 'admin'];
     }
 
-    function isValidWash(data) {
-      return data.keys().hasAll(['workerId', 'price', 'timestamp', 'status']) &&
-             data.workerId is string &&
-             data.price is number && data.price >= 0 &&
-             data.status == 'completed' &&
-             (!('workerRating' in data) || (data.workerRating is number && data.workerRating >= 1 && data.workerRating <= 5)) &&
-             (!('businessRating' in data) || (data.businessRating is number && data.businessRating >= 1 && data.businessRating <= 5)) &&
-             (!('review' in data) || (data.review is string && data.review.size() <= 500));
-    }
-
-    function isWashImmutableUnchanged() {
-      return request.resource.data.workerId == resource.data.workerId &&
-             request.resource.data.timestamp == resource.data.timestamp;
-    }
-
-    function isValidIncentive(data) {
-      return data.keys().hasAll(['workerId', 'amount', 'reason', 'timestamp']) &&
-             data.workerId is string &&
-             data.amount is number && data.amount > 0 &&
-             data.reason is string && data.reason.size() > 0;
+    function isValidBooking(data) {
+      return data.keys().hasAll(['userId', 'businessId', 'slot', 'status']) &&
+             data.userId is string &&
+             data.businessId is string &&
+             data.status in ['pending', 'confirmed', 'completed', 'canceled'];
     }
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAppOwner() || isWorker());
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.resource.data.role == resource.data.role || !('role' in resource.data) || resource.data.role == null);
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(incoming());
+      allow update: if isAuthenticated() && (isOwner(userId) || isAppOwner()) && isValidUser(incoming());
+    }
+
+    match /vehicles/{id} {
+      allow read: if isAuthenticated() && (isOwner(incoming().userId) || isOwner(existing().userId) || isAppOwner());
+      allow create: if isAuthenticated() && isOwner(incoming().userId);
+      allow update, delete: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner());
+    }
+
+    match /wash_businesses/{id} {
+      allow read: if true;
+      allow write: if isAppOwner();
+    }
+
+    match /bookings/{id} {
+      allow read: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner() || isWorker());
+      allow create: if isAuthenticated() && isOwner(incoming().userId) && isValidBooking(incoming());
+      allow update: if isAuthenticated() && (
+        isAppOwner() || 
+        isWorker() || 
+        (isOwner(existing().userId) && incoming().status == 'canceled' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      );
     }
 
     match /washes/{washId} {
       allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner() || isCustomer());
-      allow get: if true; 
+      allow create: if isAuthenticated() && (isWorker() || isAppOwner());
+      allow update: if isAuthenticated() && (isAppOwner() || resource.data.workerId == request.auth.uid);
+    }
 
-      allow create: if isAuthenticated() && (isWorker() || isAppOwner()) && isValidWash(request.resource.data) && request.resource.data.workerId == request.auth.uid;
-      allow update: if (isAppOwner() && isWashImmutableUnchanged()) || 
-                    (isAuthenticated() && resource.data.workerId == request.auth.uid && isValidWash(request.resource.data) && isWashImmutableUnchanged()) ||
-                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['workerRating', 'businessRating', 'review', 'rating']) && 
-                     !('businessRating' in resource.data)); 
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(incoming().userId);
+    }
+
+    match /subscriptions/{id} {
+      allow read: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner());
+      allow write: if isAppOwner();
+    }
+
+    match /plans/{id} {
+      allow read: if true;
+      allow write: if isAppOwner();
     }
 
     match /incentives/{id} {
       allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner());
-      allow create: if isAppOwner() && isValidIncentive(request.resource.data);
+      allow create: if isAppOwner();
       allow delete: if isAppOwner();
     }
   }

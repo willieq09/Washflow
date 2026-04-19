@@ -393,7 +393,7 @@ export default function App() {
             {view === 'dashboard' && profile && (
               profile.role === 'customer' 
                 ? <CustomerDashboardView profile={profile} setView={setView} />
-                : <DashboardView profile={profile} onLogWash={(data) => {
+                : <DashboardView profile={profile} setView={setView} onLogWash={(data) => {
                     if (data) setPreFillWash(data);
                     setView('log');
                   }} />
@@ -418,11 +418,11 @@ export default function App() {
             {(view === 'billing' || view === 'subscription') && profile && (
               <SubscriptionView profile={profile} />
             )}
-            {view === 'marketplace' && <MarketplaceView profile={profile!} />}
+            {view === 'marketplace' && <MarketplaceView profile={profile!} setView={setView} />}
             {view === 'settings' && profile?.role === 'owner' && (
               <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
-            {view === 'my-cars' && <CustomerVehicleView profile={profile!} onUpdate={(p) => setProfile(p)} />}
+            {view === 'my-cars' && <CustomerVehicleView profile={profile!} setView={setView} onUpdate={(p) => setProfile(p)} />}
           </AnimatePresence>
         </main>
       </div>
@@ -623,7 +623,14 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                 </div>
               </div>
               <div className="flex gap-4 mt-10">
-                <button className="flex-1 bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition">Reschedule</button>
+                <button 
+                  onClick={() => {
+                    alert("Rescheduling requested. Our system will contact you with available alternatives.");
+                  }}
+                  className="flex-1 bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition"
+                >
+                  Reschedule
+                </button>
                 <div className="px-6 py-4 rounded-xl border border-white/20 text-white font-black text-[10px] uppercase tracking-widest">
                   ETA 45m
                 </div>
@@ -649,7 +656,11 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
             <h3 className="text-xl font-black text-white uppercase mt-2 mb-4 tracking-tighter italic">Garage Health</h3>
             <div className="space-y-4">
                {profile.vehicles && profile.vehicles.length > 0 ? (
-                 <AIProactiveSchedule vehicle={profile.vehicles[0]} washHistoryCount={0} />
+                 <AIProactiveSchedule 
+                   vehicle={profile.vehicles[0]} 
+                   washHistoryCount={0} 
+                   onBook={() => setView('marketplace')}
+                 />
                ) : (
                  <p className="text-xs text-text-dim">Add a vehicle to your garage to receive predictive maintenance insights.</p>
                )}
@@ -690,7 +701,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
   );
 }
 
-function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
+function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, setView: (v: AppView) => void, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
@@ -985,7 +996,12 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
         <div className="md:col-span-2 bento-card overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold text-text-dim uppercase tracking-wider">Live Feed</span>
-            <button className="text-[10px] font-bold text-accent hover:underline">See full log</button>
+            <button 
+              onClick={() => setView('history')}
+              className="text-[10px] font-bold text-accent hover:underline"
+            >
+              See full log
+            </button>
           </div>
           <div className="space-y-3">
             {recentWashes.slice(0, 3).map(wash => (
@@ -1394,8 +1410,9 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
   );
 }
 
-function MarketplaceView({ profile }: { profile: UserProfile }) {
+function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [filter, setFilter] = useState<'all' | 'accessory' | 'part' | 'service'>('all');
   
   const businesses: Business[] = [
     { id: 'b1', name: "Elite Shine Studio", location: "Downtown Central", rating: 4.9, ratingCount: 128, ownerUid: '1', image: 'https://picsum.photos/seed/wash1/800/600' },
@@ -1439,7 +1456,12 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
           <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
             <Store className="text-accent" /> Top Rated Stations
           </h3>
-          <button className="text-[10px] font-black uppercase text-accent tracking-[0.2em] border-b border-accent/20 pb-1">View All</button>
+          <button 
+            onClick={() => setView('marketplace')}
+            className="text-[10px] font-black uppercase text-accent tracking-[0.2em] border-b border-accent/20 pb-1"
+          >
+            View All
+          </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {businesses.map(b => (
@@ -1473,14 +1495,19 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
             <ShoppingBag className="text-accent" /> Marketplace Picks
           </h3>
           <div className="flex gap-2">
-             <FilterBtn label="Accessories" active />
-             <FilterBtn label="Parts" />
-             <FilterBtn label="Services" />
+             <FilterBtn label="All" active={filter === 'all'} onClick={() => setFilter('all')} />
+             <FilterBtn label="Accessories" active={filter === 'accessory'} onClick={() => setFilter('accessory')} />
+             <FilterBtn label="Parts" active={filter === 'part'} onClick={() => setFilter('part')} />
+             <FilterBtn label="Services" active={filter === 'service'} onClick={() => setFilter('service')} />
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {items.map(item => (
-            <div key={item.id} className="group cursor-pointer">
+          {items.filter(i => filter === 'all' || i.category === filter).map(item => (
+            <div 
+              key={item.id} 
+              className="group cursor-pointer"
+              onClick={() => alert(`Product Inquiry: ${item.name} is available from ${item.vendor}. Our e-commerce checkout is currently in sandbox mode.`)}
+            >
               <div className="aspect-square bg-white rounded-3xl mb-4 overflow-hidden relative border border-border">
                 <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
                 <div className="absolute bottom-4 left-4 bg-white px-3 py-1.5 rounded-xl font-black text-bg shadow-xl">
@@ -1497,18 +1524,21 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
   );
 }
 
-function FilterBtn({ label, active }: { label: string, active?: boolean }) {
+function FilterBtn({ label, active, onClick }: { label: string, active?: boolean, onClick?: () => void }) {
   return (
-    <button className={cn(
-      "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition border",
-      active ? "bg-accent text-white border-transparent" : "bg-white/5 text-text-dim border-border hover:text-white"
-    )}>
+    <button 
+      onClick={onClick}
+      className={cn(
+        "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition border",
+        active ? "bg-accent text-white border-transparent" : "bg-white/5 text-text-dim border-border hover:text-white"
+      )}
+    >
       {label}
     </button>
   );
 }
 
-function AIProactiveSchedule({ vehicle, washHistoryCount }: { vehicle: any, washHistoryCount: number }) {
+function AIProactiveSchedule({ vehicle, washHistoryCount, onBook }: { vehicle: any, washHistoryCount: number, onBook?: (day: string) => void }) {
   const [schedule, setSchedule] = useState<{ suggestion: string, reasoning: string, optimalDay: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1549,14 +1579,17 @@ function AIProactiveSchedule({ vehicle, washHistoryCount }: { vehicle: any, wash
         <p className="text-xs leading-relaxed font-medium italic">"{schedule?.reasoning}"</p>
       </div>
 
-      <button className="w-full bg-bg text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border border-white/20 hover:bg-white hover:text-bg transition mt-2">
+      <button 
+        onClick={() => onBook?.(schedule?.optimalDay || 'future')}
+        className="w-full bg-bg text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border border-white/20 hover:bg-white hover:text-bg transition mt-2"
+      >
         Book for {schedule?.optimalDay}
       </button>
     </div>
   );
 }
 
-function CustomerVehicleView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
+function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProfile, setView: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
   const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' as 'low' | 'high' });
@@ -1660,7 +1693,10 @@ function CustomerVehicleView({ profile, onUpdate }: { profile: UserProfile, onUp
           <Car size={40} className="text-text-dim mx-auto mb-6 opacity-20" />
           <h3 className="text-xl font-black text-white mb-4 uppercase tracking-tighter">Secure Your First Vehicle.</h3>
           <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to unlock personal AI tips and usage-based scheduling predictions.</p>
-          <button className="bg-white/5 border border-border text-white px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">
+          <button 
+            onClick={() => setShowAdd(true)}
+            className="bg-white/5 border border-border text-white px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition"
+          >
              Connect Vehicle Data
           </button>
         </div>
@@ -1703,7 +1739,11 @@ function CustomerVehicleView({ profile, onUpdate }: { profile: UserProfile, onUp
                 <h3 className="font-black uppercase tracking-widest text-sm">Proactive Scheduling</h3>
               </div>
               
-              <AIProactiveSchedule vehicle={vehicles[0]} washHistoryCount={4} />
+              <AIProactiveSchedule 
+                vehicle={vehicles[0]} 
+                washHistoryCount={4} 
+                onBook={() => setView('marketplace')}
+              />
             </div>
 
             <div className="bg-card p-8 rounded-[2.5rem] border border-border">
