@@ -1,6 +1,6 @@
 {
-  "name": "WashFlow",
-  "description": "A SaaS platform for car wash transparency, real-time tracking, and worker incentives.",
+  "name": "AutoLux",
+  "description": "Premium Car Wash Subscription & Automation Platform for owners and consumers.",
   "requestFramePermissions": ["camera", "geolocation"],
   "majorCapabilities": []
 }

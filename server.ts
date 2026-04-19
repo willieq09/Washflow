@@ -23,7 +23,14 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+app.options("*", (req, res) => {
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.sendStatus(204);
+});
+
 app.post("/api/create-checkout-session", async (req, res) => {
+  console.log(`[STRIPE] Creating session for ${req.body.userEmail} - Plan: ${req.body.plan}`);
   try {
     const { plan, userId, userEmail } = req.body;
     

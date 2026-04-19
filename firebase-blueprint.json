@@ -8,63 +8,113 @@
         "uid": { "type": "string", "description": "The user's unique identifier." },
         "name": { "type": "string", "description": "Display name of the user." },
         "email": { "type": "string", "description": "Email address of the user." },
-        "role": { "type": "string", "enum": ["owner", "worker"], "description": "Role determining access levels." },
+        "phone": { "type": "string", "description": "Phone number for contact." },
+        "role": { "type": "string", "enum": ["owner", "worker", "customer", "admin"], "description": "Role determining access levels." },
         "photoUrl": { "type": "string", "description": "Profile picture URL." },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." },
-        "businessLat": { "type": "number", "description": "Owner set latitude for geofencing." },
-        "businessLng": { "type": "number", "description": "Owner set longitude for geofencing." },
-        "businessRadius": { "type": "number", "description": "Allowed radius in meters." }
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status." },
+        "plan": { "type": "string", "description": "Active subscription plan ID or level." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." }
       },
       "required": ["uid", "name", "email", "role"]
     },
-    "WashJob": {
-      "title": "Wash Job",
-      "description": "Details of a single car wash transaction.",
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Information about a user's car.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the job." },
-        "workerId": { "type": "string", "description": "UID of the worker who performed the job." },
-        "workerName": { "type": "string", "description": "Name of the worker for quick display." },
-        "carModel": { "type": "string", "description": "Model of the car washed." },
-        "plateNumber": { "type": "string", "description": "Plate number of the car for transparency." },
-        "price": { "type": "number", "description": "Amount charged for the wash." },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the job was logged." },
-        "status": { "type": "string", "enum": ["completed"], "description": "Status of the job." },
-        "rating": { "type": "number", "description": "Customer rating from 1 to 5." },
-        "review": { "type": "string", "description": "Optional customer review comment." },
-        "maintenanceTip": { "type": "string", "description": "AI-generated tip for the customer's car." },
-        "lat": { "type": "number", "description": "Worker latitude at time of log." },
-        "lng": { "type": "number", "description": "Worker longitude at time of log." }
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "make": { "type": "string" },
+        "model": { "type": "string" },
+        "year": { "type": "number" },
+        "plateNumber": { "type": "string" },
+        "intensity": { "type": "string", "enum": ["low", "high"] }
       },
-      "required": ["workerId", "price", "timestamp", "status"]
+      "required": ["userId", "make", "model", "plateNumber"]
     },
-    "Incentive": {
-      "title": "Incentive",
-      "description": "Bonus payments to workers based on performance.",
+    "WashBusiness": {
+      "title": "Wash Business",
+      "description": "Commercial car wash location details.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier." },
-        "workerId": { "type": "string", "description": "UID of the worker receiving the incentive." },
-        "washId": { "type": "string", "description": "Reference to the wash job that triggered it." },
-        "amount": { "type": "number", "description": "Bonus amount." },
-        "reason": { "type": "string", "description": "Reason for the incentive (e.g., 'High Rating', 'Job Count Milestone')." },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the incentive was awarded." }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "businessLat": { "type": "number" },
+        "businessLng": { "type": "number" },
+        "businessRadius": { "type": "number" }
       },
-      "required": ["workerId", "amount", "timestamp"]
+      "required": ["name", "ownerId", "status"]
+    },
+    "Plan": {
+      "title": "Subscription Plan",
+      "description": "Tiered subscription service levels.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "interval": { "type": "string", "enum": ["month", "year"] },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "price", "interval", "active"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Tracking of user payments and plan status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "planId": { "type": "string" },
+        "providerRef": { "type": "string" },
+        "state": { "type": "string", "enum": ["active", "past_due", "canceled"] }
+      },
+      "required": ["userId", "planId", "state"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Scheduled or completed wash service.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "vehicleId": { "type": "string" },
+        "businessId": { "type": "string" },
+        "workerId": { "type": "string" },
+        "slot": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "canceled"] },
+        "price": { "type": "number" },
+        "maintenanceTip": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
+      },
+      "required": ["userId", "vehicleId", "businessId", "slot", "status"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer feedback on a booking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" }
+      },
+      "required": ["bookingId", "rating"]
     }
   },
   "firestore": {
-    "/users/{uid}": {
-      "schema": "UserProfile",
-      "description": "User profile documents stored by UID."
-    },
-    "/washes/{id}": {
-      "schema": "WashJob",
-      "description": "Car wash records."
-    },
-    "/incentives/{id}": {
-      "schema": "Incentive",
-      "description": "Performance bonuses records."
-    }
+    "/users/{uid}": { "schema": "UserProfile", "description": "User accounts." },
+    "/vehicles/{id}": { "schema": "Vehicle", "description": "User car registry." },
+    "/wash_businesses/{id}": { "schema": "WashBusiness", "description": "Wash station locations." },
+    "/plans/{id}": { "schema": "Plan", "description": "Subscription pricing." },
+    "/subscriptions/{id}": { "schema": "Subscription", "description": "Active user memberships." },
+    "/bookings/{id}": { "schema": "Booking", "description": "Service records (replacing /washes)." },
+    "/reviews/{id}": { "schema": "Review", "description": "Customer feedback." },
+    "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." }
   }
 }

@@ -25,14 +25,30 @@ import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalytic
 interface UserProfile {
   uid: string;
   name: string;
-  role: 'owner' | 'worker' | 'customer';
+  role: 'owner' | 'worker' | 'customer' | 'admin';
   email: string;
+  phone?: string;
   photoUrl?: string;
   plan?: 'starter' | 'standard' | 'elite';
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
   vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
+}
+
+type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings';
+
+interface Booking {
+  id: string;
+  userId: string;
+  vehicleId?: string; // or vehicle plate
+  vehicleInfo?: string;
+  businessId: string;
+  businessName: string;
+  slot: Timestamp;
+  status: 'pending' | 'confirmed' | 'completed' | 'canceled';
+  price: number;
+  createdAt: Timestamp;
 }
 
 interface Business {
@@ -84,11 +100,11 @@ interface Incentive {
 const Logger = {
   log: (...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[WASHFLOW]', ...args);
+      console.log('[AUTOLUX]', ...args);
     }
   },
   error: (...args: any[]) => {
-    console.error('[WASHFLOW ERROR]', ...args);
+    console.error('[AUTOLUX ERROR]', ...args);
     // Here you would typically send to Sentry or another error reporting tool
   }
 };
@@ -291,12 +307,13 @@ export default function App() {
               <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
                 <Car className="w-6 h-6" />
               </div>
-              <span className="text-xl font-bold text-white tracking-tight">WashFlow</span>
+              <span className="text-xl font-bold text-white tracking-tight">AutoLux</span>
             </div>
 
             <div className="space-y-1">
               {profile?.role === 'customer' ? (
                 <>
+                  <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
                   <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => setView('marketplace')} />
                   <NavItem icon={<Car size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => setView('my-cars')} />
                   <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
@@ -368,7 +385,9 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && profile && (
-              <DashboardView profile={profile} onLogWash={() => setView('log')} />
+              profile.role === 'customer' 
+                ? <CustomerDashboardView profile={profile} setView={setView} />
+                : <DashboardView profile={profile} onLogWash={() => setView('log')} />
             )}
             {view === 'log' && profile && (
               <LogWashForm profile={profile} onComplete={() => setView('history')} setView={setView} />
@@ -472,11 +491,11 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
           <Car size={40} />
         </div>
         <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter uppercase italic leading-none">
-          WASHFLOW <br />
+          AUTOLUX <br />
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
         <p className="text-xl text-text-dim mb-12 max-w-xl mx-auto font-medium">
-          The transparency layer for car wash hubs. Track, incentivize, and scale with real-time AI insights.
+          The car wash owner operating system. Manage operations locally, scale subscriptions globally.
         </p>
         <button 
           onClick={onLogin}
@@ -517,9 +536,9 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
         )}
         
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-          <FeatureCard title="Transparency" desc="Stop revenue leakage. Every wash is recorded instantly." />
-          <FeatureCard title="Feedback" desc="Direct customer-to-worker rating loop for performance audit." />
-          <FeatureCard title="Resilience" desc="Built-in offline support and real-time ledger synchronization." />
+          <FeatureCard title="Operator OS" desc="Stop revenue leakage. Manage team capacity and job logs with a high-fidelity dashboard." />
+          <FeatureCard title="Subscription Joy" desc="Layer your favorite wash stations into a single monthly plan. One payment, endless shine." />
+          <FeatureCard title="AI Intelligence" desc="Get predictive scheduling based on local weather and your car's personal usage history." />
         </div>
       </motion.div>
     </div>
@@ -537,9 +556,127 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 
 // --- View Components ---
 
+function CustomerDashboardView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
+  const [upcoming, setUpcoming] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'bookings'), 
+      where('userId', '==', profile.uid),
+      where('status', 'in', ['pending', 'confirmed']),
+      orderBy('slot', 'asc'),
+      limit(5)
+    );
+
+    return onSnapshot(q, (snap) => {
+      setUpcoming(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
+      setLoading(false);
+    });
+  }, [profile]);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-12">
+      <header className="flex justify-between items-end">
+        <div>
+          <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Hub.</h2>
+          <p className="text-text-dim text-lg lowercase mt-2">Manage your fleet and upcoming sessions.</p>
+        </div>
+        <button 
+          onClick={() => setView('marketplace')}
+          className="bg-accent text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition"
+        >
+          Book New Wash
+        </button>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Next Session */}
+        <div className="md:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-10 min-h-[300px]">
+          {upcoming.length > 0 ? (
+            <>
+              <div>
+                <span className="text-[10px] font-black text-white/60 uppercase tracking-[0.2em] mb-4 block">Up Next</span>
+                <div className="text-5xl font-black text-white tracking-tighter uppercase mb-4 leading-tight">
+                  {upcoming[0].businessName} <br />
+                  <span className="opacity-40 text-3xl">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div className="inline-flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white">
+                  {upcoming[0].status} • {upcoming[0].vehicleInfo || 'Vehicle Selected'}
+                </div>
+              </div>
+              <div className="flex gap-4 mt-10">
+                <button className="flex-1 bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition">Reschedule</button>
+                <div className="px-6 py-4 rounded-xl border border-white/20 text-white font-black text-[10px] uppercase tracking-widest">
+                  ETA 45m
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                <Calendar size={32} className="text-white/40" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-white uppercase italic">No Active Bookings</h3>
+                <p className="text-sm text-white/60 mt-2">Your garage is resting. Schedule a session to keep it pristine.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* AI Maintenance Corner */}
+        <div className="bento-card border-t-4 border-t-accent flex flex-col justify-between">
+          <div>
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">AI Pulse</span>
+            <h3 className="text-xl font-black text-white uppercase mt-2 mb-4 tracking-tighter italic">Garage Health</h3>
+            <div className="space-y-4">
+               {profile.vehicles && profile.vehicles.length > 0 ? (
+                 <AIProactiveSchedule vehicle={profile.vehicles[0]} washHistoryCount={0} />
+               ) : (
+                 <p className="text-xs text-text-dim">Add a vehicle to your garage to receive predictive maintenance insights.</p>
+               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
+            <Car className="text-accent" /> Your Fleet
+          </h3>
+          <button onClick={() => setView('my-cars')} className="text-[10px] font-black uppercase text-accent tracking-[0.2em] border-b border-accent/20 pb-1">Manage Garage</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {profile.vehicles?.map((v, i) => (
+            <div key={i} className="bento-card p-6 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-bg border border-border flex items-center justify-center">
+                <Car size={24} className="text-accent" />
+              </div>
+              <div>
+                <p className="font-bold text-white text-sm">{v.make} {v.model}</p>
+                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">{v.plate}</p>
+              </div>
+            </div>
+          ))}
+          <button 
+            onClick={() => setView('my-cars')}
+            className="bento-card p-6 flex items-center justify-center gap-2 text-text-dim hover:text-white transition group border-dashed"
+          >
+            <Plus size={18} className="group-hover:scale-110 transition" />
+            <span className="font-black text-[10px] uppercase tracking-widest">Add Vehicle</span>
+          </button>
+        </div>
+      </section>
+    </motion.div>
+  );
+}
+
 function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: () => void }) {
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
+  const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -557,35 +694,41 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
   };
 
   useEffect(() => {
-    const q = profile.role === 'owner' 
+    // Sync Washes
+    const qWashes = profile.role === 'owner' 
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(50))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(50));
 
-    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
-      const washes = snap.docs.map(d => ({ 
-        id: d.id, 
-        ...d.data(), 
-        isPending: d.metadata.hasPendingWrites 
-      } as WashJob));
+    const unsubWashes = onSnapshot(qWashes, (snap) => {
+      const washes = snap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob));
       setRecentWashes(washes.slice(0, 10));
-      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
       const todayWashes = washes.filter(w => w.timestamp?.toDate() >= today);
-      
-      const rev = todayWashes.reduce((acc, curr) => acc + curr.price, 0);
-      setStats({ 
-        todayRevenue: rev, 
+      setStats(prev => ({ 
+        ...prev,
+        todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
         todayCount: todayWashes.length,
-        totalCount: washes.length,
-        incentives: 0
-      });
-      setLoading(false);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'washes');
+        totalCount: washes.length 
+      }));
       setLoading(false);
     });
+
+    // Sync Bookings (Queue)
+    const qBookings = query(
+      collection(db, 'bookings'),
+      where('status', '==', 'pending'),
+      orderBy('slot', 'asc'),
+      limit(10)
+    );
+    const unsubBookings = onSnapshot(qBookings, (snap) => {
+      setUpcomingBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
+    });
+
+    return () => {
+      unsubWashes();
+      unsubBookings();
+    };
   }, [profile]);
 
   useEffect(() => {
@@ -623,7 +766,7 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
       <header className="mb-10 flex justify-between items-end">
         <div>
-          <h2 className="text-4xl font-black text-white tracking-tight">WashFlow Dashboard</h2>
+          <h2 className="text-4xl font-black text-white tracking-tight">AutoLux Dashboard</h2>
           <p className="text-text-dim mt-1">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
         <div className="hidden md:flex items-center gap-2 bg-success/10 text-success border border-success/20 px-3 py-1.5 rounded-full text-xs font-bold">
@@ -780,6 +923,42 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
             </div>
           )}
         </AnimatePresence>
+
+        {/* Today's Queue / Upcoming Bookings */}
+        <div className="md:col-span-2 bento-card">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold text-text-dim uppercase tracking-wider">Today's Queue</span>
+            <span className="text-[10px] font-black text-accent uppercase tracking-widest">{upcomingBookings.length} pending</span>
+          </div>
+          <div className="space-y-4">
+            {upcomingBookings.map(booking => (
+              <div key={booking.id} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-accent/20 transition group">
+                <div className="flex items-center gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center text-accent">
+                      <Calendar size={18} />
+                   </div>
+                   <div>
+                     <p className="font-bold text-sm text-white tracking-tight">{booking.vehicleInfo || 'Service Request'}</p>
+                     <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">
+                       Slot: {booking.slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </p>
+                   </div>
+                </div>
+                <button 
+                  onClick={onLogWash}
+                  className="opacity-0 group-hover:opacity-100 bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl"
+                >
+                  Process
+                </button>
+              </div>
+            ))}
+            {upcomingBookings.length === 0 && (
+              <div className="text-center py-6">
+                <p className="text-xs text-text-dim italic">No bookings in the queue...</p>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Activity Feed in Bento style */}
         <div className="md:col-span-2 bento-card overflow-hidden">
@@ -944,7 +1123,209 @@ function RoleCard({ icon, title, desc, onClick, highlight, loading, disabled }: 
   );
 }
 
+function BookingModal({ business, profile, onClose }: { business: Business, profile: UserProfile, onClose: () => void }) {
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'basic' | 'premium'>('basic');
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState<string>("");
+
+  const handleConfirm = async () => {
+    if (!selectedDate || !selectedTime || !selectedVehicle) return;
+    
+    setLoading(true);
+    try {
+      const slot = new Date(`${selectedDate}T${selectedTime}`);
+      const bookingData: Partial<Booking> = {
+        userId: profile.uid,
+        vehicleId: selectedVehicle,
+        businessId: business.id,
+        businessName: business.name,
+        slot: Timestamp.fromDate(slot),
+        status: 'pending',
+        price: selectedPlan === 'premium' ? 25 : 15,
+        createdAt: serverTimestamp() as Timestamp
+      };
+
+      await addDoc(collection(db, 'bookings'), bookingData);
+      alert("Booking Confirmed! You'll receive a reminder 1 hour before your slot.");
+      onClose();
+    } catch (error: any) {
+      console.error("Booking failed:", error);
+      alert(`Booking Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const vehicles = profile.vehicles || [];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-bg/80 backdrop-blur-xl"
+      />
+      
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-lg bg-card border border-border rounded-[2.5rem] shadow-2xl overflow-hidden"
+      >
+        <div className="p-10">
+          <header className="mb-8">
+            <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">Book at {business.name}</h3>
+            <p className="text-text-dim text-sm mt-1">Step {step} of 3 — {step === 1 ? 'Choose Vehicle' : step === 2 ? 'Select Tier' : 'Finalize Slot'}</p>
+          </header>
+
+          {step === 1 && (
+            <div className="space-y-4">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Select your vehicle</label>
+              {vehicles.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3">
+                  {vehicles.map((v, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setSelectedVehicle(v.plate)}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border transition text-left",
+                        selectedVehicle === v.plate 
+                          ? "bg-accent/10 border-accent text-white" 
+                          : "bg-white/5 border-border text-text-dim hover:border-white/20"
+                      )}
+                    >
+                      <div>
+                        <p className="font-bold text-sm tracking-tight">{v.make} {v.model}</p>
+                        <p className="text-[10px] opacity-60 uppercase font-black tracking-widest">{v.plate}</p>
+                      </div>
+                      <Car size={18} className={selectedVehicle === v.plate ? "text-accent" : "opacity-20"} />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-10 border-2 border-dashed border-border rounded-3xl text-center space-y-4">
+                  <Car className="mx-auto opacity-20" size={40} />
+                  <p className="text-sm text-text-dim">No vehicles in your garage. Add one first to book a wash.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Service Tier</label>
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setSelectedPlan('basic')}
+                  className={cn(
+                    "p-5 rounded-3xl border transition text-left",
+                    selectedPlan === 'basic' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                  )}
+                >
+                  <Zap size={20} className={selectedPlan === 'basic' ? "text-accent mb-3" : "text-text-dim mb-3"} />
+                  <p className="font-black text-sm uppercase tracking-tighter">Basic Wash</p>
+                  <p className="text-xl font-black mt-1">$15</p>
+                </button>
+                <button 
+                  onClick={() => setSelectedPlan('premium')}
+                  className={cn(
+                    "p-5 rounded-3xl border transition text-left relative overflow-hidden",
+                    selectedPlan === 'premium' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                  )}
+                >
+                  <Sparkles size={20} className={selectedPlan === 'premium' ? "text-accent mb-3" : "text-text-dim mb-3"} />
+                  <p className="font-black text-sm uppercase tracking-tighter">Premium Care</p>
+                  <p className="text-xl font-black mt-1">$25</p>
+                  <div className="absolute top-2 right-2 bg-accent px-1.5 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-widest">Best</div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Pick a Slot</label>
+                <div className="flex gap-4">
+                   <div className="flex-1">
+                      <input 
+                        type="date" 
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full bg-white/5 border border-border rounded-xl p-3 text-white text-sm focus:ring-1 focus:ring-accent outline-none" 
+                      />
+                   </div>
+                   <div className="flex-1">
+                      <input 
+                        type="time" 
+                        value={selectedTime}
+                        onChange={(e) => setSelectedTime(e.target.value)}
+                        className="w-full bg-white/5 border border-border rounded-xl p-3 text-white text-sm focus:ring-1 focus:ring-accent outline-none" 
+                      />
+                   </div>
+                </div>
+              </div>
+              <div className="p-6 bg-accent/5 rounded-2xl border border-accent/10">
+                <p className="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4">Reservation Summary</p>
+                <div className="space-y-2">
+                   <div className="flex justify-between text-xs font-bold text-white/60">
+                      <span>Vehicle</span>
+                      <span className="text-white">{selectedVehicle}</span>
+                   </div>
+                   <div className="flex justify-between text-xs font-bold text-white/60">
+                      <span>Tier</span>
+                      <span className="text-white uppercase tracking-widest">{selectedPlan}</span>
+                   </div>
+                   <div className="border-t border-accent/10 my-2 pt-2 flex justify-between">
+                      <span className="text-sm font-black text-white uppercase italic tracking-tighter">Total Due</span>
+                      <span className="text-xl font-black text-accent italic">{formatCurrency(selectedPlan === 'premium' ? 25 : 15)}</span>
+                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-10 flex gap-4">
+            {step > 1 && (
+              <button 
+                onClick={() => setStep(step - 1)}
+                className="flex-1 bg-white/5 text-text-dim py-4 rounded-xl font-black text-[10px] uppercase tracking-widest border border-border hover:text-white transition"
+              >
+                Back
+              </button>
+            )}
+            <button 
+              onClick={() => {
+                if (step < 3) {
+                  if (step === 1 && !selectedVehicle) {
+                    alert("Please select a vehicle or add one to your garage.");
+                    return;
+                  }
+                  setStep(step + 1);
+                } else {
+                  handleConfirm();
+                }
+              }}
+              disabled={loading}
+              className="flex-[2] bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50"
+            >
+              {loading ? "Processing..." : step === 3 ? "Confirm Reservation" : "Continue"}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function MarketplaceView({ profile }: { profile: UserProfile }) {
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  
   const businesses: Business[] = [
     { id: 'b1', name: "Elite Shine Studio", location: "Downtown Central", rating: 4.9, ratingCount: 128, ownerUid: '1', image: 'https://picsum.photos/seed/wash1/800/600' },
     { id: 'b2', name: "HydroFlow Auto", location: "North Industrial Park", rating: 4.7, ratingCount: 84, ownerUid: '2', image: 'https://picsum.photos/seed/wash2/800/600' },
@@ -958,7 +1339,8 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12 pb-20">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className ="space-y-12 pb-20">
+      {/* Search Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-10 rounded-[3rem] border border-border">
         <div>
           <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2">Explore the Ecosystem.</h2>
@@ -969,6 +1351,17 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
           <input type="text" placeholder="Search washes, parts, accessories..." className="bg-transparent border-none text-white focus:ring-0 placeholder:text-text-dim/50 text-sm py-3 w-full" />
         </div>
       </header>
+
+      {/* Booking Modal */}
+      <AnimatePresence>
+        {selectedBusiness && (
+          <BookingModal 
+            business={selectedBusiness} 
+            profile={profile} 
+            onClose={() => setSelectedBusiness(null)} 
+          />
+        )}
+      </AnimatePresence>
 
       <section>
         <div className="flex items-center justify-between mb-8">
@@ -991,7 +1384,10 @@ function MarketplaceView({ profile }: { profile: UserProfile }) {
                 <div className="flex items-center gap-1.5 text-text-dim text-xs mb-6">
                   <MapPin size={12} /> {b.location}
                 </div>
-                <button className="w-full bg-white text-bg py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent hover:text-white transition">
+                <button 
+                  onClick={() => setSelectedBusiness(b)}
+                  className="w-full bg-white text-bg py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent hover:text-white transition"
+                >
                   Book A Wash <ChevronRight size={14} />
                 </button>
               </div>
@@ -1522,7 +1918,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     </motion.div>
   );
 }
-function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, onComplete: () => void, setView: (v: any) => void }) {
+function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, onComplete: () => void, setView: (v: AppView) => void }) {
   const [form, setForm] = useState({ carModel: '', plateNumber: '', price: '20' });
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
