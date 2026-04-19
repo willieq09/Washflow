@@ -30,13 +30,15 @@ interface UserProfile {
   phone?: string;
   photoUrl?: string;
   plan?: 'starter' | 'standard' | 'elite';
+  businessName?: string;
+  businessAddress?: string;
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
   vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
 }
 
-type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings';
+type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription';
 
 interface Booking {
   id: string;
@@ -47,8 +49,10 @@ interface Booking {
   businessName: string;
   slot: Timestamp;
   status: 'pending' | 'confirmed' | 'completed' | 'canceled';
+  serviceType: 'in-station' | 'home-service';
   price: number;
   createdAt: Timestamp;
+  notes?: string;
 }
 
 interface Business {
@@ -156,7 +160,8 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings'>('dashboard');
+  const [view, setView] = useState<AppView>('dashboard');
+  const [preFillWash, setPreFillWash] = useState<{ carModel: string, plateNumber: string, bookingId?: string } | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
 
@@ -316,6 +321,7 @@ export default function App() {
                   <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
                   <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => setView('marketplace')} />
                   <NavItem icon={<Car size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => setView('my-cars')} />
+                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => setView('subscription')} />
                   <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
                 </>
               ) : (
@@ -387,10 +393,21 @@ export default function App() {
             {view === 'dashboard' && profile && (
               profile.role === 'customer' 
                 ? <CustomerDashboardView profile={profile} setView={setView} />
-                : <DashboardView profile={profile} onLogWash={() => setView('log')} />
+                : <DashboardView profile={profile} onLogWash={(data) => {
+                    if (data) setPreFillWash(data);
+                    setView('log');
+                  }} />
             )}
             {view === 'log' && profile && (
-              <LogWashForm profile={profile} onComplete={() => setView('history')} setView={setView} />
+              <LogWashForm 
+                profile={profile} 
+                onComplete={() => {
+                  setPreFillWash(null);
+                  setView('history');
+                }} 
+                setView={setView}
+                preFill={preFillWash}
+              />
             )}
             {view === 'history' && profile && (
               <HistoryView profile={profile} />
@@ -398,7 +415,7 @@ export default function App() {
             {view === 'performance' && profile?.role === 'owner' && (
               <OwnerPerformanceView />
             )}
-            {view === 'billing' && profile?.role === 'owner' && (
+            {(view === 'billing' || view === 'subscription') && profile && (
               <SubscriptionView profile={profile} />
             )}
             {view === 'marketplace' && <MarketplaceView profile={profile!} />}
@@ -673,7 +690,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
   );
 }
 
-function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: () => void }) {
+function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
@@ -834,7 +851,7 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
 
         {/* Action Card */}
         <div 
-          onClick={onLogWash}
+          onClick={() => onLogWash()}
           className="md:col-span-1 bento-card bg-accent border-none flex flex-col items-center justify-center text-center cursor-pointer hover:bg-accent/90 active:scale-95 group"
         >
            <div className="w-12 h-12 rounded-full border-2 border-white/20 flex items-center justify-center text-white mb-3 group-hover:scale-110 transition">
@@ -945,8 +962,12 @@ function DashboardView({ profile, onLogWash }: { profile: UserProfile, onLogWash
                    </div>
                 </div>
                 <button 
-                  onClick={onLogWash}
-                  className="opacity-0 group-hover:opacity-100 bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl"
+                  onClick={() => onLogWash({ 
+                    carModel: booking.vehicleInfo?.split('(')[0].trim() || 'Service Request', 
+                    plateNumber: booking.vehicleInfo?.match(/\(([^)]+)\)/)?.[1] || '',
+                    bookingId: booking.id 
+                  })}
+                  className="bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl hover:bg-accent hover:text-white"
                 >
                   Process
                 </button>
@@ -1128,6 +1149,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
   const [loading, setLoading] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<'basic' | 'premium'>('basic');
+  const [serviceType, setServiceType] = useState<'in-station' | 'home-service'>('in-station');
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
 
@@ -1140,16 +1162,18 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
       const bookingData: Partial<Booking> = {
         userId: profile.uid,
         vehicleId: selectedVehicle,
+        vehicleInfo: `${selectedVehicle}`,
         businessId: business.id,
         businessName: business.name,
         slot: Timestamp.fromDate(slot),
         status: 'pending',
-        price: selectedPlan === 'premium' ? 25 : 15,
+        serviceType: serviceType,
+        price: (selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0),
         createdAt: serverTimestamp() as Timestamp
       };
 
       await addDoc(collection(db, 'bookings'), bookingData);
-      alert("Booking Confirmed! You'll receive a reminder 1 hour before your slot.");
+      alert(`Booking Confirmed! ${serviceType === 'home-service' ? "Our professional will arrive at your location." : "See you at the station!"}`);
       onClose();
     } catch (error: any) {
       console.error("Booking failed:", error);
@@ -1180,7 +1204,12 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
         <div className="p-10">
           <header className="mb-8">
             <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">Book at {business.name}</h3>
-            <p className="text-text-dim text-sm mt-1">Step {step} of 3 — {step === 1 ? 'Choose Vehicle' : step === 2 ? 'Select Tier' : 'Finalize Slot'}</p>
+            <p className="text-text-dim text-sm mt-1">Step {step} of 4 — {
+              step === 1 ? 'Choose Vehicle' : 
+              step === 2 ? 'Select Tier' : 
+              step === 3 ? 'Service Mode' : 
+              'Finalize Slot'
+            }</p>
           </header>
 
           {step === 1 && (
@@ -1191,10 +1220,10 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                   {vehicles.map((v, idx) => (
                     <button 
                       key={idx}
-                      onClick={() => setSelectedVehicle(v.plate)}
+                      onClick={() => setSelectedVehicle(`${v.make} ${v.model} (${v.plate})`)}
                       className={cn(
                         "flex items-center justify-between p-4 rounded-2xl border transition text-left",
-                        selectedVehicle === v.plate 
+                        selectedVehicle?.includes(v.plate) 
                           ? "bg-accent/10 border-accent text-white" 
                           : "bg-white/5 border-border text-text-dim hover:border-white/20"
                       )}
@@ -1203,7 +1232,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                         <p className="font-bold text-sm tracking-tight">{v.make} {v.model}</p>
                         <p className="text-[10px] opacity-60 uppercase font-black tracking-widest">{v.plate}</p>
                       </div>
-                      <Car size={18} className={selectedVehicle === v.plate ? "text-accent" : "opacity-20"} />
+                      <Car size={18} className={selectedVehicle?.includes(v.plate) ? "text-accent" : "opacity-20"} />
                     </button>
                   ))}
                 </div>
@@ -1248,6 +1277,42 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
           )}
 
           {step === 3 && (
+            <div className="space-y-4">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Delivery Method</label>
+              <div className="grid grid-cols-1 gap-4">
+                <button 
+                  onClick={() => setServiceType('in-station')}
+                  className={cn(
+                    "p-6 rounded-3xl border transition flex items-center gap-4",
+                    serviceType === 'in-station' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                  )}
+                >
+                   <Store size={24} className={serviceType === 'in-station' ? "text-accent" : "text-text-dim"} />
+                   <div className="text-left">
+                     <p className="font-black text-sm uppercase tracking-tighter">In-Station</p>
+                     <p className="text-[10px] text-text-dim">Visit {business.name} and get served instantly.</p>
+                   </div>
+                   <div className="ml-auto text-xs font-black text-accent">+$0</div>
+                </button>
+                <button 
+                  onClick={() => setServiceType('home-service')}
+                  className={cn(
+                    "p-6 rounded-3xl border transition flex items-center gap-4",
+                    serviceType === 'home-service' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                  )}
+                >
+                   <MapPin size={24} className={serviceType === 'home-service' ? "text-accent" : "text-text-dim"} />
+                   <div className="text-left">
+                     <p className="font-black text-sm uppercase tracking-tighter">Home Service</p>
+                     <p className="text-[10px] text-text-dim">Our professional comes to your specific location.</p>
+                   </div>
+                   <div className="ml-auto text-xs font-black text-accent">+$10</div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
             <div className="space-y-6">
               <div className="space-y-4">
                 <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Pick a Slot</label>
@@ -1275,15 +1340,21 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                 <div className="space-y-2">
                    <div className="flex justify-between text-xs font-bold text-white/60">
                       <span>Vehicle</span>
-                      <span className="text-white">{selectedVehicle}</span>
+                      <span className="text-white truncate max-w-[150px]">{selectedVehicle}</span>
                    </div>
                    <div className="flex justify-between text-xs font-bold text-white/60">
-                      <span>Tier</span>
+                      <span>Service Mode</span>
+                      <span className="text-white uppercase tracking-widest">{serviceType.replace('-', ' ')}</span>
+                   </div>
+                   <div className="flex justify-between text-xs font-bold text-white/60">
+                      <span>Care Tier</span>
                       <span className="text-white uppercase tracking-widest">{selectedPlan}</span>
                    </div>
                    <div className="border-t border-accent/10 my-2 pt-2 flex justify-between">
                       <span className="text-sm font-black text-white uppercase italic tracking-tighter">Total Due</span>
-                      <span className="text-xl font-black text-accent italic">{formatCurrency(selectedPlan === 'premium' ? 25 : 15)}</span>
+                      <span className="text-xl font-black text-accent italic">
+                        {formatCurrency((selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0))}
+                      </span>
                    </div>
                 </div>
               </div>
@@ -1301,7 +1372,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
             )}
             <button 
               onClick={() => {
-                if (step < 3) {
+                if (step < 4) {
                   if (step === 1 && !selectedVehicle) {
                     alert("Please select a vehicle or add one to your garage.");
                     return;
@@ -1314,7 +1385,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
               disabled={loading}
               className="flex-[2] bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50"
             >
-              {loading ? "Processing..." : step === 3 ? "Confirm Reservation" : "Continue"}
+              {loading ? "Processing..." : step === 4 ? "Confirm Reservation" : "Continue"}
             </button>
           </div>
         </div>
@@ -1769,7 +1840,7 @@ function StarRating({ value, onChange, size = 24 }: { value: number, onChange: (
 function SubscriptionView({ profile }: { profile: UserProfile }) {
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSubscribe = async (plan: 'starter' | 'standard' | 'elite') => {
+  const handleSubscribe = async (plan: string) => {
     setLoading(plan);
     try {
       const response = await fetch('/api/create-checkout-session', {
@@ -1811,7 +1882,9 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     }
   };
 
-  const tiers = [
+  const isCustomer = profile.role === 'customer';
+
+  const ownerTiers = [
     {
       id: 'starter',
       name: 'Starter',
@@ -1842,14 +1915,51 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     }
   ];
 
+  const customerTiers = [
+    {
+      id: 'basic_wash',
+      name: 'Silver Care',
+      price: '$15',
+      description: '2 Professional station washes per month.',
+      features: ['2 Exterior Washes', 'Digital Maintenance Log', 'Priority Queue', 'AI Health Alerts'],
+      color: 'bg-white/5',
+      icon: <Check size={24} className="text-white/40" />
+    },
+    {
+      id: 'premium_wash',
+      name: 'Gold Care',
+      price: '$35',
+      description: 'The perfect subscription for busy owners.',
+      features: ['4 Exterior Washes', '1 Interior Detailing', 'Engine Bay Check', 'Everything in Silver'],
+      color: 'bg-accent/10 border-accent/40',
+      icon: <Sparkles size={24} className="text-accent" />,
+      popular: true
+    },
+    {
+      id: 'unlimited_wash',
+      name: 'Platinum Care',
+      price: '$75',
+      description: 'The ultimate care package for your vehicle.',
+      features: ['Unlimited Washes', 'Full Detailing', 'Ceramic Waxing', 'Everything in Gold'],
+      color: 'bg-white text-bg',
+      icon: <ShieldCheck size={24} className="text-bg" />
+    }
+  ];
+
+  const tiers = isCustomer ? customerTiers : ownerTiers;
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto pb-20">
       <header className="text-center mb-16">
-        <h2 className="text-5xl font-black text-white tracking-tighter uppercase mb-4">Scale Your Flow.</h2>
-        <p className="text-text-dim text-lg">Choose a plan that matches your business velocity.</p>
+        <h2 className="text-5xl font-black text-white tracking-tighter uppercase mb-4">
+          {isCustomer ? 'Subscription Joy.' : 'Scale Your Flow.'}
+        </h2>
+        <p className="text-text-dim text-lg">
+          {isCustomer ? 'Premium vehicle care, automated for your peace of mind.' : 'Choose a plan that matches your business velocity.'}
+        </p>
         <div className="mt-8 inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-accent/20">
           <Sparkles size={14} />
-          Your current plan: {profile.plan || 'Free Trial (Starter)'}
+          Your current plan: {profile.plan || 'No Active Subscription'}
         </div>
       </header>
 
@@ -1918,12 +2028,17 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     </motion.div>
   );
 }
-function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, onComplete: () => void, setView: (v: AppView) => void }) {
-  const [form, setForm] = useState({ carModel: '', plateNumber: '', price: '20' });
+function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserProfile, onComplete: () => void, setView: (v: AppView) => void, preFill?: { carModel: string, plateNumber: string, bookingId?: string } | null }) {
+  const [form, setForm] = useState({ 
+    carModel: preFill?.carModel || '', 
+    plateNumber: preFill?.plateNumber || '', 
+    price: '20' 
+  });
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
@@ -2011,24 +2126,12 @@ function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, o
         throw new Error("Unable to verify your location. Please enable GPS and try again.");
       }
 
-      // 2. Fetch Business Geofence Settings
-      // For MVP: Fetch the first owner found or use current profile if owner
+      // 2. Geofence check
       let geofence = { lat: profile.businessLat, lng: profile.businessLng, radius: profile.businessRadius || 500 };
-      
-      if (profile.role === 'worker' && (!geofence.lat || !geofence.lng)) {
-        // Look up owner settings
-        const ownerQuery = query(collection(db, 'users'), where('role', '==', 'owner'), limit(1));
-        const ownerSnap = await getDoc(doc(db, 'users', 'MASTER_SETTINGS')); // Using a known ID or searching
-        // Since we don't have a fixed MASTER_SETTINGS, let's search for an owner.
-        // Actually, to keep it simple, let's just use the current profile if it has it, 
-        // OR prompt the user that business location hasn't been set.
-      }
-
-      // Hard check: If business location is set, verify distance
       if (geofence.lat && geofence.lng) {
         const dist = calculateDistance(currentLat!, currentLng!, geofence.lat, geofence.lng);
         if (dist > geofence.radius) {
-          throw new Error(`Out of bounds. You are ${Math.round(dist)}m away from the business. Max allowed is ${geofence.radius}m.`);
+          throw new Error(`Out of bounds. You are ${Math.round(dist)}m away. Max allowed is ${geofence.radius}m.`);
         }
       } else if (profile.role === 'worker') {
         throw new Error("Business location has not been configured by the owner yet.");
@@ -2048,10 +2151,19 @@ function LogWashForm({ profile, onComplete, setView }: { profile: UserProfile, o
         status: 'completed',
         maintenanceTip: tip,
         lat: currentLat,
-        lng: currentLng
+        lng: currentLng,
+        bookingId: preFill?.bookingId || null
       };
       
       const docRef = await addDoc(collection(db, 'washes'), washData);
+      
+      // If there was a booking, mark it as completed
+      if (preFill?.bookingId) {
+        await updateDoc(doc(db, 'bookings', preFill.bookingId), {
+          status: 'completed'
+        });
+      }
+
       setLastLoggedId(docRef.id);
     } catch (error: any) {
       if (error.message.includes('bounds') || error.message.includes('Location') || error.message.includes('configured')) {
@@ -2660,6 +2772,8 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState({
+    businessName: profile.businessName || '',
+    businessAddress: profile.businessAddress || '',
     businessLat: profile.businessLat || 0,
     businessLng: profile.businessLng || 0,
     businessRadius: profile.businessRadius || 500
@@ -2689,7 +2803,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
     try {
       await updateDoc(doc(db, 'users', profile.uid), settings);
       onUpdate({ ...profile, ...settings });
-      alert("Business location saved successfully.");
+      alert("Business profile updated successfully.");
     } catch (error) {
       console.error("Save error:", error);
       alert("Failed to save settings.");
@@ -2701,15 +2815,42 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-20">
       <header className="mb-10 text-center">
-        <h2 className="text-4xl font-black text-white tracking-tight uppercase">Settings</h2>
-        <p className="text-text-dim mt-2 lowercase">Configure your business operational boundaries.</p>
+        <h2 className="text-4xl font-black text-white tracking-tight uppercase px-4">Operating Environment.</h2>
+        <p className="text-text-dim mt-2 lowercase">Configure your business identity and boundaries.</p>
       </header>
 
-      <div className="bento-card space-y-8">
-        <div className="space-y-4">
+      <div className="bento-card space-y-10">
+        <div className="space-y-6">
+          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+            <Store size={14} className="text-accent" />
+            Station Identity
+          </label>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
+              <input 
+                value={settings.businessName}
+                onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
+                placeholder="e.g. Lagos Premium Wash"
+                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
+              <input 
+                value={settings.businessAddress}
+                onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
+                placeholder="123 Lekki Phase 1, Lagos"
+                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 pt-6 border-t border-border">
           <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
             <MapPin size={14} className="text-accent" />
-            Business Geofence
+            Operational Geofence
           </label>
           <p className="text-xs text-text-dim leading-relaxed">
             Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.

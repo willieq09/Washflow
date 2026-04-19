@@ -39,9 +39,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
     }
 
     const plans = {
-      starter: { name: "WashFlow Starter", price: 1900 },
-      standard: { name: "WashFlow Professional", price: 4900 },
-      elite: { name: "WashFlow Elite", price: 9900 },
+      starter: { name: "AutoLux Operator Starter", price: 1900 },
+      standard: { name: "AutoLux Operator Professional", price: 4900 },
+      elite: { name: "AutoLux Operator Elite", price: 9900 },
     };
 
     const selectedPlan = plans[plan as keyof typeof plans];
@@ -59,7 +59,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
             currency: "usd",
             product_data: {
               name: selectedPlan.name,
-              description: `Subscription for ${selectedPlan.name} plan`,
+              description: `Subscription for ${selectedPlan.name}`,
             },
             unit_amount: selectedPlan.price,
             recurring: { interval: "month" },
