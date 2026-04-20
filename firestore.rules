@@ -1,70 +1,43 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required)
-    //   - name: string (required)
-    //   - email: string (required)
-    //   - role: string (owner|worker) (required)
-    //   - photoUrl: string (optional)
-    //   - createdAt: timestamp (required)
-    //
-    // Collection: washes
-    // Document ID: {id}
-    // Fields:
-    //   - workerId: string (required)
-    //   - workerName: string (optional)
-    //   - carModel: string (optional)
-    //   - plateNumber: string (optional)
-    //   - price: number (required, positive)
-    //   - timestamp: timestamp (required)
-    //   - status: string (completed) (required)
-    //   - rating: number (optional, 1-5)
-    //   - review: string (optional, max 500 chars)
-    //   - maintenanceTip: string (optional)
-    //
-    // Collection: incentives
-    // Document ID: {id}
-    // Fields:
-    //   - workerId: string (required)
-    //   - washId: string (optional)
-    //   - amount: number (required, positive)
-    //   - reason: string (required)
-    //   - timestamp: timestamp (required)
-    //
-    // ===============================================================
+    // --- Global Safety Net ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    // Helper Functions
-    function isAuthenticated() {
+    // --- Helper Functions ---
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Auth tokens never contain custom claims. Look up roles from the DB.
+    // Caution: get() inside list queries counts towards the 10-read limit per request.
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    function isAppOwner() {
-      return isAuthenticated() && 
-             (getUserRole() == 'owner' || getUserRole() == 'admin' ||
-              (request.auth.token.email == 'oumawillis09@gmail.com' && request.auth.token.email_verified == true));
+    function isAdmin() {
+      return isSignedIn() && (
+        getUserRole() == 'admin' || 
+        (request.auth.token.email == 'oumawillis09@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isStationOwner() {
+      return isSignedIn() && getUserRole() == 'owner';
     }
 
     function isWorker() {
-      return isAuthenticated() && getUserRole() == 'worker';
+      return isSignedIn() && getUserRole() == 'worker';
     }
 
     function isCustomer() {
-      return isAuthenticated() && getUserRole() == 'customer';
+      return isSignedIn() && getUserRole() == 'customer';
     }
 
     function isValidId(id) { 
@@ -74,73 +47,118 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
+    // --- Validation Blueprints ---
+
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
-             data.uid is string &&
+             data.uid == request.auth.uid &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string &&
-             data.role in ['owner', 'worker', 'customer', 'admin'];
+             data.email is string && data.email.size() > 0 &&
+             data.role in ['owner', 'worker', 'customer', 'admin'] &&
+             (data.createdAt == request.time || data.createdAt.toMillis() > 0);
     }
 
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'businessId', 'slot', 'status']) &&
-             data.userId is string &&
+      return data.keys().hasAll(['userId', 'businessId', 'slot', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
              data.businessId is string &&
-             data.status in ['pending', 'confirmed', 'completed', 'canceled'];
+             data.slot is timestamp &&
+             data.status in ['pending', 'confirmed', 'completed', 'canceled'] &&
+             (data.createdAt == request.time || data.createdAt.toMillis() > 0);
+    }
+
+    function isValidVehicle(data) {
+      return data.keys().hasAll(['userId', 'make', 'model', 'plateNumber']) &&
+             data.userId == request.auth.uid &&
+             data.make is string &&
+             data.model is string &&
+             data.plateNumber is string;
+    }
+
+    // --- Match Blocks ---
+
+    // Initial connection test
+    match /test/{id} {
+      allow read: if true;
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAppOwner() || isWorker());
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(incoming());
-      allow update: if isAuthenticated() && (isOwner(userId) || isAppOwner()) && isValidUser(incoming());
+      allow read: if isSignedIn() && (isOwner(userId) || isWorker() || isStationOwner() || isAdmin());
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && 
+                    // Protect immutable fields
+                    incoming().uid == existing().uid &&
+                    incoming().role == existing().role &&
+                    isValidUser(incoming());
     }
 
     match /vehicles/{id} {
-      allow read: if isAuthenticated() && (isOwner(incoming().userId) || isOwner(existing().userId) || isAppOwner());
-      allow create: if isAuthenticated() && isOwner(incoming().userId);
-      allow update, delete: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner());
+      allow read: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId) && isValidVehicle(incoming());
+      allow update, delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
     }
 
     match /wash_businesses/{id} {
       allow read: if true;
-      allow write: if isAppOwner();
-    }
-
-    match /bookings/{id} {
-      allow read: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner() || isWorker());
-      allow create: if isAuthenticated() && isOwner(incoming().userId) && isValidBooking(incoming());
-      allow update: if isAuthenticated() && (
-        isAppOwner() || 
-        isWorker() || 
-        (isOwner(existing().userId) && incoming().status == 'canceled' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
-      );
-    }
-
-    match /washes/{washId} {
-      allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner() || isCustomer());
-      allow create: if isAuthenticated() && (isWorker() || isAppOwner());
-      allow update: if isAuthenticated() && (isAppOwner() || resource.data.workerId == request.auth.uid);
-    }
-
-    match /reviews/{id} {
-      allow read: if true;
-      allow create: if isAuthenticated() && isOwner(incoming().userId);
-    }
-
-    match /subscriptions/{id} {
-      allow read: if isAuthenticated() && (isOwner(existing().userId) || isAppOwner());
-      allow write: if isAppOwner();
+      allow write: if isAdmin();
     }
 
     match /plans/{id} {
       allow read: if true;
-      allow write: if isAppOwner();
+      allow write: if isAdmin();
+    }
+
+    match /subscriptions/{id} {
+      allow read: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /bookings/{id} {
+      // Identity isolation
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.workerId) ||
+        isWorker() || 
+        isStationOwner() || 
+        isAdmin()
+      );
+      
+      allow create: if isSignedIn() && isOwner(incoming().userId) && isValidBooking(incoming());
+      
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isWorker() && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'workerId'])) ||
+        (isOwner(existing().userId) && incoming().status == 'canceled' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        (isStationOwner() && (get(/databases/$(database)/documents/wash_businesses/$(existing().businessId)).data.ownerId == request.auth.uid))
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    match /washes/{id} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.workerId) || 
+        isAdmin() || 
+        isStationOwner() || 
+        isWorker() ||
+        isCustomer()
+      );
+      allow create: if isSignedIn() && (isWorker() || isStationOwner() || isAdmin());
+      allow update: if isAdmin();
+    }
+
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow delete: if isAdmin();
     }
 
     match /incentives/{id} {
-      allow read: if isAuthenticated() && (resource.data.workerId == request.auth.uid || isAppOwner());
-      allow create: if isAppOwner();
-      allow delete: if isAppOwner();
+      // Allow workers to see their own incentives, and station owners/admins to see all for reports
+      allow read: if isSignedIn() && (isOwner(resource.data.workerId) || isStationOwner() || isAdmin());
+      // For MVP, allow workers to log their own job incentives as triggered in App.tsx
+      allow create: if isSignedIn() && (isWorker() || isAdmin());
+      allow delete: if isAdmin();
     }
   }
 }
