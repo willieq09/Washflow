@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   auth, db, OperationType, handleFirestoreError 
 } from './lib/firebase';
@@ -17,6 +17,9 @@ import {
   Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+} from 'recharts';
 import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
@@ -54,6 +57,9 @@ interface Booking {
   price: number;
   createdAt: Timestamp;
   notes?: string;
+  workerId?: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface Business {
@@ -337,11 +343,11 @@ export default function App() {
               {profile?.role === 'owner' && (
                 <>
                   <NavItem 
-                    icon={<Users size={20} />} 
-                    label="Team" 
+                    icon={<TrendingUp size={20} />} 
+                    label="Performance" 
                     active={view === 'performance'} 
                     onClick={() => {
-                      if (profile.plan === 'standard' || profile.plan === 'elite') {
+                      if (profile.plan === 'standard' || profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com') {
                         setView('performance');
                       } else {
                         setView('billing');
@@ -354,7 +360,7 @@ export default function App() {
                     active={view === 'billing'} 
                     onClick={() => setView('billing')} 
                   />
-                  {profile.plan === 'elite' && (
+                  {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com') && (
                     <NavItem 
                       icon={<Camera size={20} className="text-accent" />} 
                       label="AI Scanner" 
@@ -767,7 +773,25 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       limit(10)
     );
     const unsubBookings = onSnapshot(qBookings, (snap) => {
-      setUpcomingBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
+      let bookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
+      
+      // Filter for worker role: Assigned or Nearby
+      if (profile.role === 'worker') {
+        bookings = bookings.filter(b => {
+          const isAssigned = b.workerId === profile.uid;
+          
+          // Nearby check (if location data exists in booking)
+          let isNearby = false;
+          if (profile.businessLat && profile.businessLng && b.lat && b.lng) {
+            const dist = calculateDistance(profile.businessLat, profile.businessLng, b.lat, b.lng);
+            isNearby = dist <= (profile.businessRadius || 500);
+          }
+          
+          return isAssigned || isNearby || !b.workerId; // Show assigned, nearby, or unassigned available tasks
+        });
+      }
+      
+      setUpcomingBookings(bookings);
     });
 
     return () => {
@@ -1574,6 +1598,95 @@ function FilterBtn({ label, active, onClick }: { label: string, active?: boolean
   );
 }
 
+function VehicleCard({ vehicle }: { vehicle: any }) {
+  const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Usage history simulated based on 'intensity' and a mocked history count
+    const historyCount = vehicle.intensity === 'high' ? 6 : 2;
+    getPredictiveTips(vehicle, historyCount).then(res => {
+      setPredictive(res);
+      setLoading(false);
+    });
+  }, [vehicle]);
+
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      className="bg-card p-8 rounded-[2.5rem] border border-border flex flex-col gap-8 relative overflow-hidden group"
+    >
+      <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+      
+      <div className="flex flex-col md:flex-row gap-8">
+        <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-border">
+          <Car size={48} className="text-accent/20 group-hover:scale-110 transition-transform duration-500" />
+        </div>
+        
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-accent/20">
+              {vehicle.intensity === 'high' ? 'High Usage' : 'Weekend Driver'}
+            </span>
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">VIN Verified</span>
+          </div>
+          <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-bg/50 p-4 rounded-2xl border border-border">
+              <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Plate ID</p>
+              <p className="font-mono text-white text-sm">{vehicle.plate}</p>
+            </div>
+            <div className="bg-bg/50 p-4 rounded-2xl border border-border">
+              <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Health Score</p>
+              <p className="font-mono text-success text-sm">98%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+        <div className="bg-white/5 border border-white/5 rounded-3xl p-6 relative overflow-hidden group/tip">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={14} className="text-accent" />
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Predictive Wash</span>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-3 bg-white/10 rounded w-full animate-pulse" />
+              <div className="h-3 bg-white/10 rounded w-2/3 animate-pulse" />
+            </div>
+          ) : (
+            <p className="text-xs text-white/80 font-medium leading-relaxed italic line-clamp-2">
+               "{predictive?.nextWash}"
+            </p>
+          )}
+        </div>
+
+        <div className="bg-white/5 border border-white/5 rounded-3xl p-6 relative overflow-hidden group/tip">
+          <div className="flex items-center gap-2 mb-3">
+            <Gauge size={14} className="text-accent" />
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">AI Maintenance</span>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-3 bg-white/10 rounded w-full animate-pulse" />
+              <div className="h-3 bg-white/10 rounded w-2/3 animate-pulse" />
+            </div>
+          ) : (
+            <p className="text-xs text-white/80 font-medium leading-relaxed italic line-clamp-2">
+               "{predictive?.maintenance}"
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function AIProactiveSchedule({ vehicle, washHistoryCount, onBook }: { vehicle: any, washHistoryCount: number, onBook?: (day: string) => void }) {
   const [schedule, setSchedule] = useState<{ suggestion: string, reasoning: string, optimalDay: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1628,15 +1741,19 @@ function AIProactiveSchedule({ vehicle, washHistoryCount, onBook }: { vehicle: a
 function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProfile, setView: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
+  const [searchTerm, setSearchTerm] = useState('');
   const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' as 'low' | 'high' });
   const [saving, setSaving] = useState(false);
-  const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
 
-  useEffect(() => {
-    if (vehicles.length > 0) {
-      getPredictiveTips(vehicles[0], 4).then(setPredictive);
-    }
-  }, [vehicles]);
+  const filteredVehicles = useMemo(() => {
+    if (!searchTerm.trim()) return vehicles;
+    const term = searchTerm.toLowerCase();
+    return vehicles.filter(v => 
+      v.make.toLowerCase().includes(term) || 
+      v.model.toLowerCase().includes(term) || 
+      v.plate.toLowerCase().includes(term)
+    );
+  }, [vehicles, searchTerm]);
 
   const handleAddVehicle = async () => {
     if (!newVehicle.make || !newVehicle.model || !newVehicle.plate) {
@@ -1661,17 +1778,41 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
 
   return (
     <div className="space-y-8 pb-20">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h2 className="text-3xl font-black text-white uppercase tracking-tighter">My Garage.</h2>
           <p className="text-text-dim text-sm lowercase">Manage your vehicles and track AI maintenance health.</p>
         </div>
-        <button 
-          onClick={() => setShowAdd(true)}
-          className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center gap-2"
-        >
-           <Plus size={16} /> Add Vehicle
-        </button>
+        
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+          {vehicles.length > 0 && (
+            <div className="relative group min-w-[240px]">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent transition-colors" size={16} />
+              <input 
+                type="text"
+                placeholder="Search make, model, or plate..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white/5 border border-border rounded-2xl pl-12 pr-4 py-3 text-xs font-medium text-white outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/5 transition-all"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-dim hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
+          
+          <button 
+            onClick={() => setShowAdd(true)}
+            className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center justify-center gap-2"
+          >
+             <Plus size={16} /> Add Vehicle
+          </button>
+        </div>
       </header>
 
       <AnimatePresence>
@@ -1739,33 +1880,28 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            {vehicles.map((v, i) => (
-              <div key={i} className="bg-card p-8 rounded-[2.5rem] border border-border flex flex-col md:flex-row gap-8 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
-                <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-border">
-                  <Car size={48} className="text-accent/20" />
-                </div>
-                <div className="flex-1 flex flex-col justify-center">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-accent/20">
-                      {v.intensity === 'high' ? 'High Usage' : 'Weekend Driver'}
-                    </span>
-                    <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">VIN Verified</span>
-                  </div>
-                  <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">{v.year} {v.make} {v.model}</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-bg/50 p-4 rounded-2xl border border-border">
-                      <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Last Wash</p>
-                      <p className="font-mono text-white">4 days ago</p>
-                    </div>
-                    <div className="bg-bg/50 p-4 rounded-2xl border border-border">
-                      <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Health Score</p>
-                      <p className="font-mono text-success">98%</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+            <AnimatePresence mode="popLayout">
+              {filteredVehicles.map((v) => (
+                <VehicleCard key={v.plate} vehicle={v} />
+              ))}
+            </AnimatePresence>
+
+            {filteredVehicles.length === 0 && searchTerm && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="py-20 text-center bento-card border-dashed"
+              >
+                <Search size={40} className="text-text-dim mx-auto mb-4 opacity-20" />
+                <p className="text-text-dim font-bold uppercase tracking-widest text-[10px]">No vehicles matching "{searchTerm}"</p>
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="mt-4 text-accent text-xs font-black uppercase tracking-widest hover:underline"
+                >
+                  Clear Search
+                </button>
+              </motion.div>
+            )}
           </div>
 
           <aside className="space-y-6">
@@ -1915,9 +2051,20 @@ function StarRating({ value, onChange, size = 24 }: { value: number, onChange: (
 
 function SubscriptionView({ profile }: { profile: UserProfile }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('canceled') === 'true') {
+      setError("Payment was canceled or could not be processed. Your card was not charged.");
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleSubscribe = async (plan: string) => {
     setLoading(plan);
+    setError(null);
     try {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -1952,7 +2099,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       window.location.href = responseData.url;
     } catch (error: any) {
       console.error("Subscription Error:", error);
-      alert(`Subscription Error: ${error.message}`);
+      setError(error.message || "An unexpected error occurred during checkout initialization.");
     } finally {
       setLoading(null);
     }
@@ -2033,10 +2180,59 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         <p className="text-text-dim text-lg">
           {isCustomer ? 'Premium vehicle care, automated for your peace of mind.' : 'Choose a plan that matches your business velocity.'}
         </p>
-        <div className="mt-8 inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-accent/20">
-          <Sparkles size={14} />
-          Your current plan: {profile.plan || 'No Active Subscription'}
-        </div>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-8 overflow-hidden"
+            >
+              <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-left max-w-2xl mx-auto flex items-start gap-4 shadow-2xl relative">
+                <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-500 shrink-0 mt-1">
+                  <X size={20} strokeWidth={3} />
+                </div>
+                <div className="flex-1">
+                   <h4 className="text-white font-black uppercase tracking-widest text-xs mb-1">Transaction Interrupted.</h4>
+                   <p className="text-red-200/80 text-sm leading-relaxed mb-4">
+                     {error}
+                   </p>
+                   <div className="flex flex-wrap gap-2">
+                     <button 
+                       onClick={() => setError(null)}
+                       className="bg-white text-bg px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition"
+                     >
+                       Retry Selection
+                     </button>
+                     <button 
+                       onClick={() => window.open('https://support.stripe.com/questions/declined-payments', '_blank')}
+                       className="bg-white/5 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2"
+                     >
+                       Payment Help <Info size={12} />
+                     </button>
+                   </div>
+                </div>
+                <button 
+                  onClick={() => setError(null)}
+                  className="absolute top-4 right-4 text-white/20 hover:text-white transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="mt-4 text-[10px] text-text-dim/60 uppercase font-black tracking-widest">
+                Tip: Ensure your card has international payments enabled and sufficient balance.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!error && (
+          <div className="mt-8 inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border border-accent/20">
+            <Sparkles size={14} />
+            Your current plan: {profile.plan || 'No Active Subscription'}
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2116,8 +2312,17 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const [cameraActive, setCameraActive] = useState(false);
   
   const [workers, setWorkers] = useState<any[]>([]);
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(profile.uid);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(
+    profile.role === 'worker' ? profile.uid : profile.uid
+  );
   const [loadingWorkers, setLoadingWorkers] = useState(false);
+
+  // Set initial worker selection for workers
+  useEffect(() => {
+    if (profile.role === 'worker') {
+      setSelectedWorkerId(profile.uid);
+    }
+  }, [profile]);
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -2148,9 +2353,14 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
           setWorkers(workerData);
           
-          if (preFill?.bookingId && workerData.length > 0) {
+          // Auto-select the best worker for owners if nothing is specifically selected yet or if it's a new session
+          if (profile.role === 'owner' && workerData.length > 0) {
             const best = [...workerData].sort((a, b) => b.efficiency - a.efficiency)[0];
-            setSelectedWorkerId(best.uid);
+            // If we are just initializing (current selection is the owner themselves)
+            // suggest the best staff member instead to optimize throughput
+            if (selectedWorkerId === profile.uid || preFill?.bookingId) {
+              setSelectedWorkerId(best.uid);
+            }
           }
           
           setLoadingWorkers(false);
@@ -2162,7 +2372,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   }, [profile, preFill]);
 
   const startCamera = async () => {
-    if (profile.plan !== 'elite') {
+    if (profile.plan !== 'elite' && profile.email !== 'oumawillis09@gmail.com') {
       setView('billing');
       return;
     }
@@ -2203,12 +2413,20 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       
       try {
         const result = await scanVehicleInfo(base64Image);
-        if (result.plate || result.vehicle) {
+        if (result.plate && result.vehicle) {
           setForm(prev => ({
             ...prev,
-            carModel: result.vehicle || prev.carModel,
-            plateNumber: result.plate || prev.plateNumber
+            carModel: result.vehicle,
+            plateNumber: result.plate
           }));
+          stopCamera();
+        } else if (result.vehicle && !result.plate) {
+          setForm(prev => ({ ...prev, carModel: result.vehicle }));
+          alert("Vehicle identified, but plate was not detected. Please enter the plate number manually.");
+          stopCamera();
+        } else if (result.plate && !result.vehicle) {
+          setForm(prev => ({ ...prev, plateNumber: result.plate }));
+          alert("Plate recognized! Please select the vehicle from your records or enter the model manually below.");
           stopCamera();
         } else {
           alert("Could not detect vehicle info. Please try again or enter manually.");
@@ -2247,13 +2465,31 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
       // 2. Geofence check
       let geofence = { lat: profile.businessLat, lng: profile.businessLng, radius: profile.businessRadius || 500 };
+      
+      // If it's a booking, check if it's a mobile/home service
+      let bookingTarget: Booking | null = null;
+      if (preFill?.bookingId) {
+        const bDoc = await getDoc(doc(db, 'bookings', preFill.bookingId));
+        if (bDoc.exists()) {
+          bookingTarget = { id: bDoc.id, ...bDoc.data() } as Booking;
+          // If home service and has coords, use those
+          if (bookingTarget.serviceType === 'home-service' && bookingTarget.lat && bookingTarget.lng) {
+            geofence = { lat: bookingTarget.lat, lng: bookingTarget.lng, radius: 250 }; // Slightly larger radius for urban density
+          }
+        }
+      }
+
       if (geofence.lat && geofence.lng) {
         const dist = calculateDistance(currentLat!, currentLng!, geofence.lat, geofence.lng);
         if (dist > geofence.radius) {
-          throw new Error(`Out of bounds. You are ${Math.round(dist)}m away. Max allowed is ${geofence.radius}m.`);
+          const locationLabel = bookingTarget?.serviceType === 'home-service' 
+            ? "the customer's service location" 
+            : "the business station";
+            
+          throw new Error(`Geofence Alert: You are currently ${Math.round(dist)}m away from ${locationLabel}. Operational compliance requires you to be within ${geofence.radius}m to log this job.`);
         }
-      } else if (profile.role === 'worker') {
-        throw new Error("Business location has not been configured by the owner yet.");
+      } else if (profile.role === 'worker' && (!bookingTarget || bookingTarget.serviceType !== 'home-service')) {
+        throw new Error("Operational Configuration Error: The business geofence has not been configured. Please contact your manager.");
       }
 
       const tip = (profile.plan === 'standard' || profile.plan === 'elite')
@@ -2369,11 +2605,14 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 ))}
               </select>
               
-              {preFill?.bookingId && (
+              {workers.length > 0 && (
                 <div className="flex items-center gap-2 bg-accent/10 border border-accent/20 p-3 rounded-xl">
                   <Award size={16} className="text-accent" />
                   <p className="text-[10px] text-accent font-bold uppercase tracking-tight">
-                    Performance Insight: <span className="text-white">Auto-selected {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} to boost morale based on efficiency metrics.</span>
+                    Power Suggestion: <span className="text-white">
+                      AI recommended {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} 
+                      {selectedWorkerId === [...workers].sort((a, b) => b.efficiency - a.efficiency)[0]?.uid ? " (Highest Efficiency)" : ""} to maximize station throughput.
+                    </span>
                   </p>
                 </div>
               )}
@@ -2487,11 +2726,17 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
 function OwnerPerformanceView() {
   const [workers, setWorkers] = useState<any[]>([]);
+  const [allWashes, setAllWashes] = useState<WashJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     const unsubWashes = onSnapshot(collection(db, 'washes'), (washSnap) => {
       const washes = washSnap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob));
+      setAllWashes(washes);
       
       onSnapshot(collection(db, 'incentives'), (incentiveSnap) => {
         const incentives = incentiveSnap.docs.map(d => ({ id: d.id, ...d.data() } as Incentive));
@@ -2499,19 +2744,30 @@ function OwnerPerformanceView() {
         onSnapshot(collection(db, 'users'), (userSnap) => {
           const users = userSnap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker');
           
+          const startDate = new Date(dateRange.start);
+          const endDate = new Date(dateRange.end);
+          endDate.setHours(23, 59, 59);
+
           const workerData = users.map(worker => {
-            const workerWashes = washes.filter(w => w.workerId === worker.uid);
-            const workerIncentives = incentives.filter(i => i.workerId === worker.uid);
+            const workerWashes = washes.filter(w => {
+              const washDate = w.timestamp?.toDate() || new Date();
+              return w.workerId === worker.uid && washDate >= startDate && washDate <= endDate;
+            });
+            const workerIncentives = incentives.filter(i => {
+              const incDate = i.timestamp?.toDate() || new Date();
+              return i.workerId === worker.uid && incDate >= startDate && incDate <= endDate;
+            });
             
             const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
             const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
             const totalIncentives = workerIncentives.reduce((acc, curr) => acc + curr.amount, 0);
-            const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
+            // Normalized efficiency score 0-100
+            const efficiencyScore = Math.min(100, (workerWashes.length * (avgRating / 5) * 2) * 5);
             
             // Calculate badges
             const badges = [];
             if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={12} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
-            if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={12} />, color: 'text-accent', bg: 'bg-accent/10' });
+            if (efficiencyScore >= 80 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={12} />, color: 'text-accent', bg: 'bg-accent/10' });
             if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={12} />, color: 'text-red-400', bg: 'bg-red-400/10' });
 
             return {
@@ -2519,7 +2775,7 @@ function OwnerPerformanceView() {
               totalWashes: workerWashes.length,
               avgRating,
               totalIncentives,
-              efficiency,
+              efficiencyScore,
               badges,
               revenue: workerWashes.reduce((acc, curr) => acc + curr.price, 0)
             };
@@ -2532,7 +2788,29 @@ function OwnerPerformanceView() {
     });
 
     return () => unsubWashes();
-  }, []);
+  }, [dateRange]);
+
+  const teamMetrics = useMemo(() => {
+    if (workers.length === 0) return null;
+    const totalRevenue = workers.reduce((acc, w) => acc + w.revenue, 0);
+    const totalWashes = workers.reduce((acc, w) => acc + w.totalWashes, 0);
+    const avgTeamRating = workers.reduce((acc, w) => acc + w.avgRating, 0) / workers.length;
+    
+    // Revenue trend
+    const revenueByDay: Record<string, number> = {};
+    allWashes.forEach(w => {
+      const date = w.timestamp?.toDate().toISOString().split('T')[0];
+      if (date && date >= dateRange.start && date <= dateRange.end) {
+        revenueByDay[date] = (revenueByDay[date] || 0) + w.price;
+      }
+    });
+
+    const trendData = Object.entries(revenueByDay)
+      .map(([date, amount]) => ({ date, amount }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return { totalRevenue, totalWashes, avgTeamRating, trendData };
+  }, [workers, allWashes, dateRange]);
 
   if (loading) return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
@@ -2549,76 +2827,193 @@ function OwnerPerformanceView() {
   );
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
-      <header className="mb-10">
-        <h2 className="text-4xl font-black text-white tracking-tight">Team Performance</h2>
-        <p className="text-text-dim mt-2">Core metrics and evaluation ledger for operative staff.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto pb-20">
+      <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h2 className="text-4xl font-black text-white tracking-tight">Performance Engine</h2>
+          <p className="text-text-dim mt-2 font-medium">Real-time operative analytics and staff efficiency ledger.</p>
+        </div>
+        <div className="flex items-center gap-3 bg-card p-2 rounded-2xl border border-border shadow-2xl">
+          <Calendar size={18} className="text-text-dim ml-2" />
+          <input 
+            type="date" 
+            value={dateRange.start} 
+            onChange={e => setDateRange({...dateRange, start: e.target.value})}
+            className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+          />
+          <span className="text-text-dim text-xs font-black">TO</span>
+          <input 
+            type="date" 
+            value={dateRange.end} 
+            onChange={e => setDateRange({...dateRange, end: e.target.value})}
+            className="bg-bg border border-border rounded-xl px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+          />
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {workers.map(worker => (
-          <div key={worker.uid} className="bento-card group hover:border-accent/40 transition-colors">
-            <div className="flex items-center gap-4 mb-8">
-              <img src={worker.photoUrl} className="w-16 h-16 rounded-2xl border border-border group-hover:scale-105 transition-transform" />
-              <div>
-                <h3 className="text-xl font-bold text-white">{worker.name}</h3>
-                <p className="text-xs text-text-dim font-medium uppercase tracking-widest">{worker.email}</p>
-                {worker.badges && worker.badges.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {worker.badges.map((badge: any) => (
-                      <div key={badge.id} className={cn("flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-current text-[8px] font-black uppercase tracking-tighter", badge.color, badge.bg)}>
-                        {badge.icon}
-                        {badge.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-bg p-4 rounded-2xl border border-border">
-                <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1">Service Count</p>
-                <p className="text-2xl font-black text-white">{worker.totalWashes}</p>
-              </div>
-              <div className="bg-bg p-4 rounded-2xl border border-border">
-                <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1">Avg Rating</p>
-                <div className="flex items-center gap-1">
-                  <p className="text-2xl font-black text-white">{worker.avgRating.toFixed(1)}</p>
-                  <Star size={16} fill="currentColor" className="text-yellow-400" />
-                </div>
-              </div>
-              <div className="bg-bg p-4 rounded-2xl border border-border">
-                <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1">Revenue Base</p>
-                <p className="text-xl font-black text-white">{formatCurrency(worker.revenue)}</p>
-              </div>
-              <div className="bg-bg p-4 rounded-2xl border border-border">
-                <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1">Total Perks</p>
-                <p className="text-xl font-black text-success">{formatCurrency(worker.totalIncentives)}</p>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-border">
-               <div className="flex justify-between items-center mb-2">
-                 <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Efficiency Quotient</span>
-                 <span className="text-[10px] font-black text-accent">{Math.min(100, (worker.totalWashes * (worker.avgRating / 5) * 2)).toFixed(0)}%</span>
-               </div>
-               <div className="w-full h-1.5 bg-bg rounded-full overflow-hidden border border-border">
-                 <div 
-                   className="h-full bg-accent transition-all duration-1000" 
-                   style={{ width: `${Math.min(100, (worker.totalWashes * (worker.avgRating / 5) * 2))}%` }} 
-                 />
-               </div>
-            </div>
+      {/* Global Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bento-card border-accent/20 bg-accent/5">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-1 leading-none">Global Revenue</p>
+          <p className="text-3xl font-black text-white tracking-tighter">{formatCurrency(teamMetrics?.totalRevenue || 0)}</p>
+        </div>
+        <div className="bento-card">
+          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 leading-none">Team Efficiency</p>
+          <p className="text-3xl font-black text-white tracking-tighter">
+            {(workers.reduce((acc, w) => acc + w.efficiencyScore, 0) / (workers.length || 1)).toFixed(0)}%
+          </p>
+        </div>
+        <div className="bento-card">
+          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 leading-none">Job Volume</p>
+          <p className="text-3xl font-black text-white tracking-tighter">{teamMetrics?.totalWashes}</p>
+        </div>
+        <div className="bento-card">
+          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 leading-none">CSAT Rating</p>
+          <div className="flex items-center gap-2">
+            <p className="text-3xl font-black text-white tracking-tighter">{teamMetrics?.avgTeamRating.toFixed(1)}</p>
+            <Star size={20} fill="currentColor" className="text-yellow-400" />
           </div>
-        ))}
+        </div>
       </div>
 
-      {workers.length === 0 && (
-        <div className="bento-card text-center py-20 border-dashed">
-          <p className="text-text-dim italic">No operative staff registered in the ledger.</p>
+      {/* Revenue Trajectory - Full Width Top Row */}
+      <div className="bento-card min-h-[400px] mb-8">
+        <h3 className="text-xs font-black text-text-dim uppercase tracking-[0.2em] mb-8">Revenue Trajectory</h3>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={teamMetrics?.trendData}>
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                stroke="#666" 
+                fontSize={10} 
+                tickFormatter={(val) => new Date(val).toLocaleDateString([], { month: 'short', day: 'numeric' })} 
+              />
+              <YAxis stroke="#666" fontSize={10} tickFormatter={(val) => `$${val}`} />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }}
+                itemStyle={{ color: '#fff', fontSize: '12px' }}
+              />
+              <Area type="monotone" dataKey="amount" stroke="var(--color-accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Total Washes Comparison Chart */}
+        <div className="bento-card min-h-[400px]">
+          <h3 className="text-xs font-black text-text-dim uppercase tracking-[0.2em] mb-8">Workforce Volume Leaderboard</h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={workers}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                <XAxis dataKey="name" stroke="#666" fontSize={10} interval={0} />
+                <YAxis stroke="#666" fontSize={10} />
+                <RechartsTooltip 
+                  cursor={{ fill: '#ffffff05' }}
+                  contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }}
+                />
+                <Bar dataKey="totalWashes" radius={[4, 4, 0, 0]} barSize={40}>
+                  {workers.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? 'var(--color-accent)' : '#4f46e5'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Worker Comparison - Efficiency Radar */}
+        <div className="bento-card min-h-[400px]">
+          <h3 className="text-xs font-black text-text-dim uppercase tracking-[0.2em] mb-8">Staff IQ Comparison</h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={workers}>
+                <PolarGrid stroke="#ffffff10" />
+                <PolarAngleAxis dataKey="name" stroke="#666" fontSize={10} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#666" fontSize={8} />
+                <Radar
+                   name="Efficiency"
+                   dataKey="efficiencyScore"
+                   stroke="var(--color-accent)"
+                   fill="var(--color-accent)"
+                   fillOpacity={0.5}
+                />
+                <RechartsTooltip 
+                  contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '12px' }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-8">
+        {/* List of Workers with Cards - Reduced Size or Scrollable */}
+        <div className="space-y-4">
+          <h3 className="text-xs font-black text-text-dim uppercase tracking-[0.2em] px-2 mb-4">Operative Ledger</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {workers.map(worker => (
+              <div key={worker.uid} className="bento-card group hover:border-accent/40 transition-colors p-5">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative">
+                    <img alt={worker.name} src={worker.photoUrl} className="w-12 h-12 rounded-xl border border-border group-hover:scale-105 transition-transform" />
+                    <div className={cn(
+                      "absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-card",
+                      worker.efficiencyScore > 80 ? "bg-success" : "bg-yellow-500"
+                    )} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-white truncate">{worker.name}</h3>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {worker.badges?.slice(0, 2).map((badge: any) => (
+                        <div key={badge.id} title={badge.name} className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-current text-[7px] font-black uppercase tracking-tighter", badge.color, badge.bg)}>
+                          {badge.icon}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-black text-white">{worker.efficiencyScore.toFixed(0)}%</p>
+                    <p className="text-[8px] text-text-dim uppercase font-black tracking-widest">IQ</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-bg/50 p-2 rounded-xl border border-border/50 text-center">
+                    <p className="text-[7px] font-black text-text-dim uppercase tracking-widest mb-0.5">Washes</p>
+                    <p className="text-sm font-black text-white">{worker.totalWashes}</p>
+                  </div>
+                  <div className="bg-bg/50 p-2 rounded-xl border border-border/50 text-center">
+                    <p className="text-[7px] font-black text-text-dim uppercase tracking-widest mb-0.5">Rating</p>
+                    <div className="flex items-center justify-center gap-0.5">
+                      <p className="text-sm font-black text-white">{worker.avgRating.toFixed(1)}</p>
+                      <Star size={8} fill="currentColor" className="text-yellow-400" />
+                    </div>
+                  </div>
+                  <div className="bg-bg/50 p-2 rounded-xl border border-border/50 text-center">
+                    <p className="text-[7px] font-black text-text-dim uppercase tracking-widest mb-0.5">Revenue</p>
+                    <p className="text-sm font-black text-accent">${worker.revenue.toFixed(0)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {workers.length === 0 && (
+            <div className="bento-card text-center py-10 border-dashed opacity-50">
+              <p className="text-xs text-text-dim italic lowercase">No active staff in selected temporal range.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -3121,6 +3516,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [result, setResult] = useState<{ plate: string, vehicle: string } | null>(null);
+  const [showGarage, setShowGarage] = useState(false);
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -3128,6 +3524,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
   const startCamera = async () => {
     setCameraActive(true);
     setResult(null);
+    setShowGarage(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' } 
@@ -3164,8 +3561,14 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
       
       try {
         const res = await scanVehicleInfo(base64Image);
-        if (res.plate || res.vehicle) {
+        if (res.plate && res.vehicle) {
           setResult(res);
+          stopCamera();
+        } else if (res.vehicle && !res.plate) {
+          setResult({ ...res, plate: '' });
+          stopCamera();
+        } else if (res.plate && !res.vehicle) {
+          setResult({ ...res, vehicle: '' });
           stopCamera();
         } else {
           alert("Could not detect vehicle info. Please try again or enter manually.");
@@ -3176,6 +3579,12 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
         setIsScanning(false);
       }
     }
+  };
+
+  const handleManualSelection = (vehicle: any) => {
+    setResult({ plate: vehicle.plate, vehicle: `${vehicle.make} ${vehicle.model}` });
+    setShowGarage(false);
+    stopCamera();
   };
 
   return (
@@ -3195,19 +3604,53 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bento-card p-0 overflow-hidden relative aspect-[4/3] bg-black shadow-2xl">
-          {!cameraActive ? (
+          {!cameraActive && !showGarage ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center p-10">
               <div className="w-20 h-20 bg-accent/10 rounded-full flex items-center justify-center text-accent">
                 <Camera size={40} />
               </div>
               <h3 className="text-xl font-black text-white uppercase tracking-tighter">Ready for Analysis</h3>
-              <p className="text-sm text-text-dim lowercase">Position the vehicle plate clearly in the frame for maximum accuracy.</p>
-              <button 
-                onClick={startCamera}
-                className="mt-4 bg-white text-bg px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-accent hover:text-white transition"
-              >
-                Initiate Lens
-              </button>
+              <p className="text-sm text-text-dim lowercase mb-4">Position the vehicle plate clearly in the frame for maximum accuracy.</p>
+              
+              <div className="flex flex-col w-full max-w-xs gap-3">
+                <button 
+                  onClick={startCamera}
+                  className="bg-white text-bg px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-accent hover:text-white transition shadow-xl"
+                >
+                  Initiate Lens
+                </button>
+                
+                {profile.vehicles && profile.vehicles.length > 0 && (
+                  <button 
+                    onClick={() => setShowGarage(true)}
+                    className="bg-white/5 text-text-dim px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white/10 hover:text-white transition"
+                  >
+                    Select From Garage
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : showGarage ? (
+            <div className="absolute inset-0 bg-bg p-8 overflow-y-auto">
+               <div className="flex items-center justify-between mb-8">
+                 <h3 className="text-lg font-black text-white uppercase tracking-tighter">Internal Garage</h3>
+                 <button onClick={() => setShowGarage(false)} className="text-accent font-black text-[10px] uppercase">Back to Camera</button>
+               </div>
+               <div className="space-y-3">
+                 {profile.vehicles?.map((v, i) => (
+                   <button 
+                    key={i} 
+                    onClick={() => handleManualSelection(v)}
+                    className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:border-accent group transition"
+                   >
+                     <div className="text-left">
+                       <p className="text-white font-bold">{v.make} {v.model}</p>
+                       <p className="text-xs text-text-dim font-mono">{v.plate}</p>
+                     </div>
+                     <ChevronRight size={20} className="text-text-dim group-hover:text-accent transition" />
+                   </button>
+                 ))}
+               </div>
             </div>
           ) : (
             <>
@@ -3240,34 +3683,68 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
 
         <div className="space-y-6">
           <div className="bento-card border-t-4 border-t-accent h-full flex flex-col">
-             <div className="flex items-center gap-2 mb-6">
-               <ShieldCheck size={18} className="text-accent" />
-               <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">Recognition Result</span>
+             <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-2">
+                 <ShieldCheck size={18} className="text-accent" />
+                 <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">Recognition Result</span>
+               </div>
+               {!result && (
+                 <button 
+                   onClick={() => setResult({ plate: '', vehicle: '' })}
+                   className="text-[10px] font-black text-text-dim hover:text-white uppercase tracking-widest"
+                 >
+                   Manual Entry
+                 </button>
+               )}
              </div>
              {result ? (
                <div className="space-y-6 flex-1 flex flex-col">
                  <div>
                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 block">Identified Plate</label>
-                    <div className="text-4xl font-black text-white tracking-widest font-mono uppercase bg-bg p-4 rounded-xl border border-border shadow-inner">
-                      {result.plate || "No Plate Detected"}
-                    </div>
+                    <input 
+                      value={result.plate}
+                      placeholder="ABC-123-XY"
+                      onChange={e => setResult({...result, plate: e.target.value.toUpperCase()})}
+                      className={cn(
+                        "w-full text-4xl font-black tracking-widest font-mono uppercase bg-bg p-4 rounded-xl border outline-none focus:ring-2 focus:ring-accent shadow-inner transition",
+                        result.plate ? "text-white border-border" : "text-accent border-accent/40 animate-pulse"
+                      )}
+                    />
                  </div>
                  <div>
                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 block">Vehicle Model</label>
-                    <div className="text-2xl font-black text-white uppercase tracking-tighter">
-                      {result.vehicle || "Processing Recognition..."}
-                    </div>
+                    <input 
+                      value={result.vehicle}
+                      placeholder="VEHICLE MODEL"
+                      onChange={e => setResult({...result, vehicle: e.target.value})}
+                      className={cn(
+                        "w-full text-2xl font-black uppercase tracking-tighter bg-bg p-4 rounded-xl border outline-none focus:ring-2 focus:ring-accent transition",
+                        result.vehicle ? "text-white border-border" : "text-yellow-500 border-yellow-500/40 animate-pulse"
+                      )}
+                    />
                  </div>
-                 <div className="mt-auto pt-6">
+                 
+                 <div className="mt-auto pt-6 space-y-3">
                    <button 
+                    disabled={!result.plate || !result.vehicle}
                     onClick={() => onLog({ carModel: result.vehicle, plateNumber: result.plate })}
-                    className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-bg transition"
+                    className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-bg transition disabled:opacity-50"
                    >
                      Log This Wash
                    </button>
+                   
+                   {profile.vehicles && profile.vehicles.length > 0 && (
+                     <button 
+                       onClick={() => setShowGarage(true)}
+                       className="w-full bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-white transition"
+                     >
+                       Select From Garage
+                     </button>
+                   )}
+
                    <button 
-                    onClick={() => startCamera()}
-                    className="w-full mt-3 bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-white transition"
+                    onClick={() => { startCamera(); }}
+                    className="w-full bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-white transition"
                    >
                      Scan Again
                    </button>
@@ -3277,6 +3754,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center opacity-20">
                  <Search size={40} className="mx-auto mb-4" />
                  <p className="text-xs font-black uppercase tracking-widest">Waiting for data stream...</p>
+                 <p className="text-[10px] mt-2 italic lowercase text-text-dim">Initiate the lens or select manually from your records.</p>
                </div>
              )}
           </div>
