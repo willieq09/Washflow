@@ -36,9 +36,10 @@ interface UserProfile {
   businessLng?: number;
   businessRadius?: number;
   vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
+  badges?: { id: string; name: string; icon: any; color: string; bg: string; }[];
 }
 
-type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription';
+type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner';
 
 interface Booking {
   id: string;
@@ -251,6 +252,8 @@ export default function App() {
       await setPersistence(auth, browserLocalPersistence);
       const result = await signInWithPopup(auth, provider);
       console.log("Manual authentication success:", result.user.email);
+      // Force reload to ensure session is recognized immediately across the app
+      window.location.reload();
     } catch (error: any) {
       console.error("Login failed:", error);
       setAuthLoading(false);
@@ -351,6 +354,14 @@ export default function App() {
                     active={view === 'billing'} 
                     onClick={() => setView('billing')} 
                   />
+                  {profile.plan === 'elite' && (
+                    <NavItem 
+                      icon={<Camera size={20} className="text-accent" />} 
+                      label="AI Scanner" 
+                      active={view === 'scanner'} 
+                      onClick={() => setView('scanner')} 
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -423,6 +434,12 @@ export default function App() {
               <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
             {view === 'my-cars' && <CustomerVehicleView profile={profile!} setView={setView} onUpdate={(p) => setProfile(p)} />}
+            {view === 'scanner' && profile && (
+              <ScannerView profile={profile} setView={setView} onLog={(data) => {
+                setPreFillWash(data);
+                setView('log');
+              }} />
+            )}
           </AnimatePresence>
         </main>
       </div>
@@ -871,6 +888,25 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
            <div className="font-bold text-lg">New Wash</div>
            <div className="text-[10px] text-white/70 uppercase tracking-widest mt-1">Quick Log</div>
         </div>
+
+        {/* Elite Scanner Card - Only for Elite Owners */}
+        {profile.role === 'owner' && profile.plan === 'elite' && (
+          <div 
+            onClick={() => setView('scanner')}
+            className="md:col-span-1 bento-card bg-white border-none flex flex-col justify-between group cursor-pointer hover:bg-black hover:text-white transition-all duration-300 shadow-2xl shadow-accent/20"
+          >
+            <div className="flex justify-between items-start">
+               <div className="w-10 h-10 rounded-xl bg-bg/5 flex items-center justify-center group-hover:bg-white/10 text-bg group-hover:text-white">
+                 <Camera size={20} />
+               </div>
+               <div className="bg-bg/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest group-hover:bg-white/20 text-bg group-hover:text-white">Elite</div>
+            </div>
+            <div>
+               <h3 className="text-lg font-black uppercase tracking-tighter leading-tight group-hover:text-white text-bg">AI Plate <br/> Scanner</h3>
+               <p className="text-[9px] font-bold opacity-60 mt-2 group-hover:text-white text-bg">Instant biometric car identification.</p>
+            </div>
+          </div>
+        )}
 
         {/* AI Insight Card */}
         <div className="md:col-span-2 bento-card">
@@ -2078,9 +2114,52 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  
+  const [workers, setWorkers] = useState<any[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(profile.uid);
+  const [loadingWorkers, setLoadingWorkers] = useState(false);
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (profile.role === 'owner') {
+      setLoadingWorkers(true);
+      const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (userSnap) => {
+        const workerProfiles = userSnap.docs.map(d => d.data() as UserProfile);
+        
+        const unsubWashes = onSnapshot(collection(db, 'washes'), (washSnap) => {
+          const washes = washSnap.docs.map(d => d.data() as any);
+          
+          const workerData = workerProfiles.map(worker => {
+            const workerWashes = washes.filter(w => w.workerId === worker.uid);
+            const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
+            const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+            const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
+            
+            // Calculate badges
+            const badges = [];
+            if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={12} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
+            if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={12} />, color: 'text-accent', bg: 'bg-accent/10' });
+            if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={12} />, color: 'text-red-400', bg: 'bg-red-400/10' });
+
+            return { ...worker, efficiency, totalWashes: workerWashes.length, avgRating, badges };
+          });
+
+          setWorkers(workerData);
+          
+          if (preFill?.bookingId && workerData.length > 0) {
+            const best = [...workerData].sort((a, b) => b.efficiency - a.efficiency)[0];
+            setSelectedWorkerId(best.uid);
+          }
+          
+          setLoadingWorkers(false);
+        });
+        return () => unsubWashes();
+      });
+      return () => unsubUsers();
+    }
+  }, [profile, preFill]);
 
   const startCamera = async () => {
     if (profile.plan !== 'elite') {
@@ -2181,9 +2260,11 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         ? await getMaintenanceTip(form.carModel)
         : "Regular washing keeps your vehicle looking pristine!";
         
+      const selectedWorker = profile.role === 'owner' ? (workers.find(w => w.uid === selectedWorkerId) || profile) : profile;
+
       const washData = {
-        workerId: profile.uid,
-        workerName: profile.name,
+        workerId: selectedWorker.uid,
+        workerName: selectedWorker.name,
         carModel: form.carModel,
         plateNumber: form.plateNumber,
         price: parseFloat(form.price),
@@ -2267,6 +2348,39 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       </header>
 
       <form onSubmit={handleSubmit} className="bento-card space-y-6">
+        {profile.role === 'owner' && (
+          <div className="bg-bg/50 p-4 rounded-2xl border border-border space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Assign Operative</label>
+              {loadingWorkers && <RefreshCw size={12} className="animate-spin text-accent" />}
+            </div>
+            
+            <div className="space-y-3">
+              <select 
+                value={selectedWorkerId}
+                onChange={(e) => setSelectedWorkerId(e.target.value)}
+                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+              >
+                <option value={profile.uid}>Myself ({profile.name})</option>
+                {workers.map(w => (
+                  <option key={w.uid} value={w.uid}>
+                    {w.name} — Eff: {w.efficiency.toFixed(0)}% ({w.totalWashes} jobs)
+                  </option>
+                ))}
+              </select>
+              
+              {preFill?.bookingId && (
+                <div className="flex items-center gap-2 bg-accent/10 border border-accent/20 p-3 rounded-xl">
+                  <Award size={16} className="text-accent" />
+                  <p className="text-[10px] text-accent font-bold uppercase tracking-tight">
+                    Performance Insight: <span className="text-white">Auto-selected {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} to boost morale based on efficiency metrics.</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end">
           <button
             type="button"
@@ -2392,12 +2506,21 @@ function OwnerPerformanceView() {
             const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
             const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
             const totalIncentives = workerIncentives.reduce((acc, curr) => acc + curr.amount, 0);
+            const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
             
+            // Calculate badges
+            const badges = [];
+            if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={12} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
+            if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={12} />, color: 'text-accent', bg: 'bg-accent/10' });
+            if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={12} />, color: 'text-red-400', bg: 'bg-red-400/10' });
+
             return {
               ...worker,
               totalWashes: workerWashes.length,
               avgRating,
               totalIncentives,
+              efficiency,
+              badges,
               revenue: workerWashes.reduce((acc, curr) => acc + curr.price, 0)
             };
           });
@@ -2440,6 +2563,16 @@ function OwnerPerformanceView() {
               <div>
                 <h3 className="text-xl font-bold text-white">{worker.name}</h3>
                 <p className="text-xs text-text-dim font-medium uppercase tracking-widest">{worker.email}</p>
+                {worker.badges && worker.badges.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {worker.badges.map((badge: any) => (
+                      <div key={badge.id} className={cn("flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-current text-[8px] font-black uppercase tracking-tighter", badge.color, badge.bg)}>
+                        {badge.icon}
+                        {badge.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2508,8 +2641,28 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 
   useEffect(() => {
     if (profile.role === 'owner') {
-      const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-        setWorkers(snap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker'));
+      const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
+        const users = userSnap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker');
+        
+        onSnapshot(collection(db, 'washes'), (washSnap) => {
+          const washesData = washSnap.docs.map(d => d.data() as any);
+          
+          const workerData = users.map(worker => {
+            const workerWashes = washesData.filter(w => w.workerId === worker.uid);
+            const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
+            const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+            const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
+            
+            // Calculate badges
+            const badges = [];
+            if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={10} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
+            if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={10} />, color: 'text-accent', bg: 'bg-accent/10' });
+            if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={10} />, color: 'text-red-400', bg: 'bg-red-400/10' });
+
+            return { ...worker, badges };
+          });
+          setWorkers(workerData);
+        });
       });
       return () => unsubUsers();
     }
@@ -2790,9 +2943,18 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 
             {profile.role === 'owner' && (
               <div className="mt-6 pt-5 border-t border-border flex items-center justify-between text-[10px] font-bold text-text-dim uppercase tracking-widest">
-                <div className="flex items-center gap-2">
-                   <Users size={12} />
-                   <span>Authorized Worker: {wash.workerName}</span>
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-2">
+                     <Users size={12} />
+                     <span>Authorized Worker: {wash.workerName}</span>
+                   </div>
+                   <div className="flex gap-1.5">
+                     {workers.find(w => w.uid === wash.workerId)?.badges?.map((badge: any) => (
+                       <div key={badge.id} title={badge.name} className={cn("p-1 rounded-full border border-current", badge.color, badge.bg)}>
+                         {badge.icon}
+                       </div>
+                     ))}
+                   </div>
                 </div>
                 <span className="bg-white/5 px-2 py-0.5 rounded">ID: {wash.id.slice(0, 8)}</span>
               </div>
@@ -2950,6 +3112,175 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         >
           {loading ? "Processing..." : "Commit Settings"}
         </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setView: (v: AppView) => void, onLog: (data: { carModel: string, plateNumber: string }) => void }) {
+  const [isScanning, setIsScanning] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [result, setResult] = useState<{ plate: string, vehicle: string } | null>(null);
+
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  const startCamera = async () => {
+    setCameraActive(true);
+    setResult(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      alert("Could not access camera. Please check permissions.");
+      setCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setCameraActive(false);
+  };
+
+  const captureAndScan = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsScanning(true);
+    const context = canvasRef.current.getContext('2d');
+    if (context) {
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      context.drawImage(videoRef.current, 0, 0);
+      
+      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
+      
+      try {
+        const res = await scanVehicleInfo(base64Image);
+        if (res.plate || res.vehicle) {
+          setResult(res);
+          stopCamera();
+        } else {
+          alert("Could not detect vehicle info. Please try again or enter manually.");
+        }
+      } catch (error) {
+        alert("Scan failed. Please ensure you have a clear view of the plate.");
+      } finally {
+        setIsScanning(false);
+      }
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-8 pb-20 px-4 md:px-0">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-4xl font-black text-white uppercase tracking-tighter">AI Scanner.</h2>
+          <p className="text-text-dim lowercase">Elite recognition for plates & models.</p>
+        </div>
+        <button 
+          onClick={() => setView('dashboard')} 
+          className="text-text-dim hover:text-white uppercase text-[10px] font-black tracking-widest border-b border-white/10 pb-1"
+        >
+          Exit Scanner
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bento-card p-0 overflow-hidden relative aspect-[4/3] bg-black shadow-2xl">
+          {!cameraActive ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center p-10">
+              <div className="w-20 h-20 bg-accent/10 rounded-full flex items-center justify-center text-accent">
+                <Camera size={40} />
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter">Ready for Analysis</h3>
+              <p className="text-sm text-text-dim lowercase">Position the vehicle plate clearly in the frame for maximum accuracy.</p>
+              <button 
+                onClick={startCamera}
+                className="mt-4 bg-white text-bg px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-accent hover:text-white transition"
+              >
+                Initiate Lens
+              </button>
+            </div>
+          ) : (
+            <>
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                className="w-full h-full object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              <div className="absolute inset-0 border-[40px] border-bg/40 pointer-events-none">
+                <div className="absolute inset-4 border-2 border-accent/40 rounded-3xl" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-64 h-32 border-2 border-white/20 rounded-xl" />
+                </div>
+              </div>
+              <div className="absolute bottom-8 inset-x-8">
+                 <button 
+                  onClick={captureAndScan}
+                  disabled={isScanning}
+                  className="w-full bg-white text-bg py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition disabled:opacity-50"
+                 >
+                   {isScanning ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
+                   {isScanning ? "Processing AI Insight..." : "Analyze Stream"}
+                 </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <div className="bento-card border-t-4 border-t-accent h-full flex flex-col">
+             <div className="flex items-center gap-2 mb-6">
+               <ShieldCheck size={18} className="text-accent" />
+               <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">Recognition Result</span>
+             </div>
+             {result ? (
+               <div className="space-y-6 flex-1 flex flex-col">
+                 <div>
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 block">Identified Plate</label>
+                    <div className="text-4xl font-black text-white tracking-widest font-mono uppercase bg-bg p-4 rounded-xl border border-border shadow-inner">
+                      {result.plate || "No Plate Detected"}
+                    </div>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 block">Vehicle Model</label>
+                    <div className="text-2xl font-black text-white uppercase tracking-tighter">
+                      {result.vehicle || "Processing Recognition..."}
+                    </div>
+                 </div>
+                 <div className="mt-auto pt-6">
+                   <button 
+                    onClick={() => onLog({ carModel: result.vehicle, plateNumber: result.plate })}
+                    className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-bg transition"
+                   >
+                     Log This Wash
+                   </button>
+                   <button 
+                    onClick={() => startCamera()}
+                    className="w-full mt-3 bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-white transition"
+                   >
+                     Scan Again
+                   </button>
+                 </div>
+               </div>
+             ) : (
+               <div className="flex-1 flex flex-col items-center justify-center py-20 text-center opacity-20">
+                 <Search size={40} className="mx-auto mb-4" />
+                 <p className="text-xs font-black uppercase tracking-widest">Waiting for data stream...</p>
+               </div>
+             )}
+          </div>
+        </div>
       </div>
     </motion.div>
   );

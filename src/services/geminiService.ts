@@ -23,7 +23,7 @@ export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> 
           }
         },
         {
-          text: "Identify the vehicle license plate number and the vehicle brand/model from this image. Return the result in JSON format."
+          text: "Carefully analyze this vehicle image. Identify the license plate number (including characters and numbers) and the vehicle brand, model, and year if possible. Be extremely precise. If you cannot find a plate, return an empty string for it. Return the result in JSON format."
         }
       ],
       config: {
@@ -31,8 +31,8 @@ export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> 
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            plate: { type: Type.STRING, description: "The license plate number" },
-            vehicle: { type: Type.STRING, description: "The vehicle brand and model" }
+            plate: { type: Type.STRING, description: "The license plate number identified from the image" },
+            vehicle: { type: Type.STRING, description: "The vehicle brand, model, and year" }
           },
           required: ["plate", "vehicle"]
         }
