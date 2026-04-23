@@ -14,7 +14,7 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -40,6 +40,11 @@ interface UserProfile {
   businessRadius?: number;
   vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
   badges?: { id: string; name: string; icon: any; color: string; bg: string; }[];
+  permissions?: {
+    canManageTeam?: boolean;
+    canViewAnalytics?: boolean;
+    canAssignTasks?: boolean;
+  };
 }
 
 type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner';
@@ -119,6 +124,28 @@ const Logger = {
     // Here you would typically send to Sentry or another error reporting tool
   }
 };
+
+function AnimatedVehicleIcon({ className, size = 24, type = 'car' }: { className?: string, size?: number, type?: 'car' | 'truck' }) {
+  const Icon = type === 'truck' ? Truck : CarFront;
+  
+  return (
+    <motion.div
+      initial={{ y: 0 }}
+      animate={{ 
+        y: [0, -2, 0],
+        rotate: [0, -0.5, 0.5, 0]
+      }}
+      transition={{ 
+        duration: 4, 
+        repeat: Infinity, 
+        ease: "easeInOut" 
+      }}
+      className={cn("flex items-center justify-center", className)}
+    >
+      <Icon size={size} strokeWidth={1.5} />
+    </motion.div>
+  );
+}
 
 function ErrorBoundary({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
@@ -329,7 +356,7 @@ export default function App() {
                 <>
                   <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
                   <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => setView('marketplace')} />
-                  <NavItem icon={<Car size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => setView('my-cars')} />
+                  <NavItem icon={<CarFront size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => setView('my-cars')} />
                   <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => setView('subscription')} />
                   <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
                 </>
@@ -340,27 +367,29 @@ export default function App() {
                   <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
                 </>
               )}
-              {profile?.role === 'owner' && (
+              {(profile?.role === 'owner' || profile?.permissions?.canManageTeam) && (
                 <>
                   <NavItem 
                     icon={<TrendingUp size={20} />} 
                     label="Performance" 
                     active={view === 'performance'} 
                     onClick={() => {
-                      if (profile.plan === 'standard' || profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com') {
+                      if (profile.plan === 'standard' || profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || profile.permissions?.canManageTeam) {
                         setView('performance');
                       } else {
                         setView('billing');
                       }
                     }} 
                   />
-                  <NavItem 
-                    icon={<CreditCard size={20} />} 
-                    label="Subscription" 
-                    active={view === 'billing'} 
-                    onClick={() => setView('billing')} 
-                  />
-                  {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com') && (
+                  {profile.role === 'owner' && (
+                    <NavItem 
+                      icon={<CreditCard size={20} />} 
+                      label="Subscription" 
+                      active={view === 'billing'} 
+                      onClick={() => setView('billing')} 
+                    />
+                  )}
+                  {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || (profile.permissions?.canManageTeam && profile.role !== 'customer')) && (
                     <NavItem 
                       icon={<Camera size={20} className="text-accent" />} 
                       label="AI Scanner" 
@@ -429,14 +458,14 @@ export default function App() {
             {view === 'history' && profile && (
               <HistoryView profile={profile} />
             )}
-            {view === 'performance' && profile?.role === 'owner' && (
+            {view === 'performance' && profile && (profile.role === 'owner' || profile.permissions?.canManageTeam) && (
               <OwnerPerformanceView />
             )}
             {(view === 'billing' || view === 'subscription') && profile && (
               <SubscriptionView profile={profile} />
             )}
             {view === 'marketplace' && <MarketplaceView profile={profile!} setView={setView} />}
-            {view === 'settings' && profile?.role === 'owner' && (
+            {view === 'settings' && profile && profile.role === 'owner' && (
               <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
             {view === 'my-cars' && <CustomerVehicleView profile={profile!} setView={setView} onUpdate={(p) => setProfile(p)} />}
@@ -528,7 +557,7 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
         className="max-w-4xl w-full"
       >
         <div className="inline-flex items-center justify-center w-20 h-20 bg-accent rounded-3xl mb-10 shadow-2xl shadow-accent/20 rotate-3">
-          <Car size={40} />
+          <AnimatedVehicleIcon size={40} className="text-white" />
         </div>
         <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter uppercase italic leading-none">
           AUTOLUX <br />
@@ -746,7 +775,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
 
   useEffect(() => {
     // Sync Washes
-    const qWashes = profile.role === 'owner' 
+    const qWashes = (profile.role === 'owner' || profile.permissions?.canManageTeam) 
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(50))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(50));
 
@@ -775,8 +804,8 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
     const unsubBookings = onSnapshot(qBookings, (snap) => {
       let bookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
       
-      // Filter for worker role: Assigned or Nearby
-      if (profile.role === 'worker') {
+      // Filter for worker role: Assigned or Nearby (Unless they are Lead/Owner)
+      if (profile.role === 'worker' && !profile.permissions?.canManageTeam) {
         bookings = bookings.filter(b => {
           const isAssigned = b.workerId === profile.uid;
           
@@ -1152,7 +1181,7 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
             disabled={loading !== null}
           />
           <RoleCard 
-            icon={<Car size={40} />} 
+            icon={<AnimatedVehicleIcon size={40} />} 
             title="Car Owner" 
             desc="Personalized maintenance logs, AI health alerts, and verified wash history."
             onClick={() => setRole('customer')}
@@ -1314,7 +1343,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                 </div>
               ) : (
                 <div className="p-10 border-2 border-dashed border-border rounded-3xl text-center space-y-4">
-                  <Car className="mx-auto opacity-20" size={40} />
+          <CarFront className="mx-auto opacity-20" size={40} />
                   <p className="text-sm text-text-dim">No vehicles in your garage. Add one first to book a wash.</p>
                 </div>
               )}
@@ -1622,9 +1651,9 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
       <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
       
       <div className="flex flex-col md:flex-row gap-8">
-        <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-border">
-          <Car size={48} className="text-accent/20 group-hover:scale-110 transition-transform duration-500" />
-        </div>
+                <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-border">
+                  <AnimatedVehicleIcon size={48} className="text-accent/20 group-hover:scale-110 transition-transform duration-500" />
+                </div>
         
         <div className="flex-1 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-2">
@@ -1867,7 +1896,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
 
       {vehicles.length === 0 ? (
         <div className="bento-card py-20 text-center border-dashed">
-          <Car size={40} className="text-text-dim mx-auto mb-6 opacity-20" />
+          <CarFront size={40} className="text-text-dim mx-auto mb-6 opacity-20" />
           <h3 className="text-xl font-black text-white mb-4 uppercase tracking-tighter">Secure Your First Vehicle.</h3>
           <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to unlock personal AI tips and usage-based scheduling predictions.</p>
           <button 
@@ -2328,7 +2357,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (profile.role === 'owner') {
+    if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
       setLoadingWorkers(true);
       const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (userSnap) => {
         const workerProfiles = userSnap.docs.map(d => d.data() as UserProfile);
@@ -2584,7 +2613,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       </header>
 
       <form onSubmit={handleSubmit} className="bento-card space-y-6">
-        {profile.role === 'owner' && (
+        {(profile.role === 'owner' || profile.permissions?.canManageTeam) && (
           <div className="bg-bg/50 p-4 rounded-2xl border border-border space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Assign Operative</label>
@@ -3035,7 +3064,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
-    if (profile.role === 'owner') {
+    if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
       const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
         const users = userSnap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker');
         
@@ -3067,7 +3096,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
     let q: Query<DocumentData>;
     const washesRef = collection(db, 'washes');
 
-    if (profile.role === 'owner') {
+    if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
       q = query(washesRef, orderBy('timestamp', 'desc'));
     } else if (profile.role === 'worker') {
       q = query(washesRef, where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
@@ -3292,7 +3321,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
             <div className="flex justify-between items-start mb-6">
               <div className="flex gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent">
-                  <Car size={28} />
+              <CarFront size={28} />
                 </div>
                 <div>
                   <h4 className="font-bold text-xl text-white">{wash.carModel}</h4>
@@ -3368,6 +3397,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 
 function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
   const [loading, setLoading] = useState(false);
+  const [workers, setWorkers] = useState<UserProfile[]>([]);
   const [settings, setSettings] = useState({
     businessName: profile.businessName || '',
     businessAddress: profile.businessAddress || '',
@@ -3375,6 +3405,32 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
     businessLng: profile.businessLng || 0,
     businessRadius: profile.businessRadius || 500
   });
+
+  useEffect(() => {
+    if (profile.role === 'owner') {
+      const unsub = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (snap) => {
+        setWorkers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      });
+      return () => unsub();
+    }
+  }, [profile]);
+
+  const togglePermission = async (workerUid: string, permission: keyof NonNullable<UserProfile['permissions']>) => {
+    const worker = workers.find(w => w.uid === workerUid);
+    if (!worker) return;
+    
+    const newPermissions = {
+      ...(worker.permissions || {}),
+      [permission]: !worker.permissions?.[permission]
+    };
+    
+    try {
+      await updateDoc(doc(db, 'users', workerUid), { permissions: newPermissions });
+    } catch (error) {
+      console.error("Error updating permissions:", error);
+      alert("Failed to update staff permissions.");
+    }
+  };
 
   const handleGetCurrentLocation = () => {
     setLoading(true);
@@ -3416,97 +3472,155 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         <p className="text-text-dim mt-2 lowercase">Configure your business identity and boundaries.</p>
       </header>
 
-      <div className="bento-card space-y-10">
-        <div className="space-y-6">
-          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-            <Store size={14} className="text-accent" />
-            Station Identity
-          </label>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
-              <input 
-                value={settings.businessName}
-                onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
-                placeholder="e.g. Lagos Premium Wash"
-                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
-              <input 
-                value={settings.businessAddress}
-                onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
-                placeholder="123 Lekki Phase 1, Lagos"
-                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-              />
+      <div className="space-y-6">
+        <div className="bento-card space-y-10">
+          <div className="space-y-6">
+            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+              <Store size={14} className="text-accent" />
+              Station Identity
+            </label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
+                <input 
+                  value={settings.businessName}
+                  onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
+                  placeholder="e.g. Lagos Premium Wash"
+                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
+                <input 
+                  value={settings.businessAddress}
+                  onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
+                  placeholder="123 Lekki Phase 1, Lagos"
+                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-6 pt-6 border-t border-border">
-          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-            <MapPin size={14} className="text-accent" />
-            Operational Geofence
-          </label>
-          <p className="text-xs text-text-dim leading-relaxed">
-            Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
-          </p>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
-              <input 
-                type="number"
-                value={settings.businessLat}
-                onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-              />
+          <div className="space-y-6 pt-6 border-t border-border">
+            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+              <MapPin size={14} className="text-accent" />
+              Operational Geofence
+            </label>
+            <p className="text-xs text-text-dim leading-relaxed">
+              Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
+            </p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
+                <input 
+                  type="number"
+                  value={settings.businessLat}
+                  onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
+                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
+                <input 
+                  type="number"
+                  value={settings.businessLng}
+                  onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
+                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
-              <input 
-                type="number"
-                value={settings.businessLng}
-                onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
+
+            <button 
+              onClick={handleGetCurrentLocation}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
+            >
+              <MapPin size={16} className="group-hover:animate-bounce" />
+              {loading ? "Detecting..." : "Pin Current GPS Data"}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
+              <span>Allowed Radius (Meters)</span>
+              <span className="text-accent">{settings.businessRadius}m</span>
+            </label>
+            <input 
+              type="range"
+              min="50"
+              max="2000"
+              step="50"
+              value={settings.businessRadius}
+              onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
+              className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
+            />
           </div>
 
           <button 
-            onClick={handleGetCurrentLocation}
+            onClick={handleSave}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
+            className="w-full bg-white text-bg font-black py-4 rounded-xl uppercase tracking-widest hover:bg-accent hover:text-white transition active:scale-95 disabled:opacity-50"
           >
-            <MapPin size={16} className="group-hover:animate-bounce" />
-            {loading ? "Detecting..." : "Pin Current GPS Data"}
+            {loading ? "Processing..." : "Commit Settings"}
           </button>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
-            <span>Allowed Radius (Meters)</span>
-            <span className="text-accent">{settings.businessRadius}m</span>
-          </label>
-          <input 
-            type="range"
-            min="50"
-            max="2000"
-            step="50"
-            value={settings.businessRadius}
-            onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
-            className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
-          />
-        </div>
+        {/* Team Delegation - Only for Owners */}
+        <div className="bento-card space-y-8">
+          <header>
+            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2 mb-2">
+              <Users size={14} className="text-accent" />
+              Team Delegation
+            </label>
+            <p className="text-xs text-text-dim leading-relaxed">
+              Designate high-performance workers as <span className="text-white font-bold italic lowercase">Team Leads</span>. Leads can manage schedules, assign tasks, and view workforce analytics.
+            </p>
+          </header>
 
-        <button 
-          onClick={handleSave}
-          disabled={loading}
-          className="w-full bg-white text-bg font-black py-4 rounded-xl uppercase tracking-widest hover:bg-accent hover:text-white transition active:scale-95 disabled:opacity-50"
-        >
-          {loading ? "Processing..." : "Commit Settings"}
-        </button>
+          <div className="space-y-4">
+            {workers.map(worker => (
+              <div key={worker.uid} className="flex items-center justify-between p-4 bg-bg/50 border border-border rounded-2xl hover:border-accent/40 transition-colors group">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <img src={worker.photoUrl || ""} alt={worker.name} className="w-10 h-10 rounded-xl border border-border group-hover:scale-105 transition-transform" />
+                    {worker.permissions?.canManageTeam && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full flex items-center justify-center text-white border-2 border-card">
+                        <Zap size={8} fill="currentColor" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">{worker.name}</p>
+                    <p className="text-[10px] text-text-dim uppercase tracking-widest font-black">
+                      {worker.permissions?.canManageTeam ? "Team Lead" : "Professional Staff"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                   <button 
+                    onClick={() => togglePermission(worker.uid, 'canManageTeam')}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      worker.permissions?.canManageTeam 
+                        ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white" 
+                        : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white"
+                    )}
+                   >
+                     {worker.permissions?.canManageTeam ? "Revoke Lead" : "Promote to Lead"}
+                   </button>
+                </div>
+              </div>
+            ))}
+
+            {workers.length === 0 && (
+              <div className="py-10 text-center opacity-50 border-2 border-dashed border-border rounded-3xl">
+                <p className="text-xs text-text-dim italic">No staff members identified in your registry.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </motion.div>
   );
