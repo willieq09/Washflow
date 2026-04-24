@@ -245,13 +245,6 @@ export default function App() {
         console.log("Redirect authentication success:", result.user.email);
         setUser(result.user);
         setAuthLoading(false);
-        // On mobile, force a small delay then reload to ensure cross-context storage is finalized
-        // This solves the 'blank screen' issue where state is valid but listeners are stale
-        setTimeout(() => {
-          if (!currentUser) { // only reload if state hasn't resolved via onAuthStateChanged
-             window.location.reload();
-          }
-        }, 800);
       }
     }).catch((error) => {
       // Clear loading state on error to prevent blank white screen
@@ -262,15 +255,12 @@ export default function App() {
         console.warn("Credential already in use, usually safe to ignore if user is logged in.");
       } else if (error.code === 'auth/missing-initial-state') {
         console.warn("Session storage inaccessible on mobile. Clearing state for manual retry.");
-        signOut(auth);
       } else if (error.code !== 'auth/web-storage-unsupported') {
         console.error("Redirect auth error:", error);
       }
     });
 
-    let currentUser: any = null;
     const unsub = onAuthStateChanged(auth, async (u) => {
-      currentUser = u;
       try {
         setUser(u);
         if (u) {
@@ -323,47 +313,33 @@ export default function App() {
   const login = async () => {
     setAuthLoading(true);
     const provider = new GoogleAuthProvider();
-    // Force select_account to ensure the popup requires explicit interaction
     provider.setCustomParameters({ prompt: 'select_account' });
     
     try {
-      // Ensure local persistence is set before login (redundant but safe)
-      await setPersistence(auth, browserLocalPersistence);
-      
-      // On mobile, sometimes popups are strictly blocked even with interaction.
-      // We still prefer popup as per instructions, but ensure we handle the result.
+      // We skip setPersistence here to keep the user action chain intact for Safari mobile popup
       const result = await signInWithPopup(auth, provider);
       console.log("Manual authentication success:", result.user.email);
       setAuthLoading(false);
     } catch (error: any) {
       console.error("Login failed:", error);
       
-      // Falling back to redirect ONLY if storage partitioning prevents popups significantly
-      // or if the error specifically indicates a storage problem.
-      if (error.code === 'auth/web-storage-unsupported' || error.code === 'auth/internal-error') {
+      // If we are in an environment where popups are strictly blocked (common in iframes on mobile)
+      // we fallback to redirect. Note: redirect can be flakey in iframes.
+      if (
+        error.code === 'auth/popup-blocked' || 
+        error.code === 'auth/web-storage-unsupported' || 
+        error.code === 'auth/internal-error'
+      ) {
         try {
           await signInWithRedirect(auth, provider);
-          return; // Redirecting, no need to clear loading yet
+          return;
         } catch (redirErr) {
           console.error("Redirect fallback failed:", redirErr);
         }
       }
 
       setAuthLoading(false);
-      
-      let message = "Authentication failed. ";
-      
-      if (error.code === 'auth/popup-blocked') {
-        message += "The login popup was blocked by your browser. Please enable popups and try again.";
-      } else if (error.code === 'auth/unauthorized-domain') {
-        message += "This domain is not authorized in your Firebase console. Please add 'run.app' and your specific App URL to the Authorized Domains list in Firebase Authentication settings.";
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        message += "The login window was closed before completion.";
-      } else {
-        message += error.message || "Unknown error";
-      }
-      
-      alert(message);
+      alert("Authentication failed: " + (error.message || "Unknown error"));
     }
   };
 
@@ -372,16 +348,44 @@ export default function App() {
     signOut(auth).finally(() => setLoading(false));
   };
 
+  const [showForceRefresh, setShowForceRefresh] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) setShowForceRefresh(true);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-bg">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-bg p-6 text-center">
       <motion.div 
         animate={{ scale: [1, 1.2, 1], rotate: [0, 10, 0] }}
         transition={{ repeat: Infinity, duration: 1.5 }}
-        className="flex flex-col items-center gap-4"
+        className="flex flex-col items-center gap-4 mb-8"
       >
         <Car className="w-12 h-12 text-accent" />
         <span className="font-black text-text-dim uppercase tracking-[0.3em] text-xs">Booting OS...</span>
       </motion.div>
+      
+      {showForceRefresh && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="max-w-xs"
+        >
+          <p className="text-xs text-text-dim mb-4 leading-relaxed italic">
+            Synchronization is taking longer than expected. This can happen on some mobile browsers.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-2 mx-auto px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition"
+          >
+            <RefreshCw size={14} />
+            Force Refresh
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 
