@@ -232,17 +232,32 @@ export default function App() {
     getRedirectResult(auth).then((result) => {
       if (result) {
         console.log("Redirect authentication success:", result.user.email);
+        // On mobile, force a small delay then reload to ensure cross-context storage is finalized
+        // This solves the 'blank screen' issue where state is valid but listeners are stale
+        setTimeout(() => {
+          if (!currentUser) { // only reload if state hasn't resolved via onAuthStateChanged
+             window.location.reload();
+          }
+        }, 500);
       }
     }).catch((error) => {
+      // Clear loading state on error to prevent blank white screen
+      setAuthLoading(false);
+      setLoading(false);
+
       if (error.code === 'auth/credential-already-in-use') {
         console.warn("Credential already in use, usually safe to ignore if user is logged in.");
+      } else if (error.code === 'auth/missing-initial-state') {
+        console.warn("Session storage inaccessible on mobile. Clearing state for manual retry.");
+        signOut(auth);
       } else if (error.code !== 'auth/web-storage-unsupported') {
-        // Only log serious redirect errors, but don't block the UI
         console.error("Redirect auth error:", error);
       }
     });
 
-    return onAuthStateChanged(auth, async (u) => {
+    let currentUser: any = null;
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      currentUser = u;
       try {
         setUser(u);
         if (u) {
@@ -275,6 +290,8 @@ export default function App() {
         setAuthLoading(false);
       }
     });
+
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -3282,32 +3299,40 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   useEffect(() => {
+    // Workers should be available for everyone to filter by, but we'll only fetch the relevant ones
+    let usersQuery: Query<DocumentData>;
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
-      const unsubUsers = onSnapshot(collection(db, 'users'), (userSnap) => {
-        const users = userSnap.docs.map(d => d.data() as UserProfile).filter(u => u.role === 'worker');
-        
-        onSnapshot(collection(db, 'washes'), (washSnap) => {
-          const washesData = washSnap.docs.map(d => d.data() as any);
-          
-          const workerData = users.map(worker => {
-            const workerWashes = washesData.filter(w => w.workerId === worker.uid);
-            const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
-            const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-            const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
-            
-            // Calculate badges
-            const badges = [];
-            if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={10} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
-            if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={10} />, color: 'text-accent', bg: 'bg-accent/10' });
-            if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={10} />, color: 'text-red-400', bg: 'bg-red-400/10' });
-
-            return { ...worker, badges };
-          });
-          setWorkers(workerData);
-        });
-      });
-      return () => unsubUsers();
+      usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'));
+    } else {
+      // For customers/workers, only fetch active workers (or we could fetch from washes but that's harder)
+      // For simplicity, let's allow fetching worker names if needed, or stick to role='worker'
+      usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'));
     }
+
+    const unsubUsers = onSnapshot(usersQuery, (userSnap) => {
+      const users = userSnap.docs.map(d => d.data() as UserProfile);
+      
+      onSnapshot(collection(db, 'washes'), (washSnap) => {
+        const washesData = washSnap.docs.map(d => d.data() as any);
+        
+        const workerData = users.map(worker => {
+          const workerWashes = washesData.filter(w => w.workerId === worker.uid);
+          const ratings = workerWashes.filter(w => w.workerRating !== undefined).map(w => w.workerRating as number);
+          const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+          const efficiency = Math.min(100, (workerWashes.length * (avgRating / 5) * 2));
+          
+          // Calculate badges
+          const badges = [];
+          if (avgRating >= 4.7 && ratings.length >= 3) badges.push({ id: 'top-rated', name: 'Top Rated Professional', icon: <Award size={10} />, color: 'text-yellow-400', bg: 'bg-yellow-400/10' });
+          if (efficiency >= 70 && workerWashes.length >= 5) badges.push({ id: 'efficient', name: 'Most Efficient Worker', icon: <Zap size={10} />, color: 'text-accent', bg: 'bg-accent/10' });
+          if (ratings.length >= 10 && avgRating >= 4.5) badges.push({ id: 'favorite', name: 'Customer Favorite', icon: <Heart size={10} />, color: 'text-red-400', bg: 'bg-red-400/10' });
+
+          return { ...worker, badges };
+        });
+        setWorkers(workerData);
+      });
+    });
+    return () => unsubUsers();
   }, [profile]);
 
   useEffect(() => {
@@ -3455,7 +3480,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                 </div>
               </div>
 
-              {profile.role === 'owner' && (
+              {profile.role !== 'worker' && (
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
                     <Users size={12} /> Filter by Worker
@@ -3482,33 +3507,8 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                 >
                   <option value="all">Any Status</option>
                   <option value="completed">Completed</option>
-                  <option value="pending">Pending Sync</option>
+                  <option value="pending">Pending</option>
                 </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
-                  <Gauge size={12} /> Sort Ledger
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'Date', field: 'timestamp' },
-                    { label: 'Price', field: 'price' },
-                    { label: 'Rating', field: 'workerRating' }
-                  ].map(s => (
-                    <button 
-                      key={s.field}
-                      onClick={() => toggleSort(s.field as any)}
-                      className={cn(
-                        "flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition",
-                        sort.field === s.field ? "bg-accent text-white" : "bg-bg text-text-dim border border-border hover:text-white"
-                      )}
-                    >
-                      {s.label}
-                      {sort.field === s.field && (sort.desc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="flex items-end">
@@ -3526,6 +3526,62 @@ function HistoryView({ profile }: { profile: UserProfile }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Interactive Sort Headers */}
+      <div className="hidden md:flex items-center justify-between px-8 py-4 mb-4 bg-white/5 rounded-2xl border border-border/50">
+        <div className="flex items-center gap-12 font-black text-[10px] uppercase tracking-widest text-text-dim">
+          <button 
+            onClick={() => toggleSort('timestamp')}
+            className={cn(
+              "flex items-center gap-2 transition-colors hover:text-white group",
+              sort.field === 'timestamp' ? "text-accent" : ""
+            )}
+          >
+            Service Timeline
+            <div className={cn(
+              "flex flex-col -space-y-1.5 transition-opacity",
+              sort.field === 'timestamp' ? "opacity-100" : "opacity-20 group-hover:opacity-100"
+            )}>
+              <ArrowUp size={8} className={cn(sort.field === 'timestamp' && !sort.desc ? "text-accent" : "text-white")} />
+              <ArrowDown size={8} className={cn(sort.field === 'timestamp' && sort.desc ? "text-accent" : "text-white")} />
+            </div>
+          </button>
+        </div>
+        <div className="flex items-center gap-12 font-black text-[10px] uppercase tracking-widest text-text-dim">
+          <button 
+            onClick={() => toggleSort('workerRating')}
+            className={cn(
+              "flex items-center gap-2 transition-colors hover:text-white group",
+              sort.field === 'workerRating' ? "text-accent" : ""
+            )}
+          >
+            Review Index
+            <div className={cn(
+              "flex flex-col -space-y-1.5 transition-opacity",
+              sort.field === 'workerRating' ? "opacity-100" : "opacity-20 group-hover:opacity-100"
+            )}>
+              <ArrowUp size={8} className={cn(sort.field === 'workerRating' && !sort.desc ? "text-accent" : "text-white")} />
+              <ArrowDown size={8} className={cn(sort.field === 'workerRating' && sort.desc ? "text-accent" : "text-white")} />
+            </div>
+          </button>
+          <button 
+            onClick={() => toggleSort('price')}
+            className={cn(
+              "flex items-center gap-2 transition-colors hover:text-white group min-w-[80px] justify-end",
+              sort.field === 'price' ? "text-accent" : ""
+            )}
+          >
+            Price
+            <div className={cn(
+              "flex flex-col -space-y-1.5 transition-opacity",
+              sort.field === 'price' ? "opacity-100" : "opacity-20 group-hover:opacity-100"
+            )}>
+              <ArrowUp size={8} className={cn(sort.field === 'price' && !sort.desc ? "text-accent" : "text-white")} />
+              <ArrowDown size={8} className={cn(sort.field === 'price' && sort.desc ? "text-accent" : "text-white")} />
+            </div>
+          </button>
+        </div>
+      </div>
 
       <div className="space-y-4">
         {filteredAndSortedWashes.map(wash => (
