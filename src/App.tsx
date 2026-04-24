@@ -4,6 +4,8 @@ import {
 } from './lib/firebase';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
@@ -226,6 +228,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Handle redirect result for mobile browsers or storage partitioned environments
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        console.log("Redirect authentication success:", result.user.email);
+      }
+    }).catch((error) => {
+      if (error.code === 'auth/credential-already-in-use') {
+        console.warn("Credential already in use, usually safe to ignore if user is logged in.");
+      } else if (error.code !== 'auth/web-storage-unsupported') {
+        // Only log serious redirect errors, but don't block the UI
+        console.error("Redirect auth error:", error);
+      }
+    });
+
     return onAuthStateChanged(auth, async (u) => {
       try {
         setUser(u);
@@ -281,14 +297,28 @@ export default function App() {
     provider.setCustomParameters({ prompt: 'select_account' });
     
     try {
-      // Ensure local persistence is set before login
+      // Ensure local persistence is set before login (redundant but safe)
       await setPersistence(auth, browserLocalPersistence);
+      
+      // On mobile, sometimes popups are strictly blocked even with interaction.
+      // We still prefer popup as per instructions, but ensure we handle the result.
       const result = await signInWithPopup(auth, provider);
       console.log("Manual authentication success:", result.user.email);
-      // Force reload to ensure session is recognized immediately across the app
-      window.location.reload();
+      setAuthLoading(false);
     } catch (error: any) {
       console.error("Login failed:", error);
+      
+      // Falling back to redirect ONLY if storage partitioning prevents popups significantly
+      // or if the error specifically indicates a storage problem.
+      if (error.code === 'auth/web-storage-unsupported' || error.code === 'auth/internal-error') {
+        try {
+          await signInWithRedirect(auth, provider);
+          return; // Redirecting, no need to clear loading yet
+        } catch (redirErr) {
+          console.error("Redirect fallback failed:", redirErr);
+        }
+      }
+
       setAuthLoading(false);
       
       let message = "Authentication failed. ";
