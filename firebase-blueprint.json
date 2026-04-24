@@ -13,24 +13,22 @@
         "photoUrl": { "type": "string", "description": "Profile picture URL." },
         "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status." },
         "plan": { "type": "string", "description": "Active subscription plan ID or level." },
+        "vehicles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "make": { "type": "string" },
+              "model": { "type": "string" },
+              "year": { "type": "number" },
+              "plate": { "type": "string" },
+              "intensity": { "type": "string", "enum": ["low", "high"] }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the user account was created." }
       },
       "required": ["uid", "name", "email", "role"]
-    },
-    "Vehicle": {
-      "title": "Vehicle",
-      "description": "Information about a user's car.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "make": { "type": "string" },
-        "model": { "type": "string" },
-        "year": { "type": "number" },
-        "plateNumber": { "type": "string" },
-        "intensity": { "type": "string", "enum": ["low", "high"] }
-      },
-      "required": ["userId", "make", "model", "plateNumber"]
     },
     "WashBusiness": {
       "title": "Wash Business",
@@ -109,7 +107,6 @@
   },
   "firestore": {
     "/users/{uid}": { "schema": "UserProfile", "description": "User accounts." },
-    "/vehicles/{id}": { "schema": "Vehicle", "description": "User car registry." },
     "/wash_businesses/{id}": { "schema": "WashBusiness", "description": "Wash station locations." },
     "/plans/{id}": { "schema": "Plan", "description": "Subscription pricing." },
     "/subscriptions/{id}": { "schema": "Subscription", "description": "Active user memberships." },

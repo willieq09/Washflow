@@ -2260,20 +2260,32 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                 ) : (
                   <>
                     <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
-                       <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Toyota" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
+                         <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Toyota" />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
+                         <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Camry" />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
-                       <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Camry" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Year</label>
+                         <input 
+                           type="number" 
+                           value={newVehicle.year} 
+                           onChange={e => setNewVehicle(v => ({ ...v, year: parseInt(e.target.value) || new Date().getFullYear() }))} 
+                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" 
+                           placeholder="2023" 
+                         />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
+                         <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors font-mono" placeholder="ABC-1234" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
-                     <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors font-mono" placeholder="ABC-1234" />
-                  </div>
                   <div className="space-y-2">
                      <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Usage Intensity</label>
                      <div className="grid grid-cols-2 gap-3">

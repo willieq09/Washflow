@@ -55,7 +55,8 @@ service cloud.firestore {
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.size() > 0 &&
              data.role in ['owner', 'worker', 'customer', 'admin'] &&
-             (data.createdAt == request.time || data.createdAt.toMillis() > 0);
+             (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
+             (!('vehicles' in data) || data.vehicles is list);
     }
 
     function isValidBooking(data) {
@@ -67,13 +68,6 @@ service cloud.firestore {
              (data.createdAt == request.time || data.createdAt.toMillis() > 0);
     }
 
-    function isValidVehicle(data) {
-      return data.keys().hasAll(['userId', 'make', 'model', 'plateNumber']) &&
-             data.userId == request.auth.uid &&
-             data.make is string &&
-             data.model is string &&
-             data.plateNumber is string;
-    }
 
     // --- Match Blocks ---
 
@@ -92,11 +86,6 @@ service cloud.firestore {
                     isValidUser(incoming());
     }
 
-    match /vehicles/{id} {
-      allow read: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId) && isValidVehicle(incoming());
-      allow update, delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
-    }
 
     match /wash_businesses/{id} {
       allow read: if true;
