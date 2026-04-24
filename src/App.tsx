@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   auth, db, OperationType, handleFirestoreError 
 } from './lib/firebase';
@@ -1327,17 +1327,29 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                       key={idx}
                       onClick={() => setSelectedVehicle(`${v.make} ${v.model} (${v.plate})`)}
                       className={cn(
-                        "flex items-center justify-between p-4 rounded-2xl border transition text-left",
+                        "flex items-center justify-between p-5 rounded-3xl border transition-all duration-300 group",
                         selectedVehicle?.includes(v.plate) 
-                          ? "bg-accent/10 border-accent text-white" 
-                          : "bg-white/5 border-border text-text-dim hover:border-white/20"
+                          ? "bg-accent/10 border-accent text-white shadow-lg shadow-accent/10" 
+                          : "bg-white/5 border-border text-text-dim hover:border-white/20 hover:bg-white/[0.07]"
                       )}
                     >
-                      <div>
-                        <p className="font-bold text-sm tracking-tight">{v.make} {v.model}</p>
-                        <p className="text-[10px] opacity-60 uppercase font-black tracking-widest">{v.plate}</p>
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
+                          selectedVehicle?.includes(v.plate) ? "bg-accent/20 text-accent" : "bg-white/5 text-text-dim group-hover:text-white"
+                        )}>
+                          <CarFront size={24} strokeWidth={1.5} />
+                        </div>
+                        <div>
+                          <p className="font-black text-base tracking-tighter uppercase italic">{v.make} {v.model}</p>
+                          <p className="text-[10px] opacity-60 uppercase font-black tracking-widest font-mono">{v.plate}</p>
+                        </div>
                       </div>
-                      <Car size={18} className={selectedVehicle?.includes(v.plate) ? "text-accent" : "opacity-20"} />
+                      {selectedVehicle?.includes(v.plate) && (
+                        <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-white scale-110 shadow-lg">
+                          <Check size={14} strokeWidth={3} />
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1627,12 +1639,11 @@ function FilterBtn({ label, active, onClick }: { label: string, active?: boolean
   );
 }
 
-function VehicleCard({ vehicle }: { vehicle: any }) {
+function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: string) => void }) {
   const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Usage history simulated based on 'intensity' and a mocked history count
     const historyCount = vehicle.intensity === 'high' ? 6 : 2;
     getPredictiveTips(vehicle, historyCount).then(res => {
       setPredictive(res);
@@ -1646,67 +1657,91 @@ function VehicleCard({ vehicle }: { vehicle: any }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="bg-card p-8 rounded-[2.5rem] border border-border flex flex-col gap-8 relative overflow-hidden group"
+      className="bg-card p-6 md:p-8 rounded-[2.5rem] border border-border flex flex-col gap-6 relative overflow-hidden group"
     >
       <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
       
-      <div className="flex flex-col md:flex-row gap-8">
-                <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-border">
-                  <AnimatedVehicleIcon size={48} className="text-accent/20 group-hover:scale-110 transition-transform duration-500" />
-                </div>
-        
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="bg-accent/10 text-accent px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-accent/20">
-              {vehicle.intensity === 'high' ? 'High Usage' : 'Weekend Driver'}
-            </span>
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">VIN Verified</span>
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        <div className="w-full md:w-1/3 aspect-[16/10] bg-gradient-to-br from-white/10 to-white/5 rounded-3xl relative flex items-center justify-center overflow-hidden border border-white/10 shadow-inner group/icon">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(var(--accent-rgb),0.15),transparent_70%)] opacity-0 group-hover/icon:opacity-100 transition-opacity duration-700" />
+          <AnimatedVehicleIcon size={64} className="text-white/20 group-hover:text-accent/40 transition-colors duration-500 relative z-10" />
+          <div className="absolute bottom-4 left-4 right-4 h-1 bg-white/5 rounded-full overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: "98%" }}
+              transition={{ duration: 1.5, delay: 0.5 }}
+              className="h-full bg-success/40"
+            />
           </div>
-          <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-bg/50 p-4 rounded-2xl border border-border">
-              <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Plate ID</p>
-              <p className="font-mono text-white text-sm">{vehicle.plate}</p>
+        </div>
+        
+        <div className="flex-1 flex flex-col justify-center relative">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                vehicle.intensity === 'high' ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-accent/10 text-accent border-accent/20"
+              )}>
+                {vehicle.intensity === 'high' ? 'High Intensity' : 'Standard Use'}
+              </span>
+              <span className="text-[9px] font-black text-text-dim uppercase tracking-widest bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">Verified</span>
             </div>
-            <div className="bg-bg/50 p-4 rounded-2xl border border-border">
-              <p className="text-[10px] font-bold text-text-dim uppercase mb-1 tracking-widest">Health Score</p>
-              <p className="font-mono text-success text-sm">98%</p>
+            {onDelete && (
+              <button 
+                onClick={() => onDelete(vehicle.plate)}
+                className="p-2 text-text-dim hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all"
+                title="Remove Vehicle"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          
+          <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 leading-none">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-bg/40 p-4 rounded-2xl border border-border/50 group-hover:border-accent/20 transition-colors">
+              <p className="text-[9px] font-bold text-text-dim uppercase mb-1 tracking-widest">Plate ID</p>
+              <p className="font-mono text-white text-sm font-bold">{vehicle.plate}</p>
+            </div>
+            <div className="bg-bg/40 p-4 rounded-2xl border border-border/50 group-hover:border-accent/20 transition-colors">
+              <p className="text-[9px] font-bold text-text-dim uppercase mb-1 tracking-widest">Efficiency</p>
+              <p className="font-mono text-success text-sm font-bold">98%</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-        <div className="bg-white/5 border border-white/5 rounded-3xl p-6 relative overflow-hidden group/tip">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={14} className="text-accent" />
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Predictive Wash</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-white/5 border border-white/5 rounded-3xl p-5 relative overflow-hidden group/tip hover:bg-white/[0.07] transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={12} className="text-accent" />
+            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">Predictive Wash</span>
           </div>
           {loading ? (
-            <div className="space-y-2">
-              <div className="h-3 bg-white/10 rounded w-full animate-pulse" />
-              <div className="h-3 bg-white/10 rounded w-2/3 animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-2.5 bg-white/10 rounded w-full animate-pulse" />
+              <div className="h-2.5 bg-white/10 rounded w-2/3 animate-pulse" />
             </div>
           ) : (
-            <p className="text-xs text-white/80 font-medium leading-relaxed italic line-clamp-2">
+            <p className="text-xs text-white/70 font-medium leading-relaxed italic line-clamp-2">
                "{predictive?.nextWash}"
             </p>
           )}
         </div>
 
-        <div className="bg-white/5 border border-white/5 rounded-3xl p-6 relative overflow-hidden group/tip">
-          <div className="flex items-center gap-2 mb-3">
-            <Gauge size={14} className="text-accent" />
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">AI Maintenance</span>
+        <div className="bg-white/5 border border-white/5 rounded-3xl p-5 relative overflow-hidden group/tip hover:bg-white/[0.07] transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <Gauge size={12} className="text-accent" />
+            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">AI Maintenance</span>
           </div>
           {loading ? (
-            <div className="space-y-2">
-              <div className="h-3 bg-white/10 rounded w-full animate-pulse" />
-              <div className="h-3 bg-white/10 rounded w-2/3 animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-2.5 bg-white/10 rounded w-full animate-pulse" />
+              <div className="h-2.5 bg-white/10 rounded w-2/3 animate-pulse" />
             </div>
           ) : (
-            <p className="text-xs text-white/80 font-medium leading-relaxed italic line-clamp-2">
+            <p className="text-xs text-white/70 font-medium leading-relaxed italic line-clamp-2">
                "{predictive?.maintenance}"
             </p>
           )}
@@ -1773,6 +1808,86 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
   const [searchTerm, setSearchTerm] = useState('');
   const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' as 'low' | 'high' });
   const [saving, setSaving] = useState(false);
+  
+  // Scanning state
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const startScanning = async () => {
+    setIsScannerOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      alert("Could not access camera. Please check permissions.");
+      setIsScannerOpen(false);
+    }
+  };
+
+  const stopScanning = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setIsScannerOpen(false);
+  };
+
+  const handleCaptureAndIdentify = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsProcessingScan(true);
+    const context = canvasRef.current.getContext('2d');
+    if (context) {
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      context.drawImage(videoRef.current, 0, 0);
+      
+      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
+      
+      try {
+        const res = await scanVehicleInfo(base64Image);
+        if (res.vehicle) {
+          // Parse "Year Brand Model" or similar from res.vehicle
+          // Gemini returns something like "2022 Toyota Camry"
+          const parts = res.vehicle.split(' ');
+          let year = new Date().getFullYear();
+          let make = '';
+          let model = '';
+
+          if (parts[0] && !isNaN(parseInt(parts[0]))) {
+            year = parseInt(parts[0]);
+            make = parts[1] || '';
+            model = parts.slice(2).join(' ') || '';
+          } else {
+            make = parts[0] || '';
+            model = parts.slice(1).join(' ') || '';
+          }
+
+          setNewVehicle(prev => ({
+            ...prev,
+            make: make || prev.make,
+            model: model || prev.model,
+            year: year || prev.year,
+            plate: res.plate || prev.plate
+          }));
+          stopScanning();
+        } else {
+          alert("Could not identify vehicle. Please try again or clear the view.");
+        }
+      } catch (error) {
+        alert("Scan failed. Ensure good lighting and clear view.");
+      } finally {
+        setIsProcessingScan(false);
+      }
+    }
+  };
 
   const filteredVehicles = useMemo(() => {
     if (!searchTerm.trim()) return vehicles;
@@ -1805,12 +1920,31 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
     }
   };
 
+  const handleDeleteVehicle = async (plate: string) => {
+    if (!confirm("Are you sure you want to remove this vehicle? This will also delete its AI history.")) return;
+    try {
+      const updatedVehicles = vehicles.filter(v => v.plate !== plate);
+      await updateDoc(doc(db, 'users', profile.uid), { vehicles: updatedVehicles });
+      onUpdate({ ...profile, vehicles: updatedVehicles });
+      setVehicles(updatedVehicles);
+    } catch (error) {
+      console.error("Error deleting vehicle:", error);
+      alert("Failed to remove vehicle.");
+    }
+  };
+
+  useEffect(() => {
+    if (!showAdd) {
+      stopScanning();
+    }
+  }, [showAdd]);
+
   return (
     <div className="space-y-8 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h2 className="text-3xl font-black text-white uppercase tracking-tighter">My Garage.</h2>
-          <p className="text-text-dim text-sm lowercase">Manage your vehicles and track AI maintenance health.</p>
+          <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">My Garage</h2>
+          <p className="text-text-dim text-sm lowercase mt-1">Manage your fleet and track predictive health metrics.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
@@ -1819,7 +1953,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent transition-colors" size={16} />
               <input 
                 type="text"
-                placeholder="Search make, model, or plate..."
+                placeholder="Find match..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white/5 border border-border rounded-2xl pl-12 pr-4 py-3 text-xs font-medium text-white outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/5 transition-all"
@@ -1837,47 +1971,99 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
           
           <button 
             onClick={() => setShowAdd(true)}
-            className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center justify-center gap-2"
+            className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center justify-center gap-2 shadow-xl shadow-white/5 active:scale-95"
           >
-             <Plus size={16} /> Add Vehicle
+             <Plus size={16} strokeWidth={3} /> Add To Garage
           </button>
         </div>
       </header>
 
       <AnimatePresence>
         {showAdd && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-bg/90 backdrop-blur-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-bg/95 backdrop-blur-2xl">
              <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-card border border-border w-full max-w-md rounded-[2.5rem] p-10 space-y-8"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-card border border-border w-full max-w-md rounded-[3rem] p-10 space-y-8 relative overflow-hidden"
              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-accent" />
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-black text-white uppercase italic">Vehicle Registry</h3>
-                  <button onClick={() => setShowAdd(false)} className="p-2 hover:bg-white/5 rounded-full"><X size={20} className="text-text-dim" /></button>
+                  <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Registration</h3>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={isScannerOpen ? stopScanning : startScanning}
+                      className={cn(
+                        "p-3 rounded-full transition-colors flex items-center justify-center",
+                        isScannerOpen ? "bg-accent text-white" : "bg-white/5 text-text-dim hover:bg-white/10 hover:text-white"
+                      )}
+                      title="AI Auto-Scan"
+                    >
+                      <Camera size={20} className={cn(isScannerOpen && "animate-pulse")} />
+                    </button>
+                    <button onClick={() => setShowAdd(false)} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors"><X size={20} className="text-text-dim" /></button>
+                  </div>
                 </div>
 
-                <div className="space-y-4">
+                {isScannerOpen ? (
+                  <div className="space-y-6">
+                    <div className="relative aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl overflow-hidden group">
+                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                      <canvas ref={canvasRef} className="hidden" />
+                      
+                      <div className="absolute inset-0 border-2 border-accent/30 rounded-3xl pointer-events-none">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-32 border-2 border-accent border-dashed opacity-50 rounded-2xl" />
+                      </div>
+
+                      {isProcessingScan && (
+                        <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+                          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                          <p className="text-[10px] font-black uppercase tracking-widest text-white">Analyzing Fleet Data...</p>
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
+                         <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Auto-Detection Active</p>
+                         <button 
+                          onClick={handleCaptureAndIdentify}
+                          disabled={isProcessingScan}
+                          className="bg-accent text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-accent/20"
+                         >
+                           Analyze Frame
+                         </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={stopScanning}
+                        className="w-full bg-white/5 text-text-dim py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition"
+                      >
+                        Back to Manual Entry
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Make</label>
-                       <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="Toyota" />
+                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
+                       <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Toyota" />
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Model</label>
-                       <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="Camry" />
+                       <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
+                       <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Camry" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Plate Number</label>
-                     <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white" placeholder="ABC-1234" />
+                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
+                     <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors font-mono" placeholder="ABC-1234" />
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Usage Intensity</label>
-                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'low' }))} className={cn("py-3 rounded-xl text-[10px] font-black uppercase border", newVehicle.intensity === 'low' ? "bg-accent text-white border-transparent" : "bg-bg text-text-dim border-border")}>Weekend Driver</button>
-                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'high' }))} className={cn("py-3 rounded-xl text-[10px] font-black uppercase border", newVehicle.intensity === 'high' ? "bg-accent text-white border-transparent" : "bg-bg text-text-dim border-border")}>High Usage</button>
+                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Usage Intensity</label>
+                     <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'low' }))} className={cn("py-4 rounded-2xl text-[10px] font-black uppercase border transition-all", newVehicle.intensity === 'low' ? "bg-accent text-white border-transparent shadow-lg shadow-accent/20" : "bg-bg text-text-dim border-border opacity-60")}>Weekend Driver</button>
+                        <button onClick={() => setNewVehicle(v =>({ ...v, intensity: 'high' }))} className={cn("py-4 rounded-2xl text-[10px] font-black uppercase border transition-all", newVehicle.intensity === 'high' ? "bg-accent text-white border-transparent shadow-lg shadow-accent/20" : "bg-bg text-text-dim border-border opacity-60")}>Daily Driven</button>
                      </div>
                   </div>
                 </div>
@@ -1885,25 +2071,27 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                 <button 
                   onClick={handleAddVehicle}
                   disabled={saving}
-                  className="w-full bg-white text-bg py-4 rounded-xl font-black uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50"
+                  className="w-full bg-white text-bg py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-xl active:scale-[0.98] disabled:opacity-50"
                 >
-                   {saving ? "Registering..." : "Add to Garage"}
+                   {saving ? "Registering..." : "Sync To Fleet"}
                 </button>
+                  </>
+                )}
              </motion.div>
           </div>
         )}
       </AnimatePresence>
 
       {vehicles.length === 0 ? (
-        <div className="bento-card py-20 text-center border-dashed">
-          <CarFront size={40} className="text-text-dim mx-auto mb-6 opacity-20" />
-          <h3 className="text-xl font-black text-white mb-4 uppercase tracking-tighter">Secure Your First Vehicle.</h3>
+        <div className="bento-card py-20 text-center border-dashed border-2">
+          <CarFront size={64} className="text-text-dim mx-auto mb-6 opacity-10" />
+          <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-tighter italic">Garage Is Empty</h3>
           <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to unlock personal AI tips and usage-based scheduling predictions.</p>
           <button 
             onClick={() => setShowAdd(true)}
-            className="bg-white/5 border border-border text-white px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition"
+            className="bg-white text-bg px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl active:scale-95"
           >
-             Connect Vehicle Data
+             Initialize Registry
           </button>
         </div>
       ) : (
@@ -1911,7 +2099,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
           <div className="lg:col-span-2 space-y-6">
             <AnimatePresence mode="popLayout">
               {filteredVehicles.map((v) => (
-                <VehicleCard key={v.plate} vehicle={v} />
+                <VehicleCard key={v.plate} vehicle={v} onDelete={handleDeleteVehicle} />
               ))}
             </AnimatePresence>
 
