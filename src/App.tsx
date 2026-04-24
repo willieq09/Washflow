@@ -77,6 +77,8 @@ interface Business {
   ratingCount: number;
   ownerUid: string;
   image: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface MarketplaceItem {
@@ -234,17 +236,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Set persistence once at startup
+    setPersistence(auth, browserLocalPersistence).catch(e => console.error("Persistence error:", e));
+
     // Handle redirect result for mobile browsers or storage partitioned environments
     getRedirectResult(auth).then((result) => {
       if (result) {
         console.log("Redirect authentication success:", result.user.email);
+        setUser(result.user);
+        setAuthLoading(false);
         // On mobile, force a small delay then reload to ensure cross-context storage is finalized
         // This solves the 'blank screen' issue where state is valid but listeners are stale
         setTimeout(() => {
           if (!currentUser) { // only reload if state hasn't resolved via onAuthStateChanged
              window.location.reload();
           }
-        }, 500);
+        }, 800);
       }
     }).catch((error) => {
       // Clear loading state on error to prevent blank white screen
@@ -360,7 +367,10 @@ export default function App() {
     }
   };
 
-  const logout = () => signOut(auth);
+  const logout = () => {
+    setLoading(true);
+    signOut(auth).finally(() => setLoading(false));
+  };
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-bg">
@@ -508,7 +518,7 @@ export default function App() {
               <SyncStatus isOnline={isOnline} pendingCount={pendingSync} />
             </div>
 
-            {profile.role === 'owner' && (
+            {profile?.role === 'owner' && (
               <NavItem 
                 icon={<Settings2 size={18} />} 
                 label="Settings" 
@@ -720,7 +730,19 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 
 function CustomerDashboardView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
+  const [nearby, setNearby] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+
+  useEffect(() => {
+    // Attempt to get customer location
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => console.warn("Geolocation denied, using defaults")
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const q = query(
@@ -731,14 +753,36 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
       limit(5)
     );
 
-    return onSnapshot(q, (snap) => {
+    const businessesQuery = query(collection(db, 'businesses'), limit(12));
+
+    const unsubBookings = onSnapshot(q, (snap) => {
       setUpcoming(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
+    });
+
+    const unsubBusinesses = onSnapshot(businessesQuery, (snap) => {
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Business));
+      
+      // Sort by proximity if location available
+      if (location) {
+        all.sort((a, b) => {
+          const distA = calculateDistance(location.lat, location.lng, a.lat || 0, a.lng || 0);
+          const distB = calculateDistance(location.lat, location.lng, b.lat || 0, b.lng || 0);
+          return distA - distB;
+        });
+      }
+      
+      setNearby(all);
       setLoading(false);
     });
-  }, [profile]);
+
+    return () => {
+      unsubBookings();
+      unsubBusinesses();
+    };
+  }, [profile, location]);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-12">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-12 pb-12">
       <header className="flex justify-between items-end">
         <div>
           <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Hub.</h2>
@@ -752,9 +796,9 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Next Session */}
-        <div className="md:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-10 min-h-[300px]">
+        <div className="lg:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-10 min-h-[300px]">
           {upcoming.length > 0 ? (
             <>
               <div>
@@ -807,38 +851,112 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                    onBook={() => setView('marketplace')}
                  />
                ) : (
-                 <p className="text-xs text-text-dim">Add a vehicle to your garage to receive predictive maintenance insights.</p>
+                 <p className="text-xs text-text-dim leading-relaxed">Add a vehicle to your garage to receive predictive maintenance insights and performance tracking.</p>
                )}
             </div>
           </div>
+          <button className="w-full mt-6 py-3 rounded-xl border border-accent/20 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition">
+            View Analytics
+          </button>
         </div>
       </div>
 
-      <section>
-        <div className="flex items-center justify-between mb-8">
-          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
-            <Car className="text-accent" /> Your Fleet
-          </h3>
-          <button onClick={() => setView('my-cars')} className="text-[10px] font-black uppercase text-accent tracking-[0.2em] border-b border-accent/20 pb-1">Manage Garage</button>
+      {/* Nearby Stations */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <MapPin className="text-accent" />
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Nearby Stations</h3>
+          </div>
+          <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">Sorted by Proximity</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {profile.vehicles?.map((v, i) => (
-            <div key={i} className="bento-card p-6 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-bg border border-border flex items-center justify-center">
-                <Car size={24} className="text-accent" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {nearby.length > 0 ? nearby.map((biz) => (
+            <div 
+              key={biz.id}
+              onClick={() => setView('marketplace')}
+              className="group cursor-pointer bento-card p-0 overflow-hidden hover:border-accent/40 transition-all active:scale-95"
+            >
+              <div className="h-40 bg-zinc-900 relative overflow-hidden">
+                <img 
+                  src={biz.image || `https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=1000`} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60 group-hover:opacity-100" 
+                  alt={biz.name}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-transparent" />
+                <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1 border border-white/10">
+                  <Star size={12} className="text-accent fill-accent" />
+                  <span className="text-[10px] font-bold text-white">{biz.rating || '4.8'}</span>
+                </div>
+              </div>
+              <div className="p-5">
+                <h4 className="font-bold text-white group-hover:text-accent transition-colors">{biz.name}</h4>
+                <p className="text-xs text-text-dim mt-1 flex items-center gap-1">
+                  <MapPin size={10} />
+                  {biz.location}
+                </p>
+                {location && biz.lat && (
+                  <div className="mt-3 text-[10px] font-black text-accent uppercase tracking-widest bg-accent/10 w-fit px-2 py-0.5 rounded">
+                    {calculateDistance(location.lat, location.lng, biz.lat, biz.lng).toFixed(1)} km away
+                  </div>
+                )}
+              </div>
+            </div>
+          )) : loading ? (
+            [1,2,3,4].map(i => <Skeleton key={i} className="h-64" />)
+          ) : (
+            <div className="col-span-full p-12 text-center bg-card border border-dashed border-border rounded-3xl">
+               <p className="text-text-dim">No stations indexed in your immediate perimeter.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Your Fleet */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CarFront className="text-accent" />
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Your Fleet</h3>
+          </div>
+          <button 
+            onClick={() => setView('my-cars')}
+            className="text-[10px] font-bold text-accent uppercase tracking-widest hover:underline"
+          >
+            Manage Vehicles
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {profile.vehicles?.map((car, idx) => (
+            <div key={idx} className="bento-card border-none bg-zinc-900/50 flex items-center gap-6 group hover:bg-zinc-900 transition">
+              <div className="w-16 h-16 bg-bg rounded-2xl flex items-center justify-center text-text-dim group-hover:text-accent transition">
+                <CarFront size={32} />
               </div>
               <div>
-                <p className="font-bold text-white text-sm">{v.make} {v.model}</p>
-                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">{v.plate}</p>
+                <div className="font-bold text-white italic uppercase">{car.make} {car.model}</div>
+                <div className="text-[10px] text-text-dim font-bold tracking-[0.2em] mt-1">{car.plate}</div>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    car.intensity === 'high' ? "bg-red-500" : "bg-success"
+                  )} />
+                  <span className="text-[9px] font-black uppercase text-text-dim/60">
+                    Usage Intensity: {car.intensity}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
           <button 
             onClick={() => setView('my-cars')}
-            className="bento-card p-6 flex items-center justify-center gap-2 text-text-dim hover:text-white transition group border-dashed"
+            className="bento-card border-dashed border-white/10 bg-transparent flex flex-col items-center justify-center gap-3 hover:border-accent hover:text-accent group transition min-h-[100px]"
           >
-            <Plus size={18} className="group-hover:scale-110 transition" />
-            <span className="font-black text-[10px] uppercase tracking-widest">Add Vehicle</span>
+            <div className="w-8 h-8 rounded-full border border-current flex items-center justify-center">
+              <Plus size={16} />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest">Enlist Vehicle</span>
           </button>
         </div>
       </section>
