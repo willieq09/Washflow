@@ -40,7 +40,15 @@ interface UserProfile {
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
-  vehicles?: { make: string; model: string; year: number; plate: string; intensity: 'low' | 'high' }[];
+  vehicles?: { 
+    make: string; 
+    model: string; 
+    year: number; 
+    plate: string; 
+    intensity: 'low' | 'high';
+    tirePressure?: string;
+    dirtLevel?: 'low' | 'medium' | 'high';
+  }[];
   badges?: { id: string; name: string; icon: any; color: string; bg: string; }[];
   permissions?: {
     canManageTeam?: boolean;
@@ -1923,6 +1931,24 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
               <p className="text-[9px] font-bold text-text-dim uppercase mb-1 tracking-widest">Efficiency</p>
               <p className="font-mono text-success text-sm font-bold">98%</p>
             </div>
+            {vehicle.tirePressure && (
+              <div className="bg-bg/40 p-4 rounded-2xl border border-border/50 group-hover:border-accent/20 transition-colors">
+                <p className="text-[9px] font-bold text-text-dim uppercase mb-1 tracking-widest">Tire Status</p>
+                <p className={cn(
+                  "text-xs font-bold",
+                  vehicle.tirePressure.toLowerCase().includes('low') ? "text-red-400" : "text-success"
+                )}>{vehicle.tirePressure}</p>
+              </div>
+            )}
+            {vehicle.dirtLevel && (
+              <div className="bg-bg/40 p-4 rounded-2xl border border-border/50 group-hover:border-accent/20 transition-colors">
+                <p className="text-[9px] font-bold text-text-dim uppercase mb-1 tracking-widest">Condition</p>
+                <p className={cn(
+                  "text-xs font-bold uppercase",
+                  vehicle.dirtLevel === 'high' ? "text-red-400" : vehicle.dirtLevel === 'medium' ? "text-yellow-400" : "text-success"
+                )}>{vehicle.dirtLevel} dirt</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2021,7 +2047,15 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
   const [showAdd, setShowAdd] = useState(false);
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
   const [searchTerm, setSearchTerm] = useState('');
-  const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' as 'low' | 'high' });
+  const [newVehicle, setNewVehicle] = useState({ 
+    make: '', 
+    model: '', 
+    year: new Date().getFullYear(), 
+    plate: '', 
+    intensity: 'low' as 'low' | 'high',
+    tirePressure: 'Unknown',
+    dirtLevel: 'low' as 'low' | 'medium' | 'high'
+  });
   const [saving, setSaving] = useState(false);
   
   // Scanning state
@@ -2090,7 +2124,9 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
             make: make || prev.make,
             model: model || prev.model,
             year: year || prev.year,
-            plate: res.plate || prev.plate
+            plate: res.plate || prev.plate,
+            tirePressure: res.tirePressure || prev.tirePressure,
+            dirtLevel: res.dirtLevel || prev.dirtLevel
           }));
           stopScanning();
         } else {
@@ -2126,7 +2162,15 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
       onUpdate({ ...profile, vehicles: updatedVehicles });
       setVehicles(updatedVehicles);
       setShowAdd(false);
-      setNewVehicle({ make: '', model: '', year: new Date().getFullYear(), plate: '', intensity: 'low' });
+      setNewVehicle({ 
+        make: '', 
+        model: '', 
+        year: new Date().getFullYear(), 
+        plate: '', 
+        intensity: 'low',
+        tirePressure: 'Unknown',
+        dirtLevel: 'low'
+      });
     } catch (error) {
       console.error("Error adding vehicle:", error);
       alert("Failed to add vehicle.");

@@ -22,7 +22,9 @@
               "model": { "type": "string" },
               "year": { "type": "number" },
               "plate": { "type": "string" },
-              "intensity": { "type": "string", "enum": ["low", "high"] }
+              "intensity": { "type": "string", "enum": ["low", "high"] },
+              "tirePressure": { "type": "string" },
+              "dirtLevel": { "type": "string", "enum": ["low", "medium", "high"] }
             }
           }
         },

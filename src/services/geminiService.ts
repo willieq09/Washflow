@@ -5,6 +5,8 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 export interface ScanResult {
   plate: string;
   vehicle: string;
+  tirePressure?: string;
+  dirtLevel?: 'low' | 'medium' | 'high';
 }
 
 export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> {
@@ -23,7 +25,7 @@ export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> 
           }
         },
         {
-          text: "Carefully analyze this vehicle image. Identify the license plate number (including characters and numbers) and the vehicle brand, model, and year if possible. Be extremely precise. If you cannot find a plate, return an empty string for it. Return the result in JSON format."
+          text: "Carefully analyze this vehicle image. Identify the license plate number (including characters and numbers) and the vehicle brand, model, and year if possible. Also, estimate the tire pressure status (e.g., 'Normal', 'Appear Low') and the visual dirt level (low, medium, or high). Be extremely precise. If you cannot find a plate, return an empty string for it. Return the result in JSON format."
         }
       ],
       config: {
@@ -32,9 +34,11 @@ export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> 
           type: Type.OBJECT,
           properties: {
             plate: { type: Type.STRING, description: "The license plate number identified from the image" },
-            vehicle: { type: Type.STRING, description: "The vehicle brand, model, and year" }
+            vehicle: { type: Type.STRING, description: "The vehicle brand, model, and year" },
+            tirePressure: { type: Type.STRING, description: "Estimated tire pressure status" },
+            dirtLevel: { type: Type.STRING, enum: ["low", "medium", "high"], description: "Visual dirt level on the exterior" }
           },
-          required: ["plate", "vehicle"]
+          required: ["plate", "vehicle", "tirePressure", "dirtLevel"]
         }
       }
     });
@@ -42,7 +46,9 @@ export async function scanVehicleInfo(base64Image: string): Promise<ScanResult> 
     const result = JSON.parse(response.text || "{}");
     return {
       plate: result.plate || "",
-      vehicle: result.vehicle || ""
+      vehicle: result.vehicle || "",
+      tirePressure: result.tirePressure || "Unknown",
+      dirtLevel: result.dirtLevel || "low"
     };
   } catch (error) {
     console.error("Gemini Vision Error:", error);
