@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import Stripe from "stripe";
+import axios from "axios";
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,11 +12,8 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Stripe Initialization
-let stripe: Stripe | null = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-}
+// Paystack Configuration
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 
 // API Routes
 app.get("/api/health", (req, res) => {
@@ -29,57 +26,47 @@ app.options("*", (req, res) => {
   res.sendStatus(204);
 });
 
-app.post("/api/create-checkout-session", async (req, res) => {
-  console.log(`[STRIPE] Creating session for ${req.body.userEmail} - Plan: ${req.body.plan}`);
+app.post("/api/paystack/initialize", async (req, res) => {
+  const { email, amount, plan, userId } = req.body;
+  
+  if (!PAYSTACK_SECRET) {
+    return res.status(500).json({ error: "Paystack is not configured." });
+  }
+
   try {
-    const { plan, userId, userEmail } = req.body;
-    
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe is not configured." });
-    }
-
-    const plans = {
-      starter: { name: "AutoLux Operator Starter", price: 1900 },
-      standard: { name: "AutoLux Operator Professional", price: 4900 },
-      elite: { name: "AutoLux Operator Elite", price: 9900 },
-    };
-
-    const selectedPlan = plans[plan as keyof typeof plans];
-    if (!selectedPlan) {
-      return res.status(400).json({ error: `Invalid plan: ${plan}` });
-    }
-
     const origin = req.headers.origin || req.headers.referer || `http://localhost:${PORT}`;
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: selectedPlan.name,
-              description: `Subscription for ${selectedPlan.name}`,
-            },
-            unit_amount: selectedPlan.price,
-            recurring: { interval: "month" },
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "subscription",
-      success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}&success=true&plan=${plan}`,
-      cancel_url: `${origin}/?canceled=true`,
-      customer_email: userEmail,
-      metadata: {
-        userId: userId,
-        plan: plan,
+    
+    // Paystack initialization
+    const response = await axios.post(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        email,
+        amount: amount, // In smallest unit (kobo/cents)
+        callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
+        metadata: {
+          userId,
+          plan,
+          custom_fields: [
+            {
+              display_name: "Plan",
+              variable_name: "plan",
+              value: plan
+            }
+          ]
+        }
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-    return res.json({ url: session.url });
+    res.json(response.data.data);
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    console.error("Paystack Init Error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.message || "Failed to initialize Paystack transaction" });
   }
 });
 

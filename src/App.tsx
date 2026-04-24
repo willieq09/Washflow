@@ -299,10 +299,10 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const success = params.get('success');
-    const plan = params.get('plan') as 'starter' | 'standard' | 'elite';
+    const success = params.get('success') || params.get('paystack_success');
+    const plan = params.get('plan') as any;
     
-    if (success === 'true' && plan && profile && profile.role === 'owner') {
+    if (success === 'true' && plan && profile) {
       updateDoc(doc(db, 'users', profile.uid), { plan }).then(() => {
         setProfile(prev => prev ? { ...prev, plan } : null);
         window.history.replaceState({}, '', window.location.pathname);
@@ -2510,37 +2510,27 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     setLoading(plan);
     setError(null);
     try {
-      const response = await fetch('/api/create-checkout-session', {
+      const prices: Record<string, number> = {
+        'starter': 1900, 'standard': 4900, 'elite': 9900,
+        'basic_wash': 1500, 'premium_wash': 3500, 'unlimited_wash': 7500
+      };
+
+      const response = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan,
-          userId: profile.uid,
-          userEmail: profile.email
+          email: profile.email,
+          amount: prices[plan] || 1900,
+          userId: profile.uid
         })
       });
 
-      const responseText = await response.text();
-      let responseData: any = null;
-      
-      try {
-        if (responseText) {
-          responseData = JSON.parse(responseText);
-        }
-      } catch (e) {
-        console.error("JSON Parse Error:", e, responseText);
-      }
+      const responseData = await response.json();
+      if (!response.ok) throw new Error(responseData.error || "Failed to initialize payment");
+      if (!responseData.authorization_url) throw new Error("No authorization URL received.");
 
-      if (!response.ok) {
-        const errorMsg = responseData?.error || responseText || `Server error: ${response.status}`;
-        throw new Error(errorMsg);
-      }
-
-      if (!responseData || !responseData.url) {
-        throw new Error("No checkout URL received from server. Check logs.");
-      }
-
-      window.location.href = responseData.url;
+      window.location.href = responseData.authorization_url;
     } catch (error: any) {
       console.error("Subscription Error:", error);
       setError(error.message || "An unexpected error occurred during checkout initialization.");
@@ -2737,7 +2727,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
 
       <div className="mt-20 text-center">
         <p className="text-text-dim text-sm max-w-lg mx-auto leading-relaxed">
-          Secure billing powered by <span className="text-white font-bold">Stripe</span>. 
+          Secure billing powered by <span className="text-white font-bold">Paystack</span>. 
           Plans can be cancelled or upgraded at any time from your dashboard.
         </p>
       </div>
