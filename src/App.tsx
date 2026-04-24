@@ -16,7 +16,7 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -197,6 +197,12 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<AppView>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const navigate = (to: AppView) => {
+    setView(to);
+    setIsSidebarOpen(false);
+  };
   const [preFillWash, setPreFillWash] = useState<{ carModel: string, plateNumber: string, bookingId?: string } | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
@@ -387,31 +393,71 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-bg flex flex-col md:flex-row">
+      <div className="min-h-screen bg-bg flex flex-col md:flex-row relative overflow-x-hidden">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-4 bg-card border-b border-border sticky top-0 z-40">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white shadow-lg shadow-accent/20">
+              <Car className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-white tracking-tight">AutoLux</span>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 text-text-dim hover:text-white transition-colors"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+
+        {/* Sidebar Overlay */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 md:hidden"
+            />
+          )}
+        </AnimatePresence>
+
         {/* Sidebar */}
-        <nav className="w-full md:w-64 bg-card border-b md:border-r border-border p-6 flex flex-col justify-between">
+        <nav className={cn(
+          "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:relative md:translate-x-0 md:w-64 md:z-auto md:transition-none",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
           <div>
-            <div className="flex items-center gap-2 mb-10">
-              <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
-                <Car className="w-6 h-6" />
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
+                  <Car className="w-6 h-6" />
+                </div>
+                <span className="text-xl font-bold text-white tracking-tight">AutoLux</span>
               </div>
-              <span className="text-xl font-bold text-white tracking-tight">AutoLux</span>
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="md:hidden p-2 text-text-dim hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
 
             <div className="space-y-1">
               {profile?.role === 'customer' ? (
                 <>
-                  <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-                  <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => setView('marketplace')} />
-                  <NavItem icon={<CarFront size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => setView('my-cars')} />
-                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => setView('subscription')} />
-                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
+                  <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
+                  <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} />
+                  <NavItem icon={<CarFront size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
+                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => navigate('subscription')} />
+                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
                 </>
               ) : (
                 <>
-                  <NavItem icon={<Gauge size={20} />} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-                  <NavItem icon={<Plus size={20} />} label="Log Wash" active={view === 'log'} onClick={() => setView('log')} />
-                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => setView('history')} />
+                  <NavItem icon={<Gauge size={20} />} label="Dashboard" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
+                  <NavItem icon={<Plus size={20} />} label="Log Wash" active={view === 'log'} onClick={() => navigate('log')} />
+                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
                 </>
               )}
               {(profile?.role === 'owner' || profile?.permissions?.canManageTeam) && (
@@ -422,9 +468,9 @@ export default function App() {
                     active={view === 'performance'} 
                     onClick={() => {
                       if (profile.plan === 'standard' || profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || profile.permissions?.canManageTeam) {
-                        setView('performance');
+                        navigate('performance');
                       } else {
-                        setView('billing');
+                        navigate('billing');
                       }
                     }} 
                   />
@@ -433,7 +479,7 @@ export default function App() {
                       icon={<CreditCard size={20} />} 
                       label="Subscription" 
                       active={view === 'billing'} 
-                      onClick={() => setView('billing')} 
+                      onClick={() => navigate('billing')} 
                     />
                   )}
                   {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || (profile.permissions?.canManageTeam && profile.role !== 'customer')) && (
@@ -441,7 +487,7 @@ export default function App() {
                       icon={<Camera size={20} className="text-accent" />} 
                       label="AI Scanner" 
                       active={view === 'scanner'} 
-                      onClick={() => setView('scanner')} 
+                      onClick={() => navigate('scanner')} 
                     />
                   )}
                 </>
@@ -467,7 +513,7 @@ export default function App() {
                 icon={<Settings2 size={18} />} 
                 label="Settings" 
                 active={view === 'settings'} 
-                onClick={() => setView('settings')} 
+                onClick={() => navigate('settings')} 
               />
             )}
             <button 
