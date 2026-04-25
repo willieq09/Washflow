@@ -71,5 +71,21 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--color-accent);
   }
+
+  /* Hide number input arrows */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  /* Custom Select Style */
+  select {
+    appearance: none;
+    background-image: none;
+  }
 }
 

@@ -3009,13 +3009,22 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Year</label>
-                         <input 
-                           type="number" 
-                           value={newVehicle.year} 
-                           onChange={e => setNewVehicle(v => ({ ...v, year: parseInt(e.target.value) || new Date().getFullYear() }))} 
-                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" 
-                           placeholder="2023" 
-                         />
+                         <div className="relative">
+                           <select 
+                             value={newVehicle.year} 
+                             onChange={e => setNewVehicle(v => ({ ...v, year: parseInt(e.target.value) }))} 
+                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors appearance-none cursor-pointer custom-scrollbar overflow-y-auto"
+                           >
+                             {Array.from({ length: 76 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                               <option key={year} value={year} className="bg-card text-white">
+                                 {year}
+                               </option>
+                             ))}
+                           </select>
+                           <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim">
+                             <ChevronRight size={14} className="rotate-90" />
+                           </div>
+                         </div>
                       </div>
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
@@ -3428,19 +3437,19 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
               )}>
                 {tier.icon}
               </div>
-              <h3 className={cn("text-2xl font-black mb-2 uppercase", tier.id === 'elite' ? "text-bg" : "text-white")}>{tier.name}</h3>
+              <h3 className={cn("text-2xl font-black mb-2 uppercase", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.name}</h3>
               <div className="flex items-baseline gap-1">
-                <span className={cn("text-4xl font-black", tier.id === 'elite' ? "text-bg" : "text-white")}>{tier.price}</span>
-                <span className={cn("text-sm font-bold opacity-60", tier.id === 'elite' ? "text-bg" : "text-white")}>/MO</span>
+                <span className={cn("text-4xl font-black", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.price}</span>
+                <span className={cn("text-sm font-bold opacity-60", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>/MO</span>
               </div>
-              <p className={cn("mt-4 text-sm leading-relaxed", tier.id === 'elite' ? "text-bg/70" : "text-text-dim lowercase")}>{tier.description}</p>
+              <p className={cn("mt-4 text-sm leading-relaxed", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg/70" : "text-text-dim lowercase")}>{tier.description}</p>
             </div>
 
             <ul className="space-y-4 mb-10 flex-1">
               {tier.features.map((feature, i) => (
                 <li key={i} className="flex items-center gap-3">
-                  <Check size={16} className={cn(tier.id === 'elite' ? "text-bg" : "text-accent")} />
-                  <span className={cn("text-sm font-medium", tier.id === 'elite' ? "text-bg" : "text-white/80")}>{feature}</span>
+                  <Check size={16} className={cn((tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-accent")} />
+                  <span className={cn("text-sm font-medium", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white/80")}>{feature}</span>
                 </li>
               ))}
             </ul>
@@ -3450,7 +3459,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
               disabled={loading !== null || profile.plan === tier.id}
               className={cn(
                 "w-full py-4 rounded-2xl font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50 disabled:active:scale-100",
-                tier.id === 'elite' 
+                (tier.id === 'elite' || tier.id === 'unlimited_wash') 
                   ? "bg-bg text-white hover:bg-accent" 
                   : "bg-white text-bg hover:bg-accent hover:text-white"
               )}
