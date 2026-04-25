@@ -16,7 +16,7 @@ import {
   doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -56,6 +56,7 @@ interface UserProfile {
     canViewAnalytics?: boolean;
     canAssignTasks?: boolean;
   };
+  theme?: 'light' | 'dark';
 }
 
 type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner' | 'business';
@@ -211,6 +212,14 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<AppView>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (profile?.theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  }, [profile?.theme]);
 
   const navigate = (to: AppView) => {
     setView(to);
@@ -2331,6 +2340,34 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
       </header>
 
+      {/* Ecosystem Categories Grid */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Wash Stations', icon: <Store />, count: '24+ Nearby', img: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=400', color: 'bg-blue-500' },
+          { label: 'Detailing Pros', icon: <Sparkles />, count: '12 Active', img: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', color: 'bg-purple-500' },
+          { label: 'Parts & Spares', icon: <Briefcase />, count: '450+ Items', img: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', color: 'bg-emerald-500' },
+          { label: 'Mobile Experts', icon: <Truck />, count: '8 Available', img: 'https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=400', color: 'bg-orange-500' }
+        ].map((cat, i) => (
+          <motion.div 
+            key={i}
+            whileHover={{ y: -5 }}
+            className="group relative h-40 rounded-3xl overflow-hidden cursor-pointer"
+          >
+            <img src={cat.img} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/20 to-transparent" />
+            <div className="absolute bottom-4 left-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-white bg-accent/80 p-1 rounded-md scale-75 peer-group-hover:scale-100 transition-transform">
+                  {cat.icon}
+                </span>
+                <h4 className="text-white font-black uppercase text-[10px] tracking-widest">{cat.label}</h4>
+              </div>
+              <p className="text-text-dim text-[8px] font-bold uppercase tracking-[0.2em] ml-6">{cat.count}</p>
+            </div>
+          </motion.div>
+        ))}
+      </section>
+
       {/* Merchant CTA for Owners */}
       {profile.role === 'owner' && (
         <section className="bg-gradient-to-r from-accent/20 to-transparent p-8 rounded-3xl border border-accent/20 flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-accent/40 transition-colors">
@@ -2410,6 +2447,49 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
                )}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Featured Services/Ecosystem Highlights */}
+      <section className="bg-card p-10 rounded-[3rem] border border-border relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none">
+          <Sparkles size={120} className="text-accent" />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row gap-12">
+          <div className="w-full md:w-1/3">
+            <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 leading-none">Auto Care <br/> Experts.</h3>
+            <p className="text-text-dim text-sm lowercase leading-relaxed mb-8">Our ecosystem connects you with vetted professionals specializing in premium ceramic coatings, interior restoration, and engine detailing.</p>
+            <div className="space-y-4">
+              {[
+                { label: 'Quality Assured', icon: <ShieldCheck size={16} /> },
+                { label: 'Certified Pros', icon: <Award size={16} /> },
+                { label: 'Fast Turnaround', icon: <RefreshCw size={16} /> }
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3 text-white">
+                  <div className="w-8 h-8 bg-accent/20 rounded-lg flex items-center justify-center text-accent">
+                    {item.icon}
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-64 rounded-3xl overflow-hidden relative group">
+              <img src="https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=800" className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-6">
+                <h5 className="text-white font-black uppercase text-xs">Premium Ceramic Coating</h5>
+                <p className="text-white/60 text-[10px] uppercase tracking-widest mt-1">Starting at $299</p>
+              </div>
+            </div>
+            <div className="h-64 rounded-3xl overflow-hidden relative group">
+              <img src="https://images.unsplash.com/photo-1552933529-e359b2477262?auto=format&fit=crop&q=80&w=800" className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-6">
+                <h5 className="text-white font-black uppercase text-xs">Interior Steam Clean</h5>
+                <p className="text-white/60 text-[10px] uppercase tracking-widest mt-1">Starting at $149</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -4503,7 +4583,8 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
     businessAddress: profile.businessAddress || '',
     businessLat: profile.businessLat || 0,
     businessLng: profile.businessLng || 0,
-    businessRadius: profile.businessRadius || 500
+    businessRadius: profile.businessRadius || 500,
+    theme: profile.theme || 'dark'
   });
 
   useEffect(() => {
@@ -4568,94 +4649,142 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-20">
       <header className="mb-10 text-center">
-        <h2 className="text-4xl font-black text-white tracking-tight uppercase px-4">Operating Environment.</h2>
-        <p className="text-text-dim mt-2 lowercase">Configure your business identity and boundaries.</p>
+        <h2 className="text-4xl font-black text-white tracking-tight uppercase px-4">
+          {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
+        </h2>
+        <p className="text-text-dim mt-2 lowercase">
+          {profile.role === 'owner' ? "Configure your business identity and boundaries." : "Customize your interface and profile preferences."}
+        </p>
       </header>
 
       <div className="space-y-6">
         <div className="bento-card space-y-10">
-          <div className="space-y-6">
+          {profile.role === 'owner' && (
+            <>
+              <div className="space-y-6">
+                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+                  <Store size={14} className="text-accent" />
+                  Station Identity
+                </label>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
+                    <input 
+                      value={settings.businessName}
+                      onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
+                      placeholder="e.g. Lagos Premium Wash"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
+                    <input 
+                      value={settings.businessAddress}
+                      onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
+                      placeholder="123 Lekki Phase 1, Lagos"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6 pt-6 border-t border-border">
+                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+                  <MapPin size={14} className="text-accent" />
+                  Operational Geofence
+                </label>
+                <p className="text-xs text-text-dim leading-relaxed">
+                  Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
+                    <input 
+                      type="number"
+                      value={settings.businessLat}
+                      onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
+                    <input 
+                      type="number"
+                      value={settings.businessLng}
+                      onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleGetCurrentLocation}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
+                >
+                  <MapPin size={16} className="group-hover:animate-bounce" />
+                  {loading ? "Detecting..." : "Pin Current GPS Data"}
+                </button>
+              </div>
+            </>
+          )}
+
+          <div className={`space-y-6 ${profile.role === 'owner' ? 'pt-6 border-t border-border' : ''}`}>
             <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-              <Store size={14} className="text-accent" />
-              Station Identity
+              <Sparkles size={14} className="text-accent" />
+              Visual Interface
             </label>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
-                <input 
-                  value={settings.businessName}
-                  onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
-                  placeholder="e.g. Lagos Premium Wash"
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-                />
+            <div className="flex items-center justify-between bg-bg/50 p-4 rounded-2xl border border-border">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl transition-colors ${settings.theme === 'light' ? 'bg-accent/20 text-accent' : 'bg-white/5 text-text-dim'}`}>
+                  {settings.theme === 'light' ? <Sun size={20} /> : <Moon size={20} />}
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white uppercase tracking-tight">Interface Theme</h4>
+                  <p className="text-[10px] text-text-dim uppercase tracking-widest">Switch between light and dark modes</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
-                <input 
-                  value={settings.businessAddress}
-                  onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
-                  placeholder="123 Lekki Phase 1, Lagos"
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+              <button 
+                onClick={() => {
+                  const newTheme = settings.theme === 'light' ? 'dark' : 'light';
+                  setSettings(prev => ({ ...prev, theme: newTheme }));
+                  // Immediate preview
+                  if (newTheme === 'light') {
+                    document.documentElement.classList.add('light');
+                  } else {
+                    document.documentElement.classList.remove('light');
+                  }
+                }}
+                className={`relative w-14 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-accent ${settings.theme === 'light' ? 'bg-accent' : 'bg-white/10'}`}
+              >
+                <motion.div 
+                  animate={{ x: settings.theme === 'light' ? 26 : 4 }}
+                  className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center"
+                >
+                   {settings.theme === 'light' ? <Sun size={12} className="text-accent" /> : <Moon size={12} className="text-bg" />}
+                </motion.div>
+              </button>
             </div>
           </div>
 
-          <div className="space-y-6 pt-6 border-t border-border">
-            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-              <MapPin size={14} className="text-accent" />
-              Operational Geofence
-            </label>
-            <p className="text-xs text-text-dim leading-relaxed">
-              Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
-            </p>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
-                <input 
-                  type="number"
-                  value={settings.businessLat}
-                  onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
-                <input 
-                  type="number"
-                  value={settings.businessLng}
-                  onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
-                  className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
-                />
-              </div>
+          {profile.role === 'owner' && (
+            <div className="space-y-2">
+              <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
+                <span>Allowed Radius (Meters)</span>
+                <span className="text-accent">{settings.businessRadius}m</span>
+              </label>
+              <input 
+                type="range"
+                min="50"
+                max="2000"
+                step="50"
+                value={settings.businessRadius}
+                onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
+                className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
+              />
             </div>
-
-            <button 
-              onClick={handleGetCurrentLocation}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
-            >
-              <MapPin size={16} className="group-hover:animate-bounce" />
-              {loading ? "Detecting..." : "Pin Current GPS Data"}
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
-              <span>Allowed Radius (Meters)</span>
-              <span className="text-accent">{settings.businessRadius}m</span>
-            </label>
-            <input 
-              type="range"
-              min="50"
-              max="2000"
-              step="50"
-              value={settings.businessRadius}
-              onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
-              className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
+          )}
 
           <button 
             onClick={handleSave}

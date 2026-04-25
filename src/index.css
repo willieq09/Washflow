@@ -5,20 +5,42 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   
-  --color-bg: #0A0A0B;
-  --color-card: #141416;
-  --color-border: #262629;
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-border: var(--border);
   --color-accent: #3E63DD;
   --color-success: #30D158;
-  --color-text-dim: #8E8E93;
+  --color-text-dim: var(--text-dim);
+  --color-text-main: var(--text-main);
 }
 
 @layer base {
+  :root {
+    --bg: #0A0A0B;
+    --card: #141416;
+    --border: #262629;
+    --text-dim: #8E8E93;
+    --text-main: #FFFFFF;
+  }
+
+  :root.light {
+    --bg: #F9FAFB;
+    --card: #FFFFFF;
+    --border: #E5E7EB;
+    --text-dim: #6B7280;
+    --text-main: #111827;
+  }
+
   body {
     background-color: var(--color-bg);
-    color: #FFFFFF;
+    color: var(--text-main);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--text-main);
   }
 }
 
