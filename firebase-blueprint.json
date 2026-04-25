@@ -105,6 +105,40 @@
         "comment": { "type": "string" }
       },
       "required": ["bookingId", "rating"]
+    },
+    "MarketplaceItem": {
+      "title": "Marketplace Item",
+      "description": "Product or service listed in the marketplace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string", "enum": ["accessory", "part", "service"] },
+        "image": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "businessId": { "type": "string" },
+        "vendor": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "category", "ownerUid"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Purchase record for marketplace items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "paymentRef": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "itemId", "amount", "status"]
     }
   },
   "firestore": {
@@ -114,6 +148,8 @@
     "/subscriptions/{id}": { "schema": "Subscription", "description": "Active user memberships." },
     "/bookings/{id}": { "schema": "Booking", "description": "Service records (replacing /washes)." },
     "/reviews/{id}": { "schema": "Review", "description": "Customer feedback." },
-    "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." }
+    "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." },
+    "/marketplace_items/{id}": { "schema": "MarketplaceItem", "description": "Product and services." },
+    "/orders/{id}": { "schema": "Order", "description": "Transaction records." }
   }
 }

@@ -13,10 +13,10 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { 
-  doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, Query, DocumentData
+  doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -309,12 +309,28 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const success = params.get('success') || params.get('paystack_success');
     const plan = params.get('plan') as any;
+    const orderType = params.get('order_type');
+    const itemId = params.get('item_id');
     
-    if (success === 'true' && plan && profile) {
-      updateDoc(doc(db, 'users', profile.uid), { plan }).then(() => {
-        setProfile(prev => prev ? { ...prev, plan } : null);
-        window.history.replaceState({}, '', window.location.pathname);
-      });
+    if (success === 'true' && profile) {
+      if (orderType === 'item' && itemId) {
+        // Record order
+        addDoc(collection(db, 'orders'), {
+          userId: profile.uid,
+          itemId,
+          amount: 0, // Should ideally be passed back or fetched
+          status: 'completed',
+          createdAt: serverTimestamp()
+        }).then(() => {
+          alert("Order successful! Your product/service is confirmed.");
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+      } else if (plan) {
+        updateDoc(doc(db, 'users', profile.uid), { plan }).then(() => {
+          setProfile(prev => prev ? { ...prev, plan } : null);
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+      }
     }
   }, [profile]);
 
@@ -1749,7 +1765,7 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'profile' | 'inventory'>('profile');
 
   const [formData, setFormData] = useState({
     name: profile.name + "'s Wash",
@@ -1785,7 +1801,6 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
       return;
     }
     setSaving(true);
-    setError(null);
     try {
       if (business) {
         await updateDoc(doc(db, 'wash_businesses', business.id), {
@@ -1814,98 +1829,290 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto py-10">
-      <div className="bg-card rounded-[3rem] border border-border overflow-hidden shadow-2xl">
-        <div className="h-64 relative bg-bg/50">
-          <img src={formData.image} className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
-          <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
-          <div className="absolute bottom-10 left-10">
-            <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2">
-              {business ? 'Manage Your Station' : 'Launch Your Wash Station'}
-            </h2>
-            <p className="text-text-dim text-sm uppercase tracking-widest font-bold">
-              {business ? 'Keeping your digital storefront up to date' : 'Connect with thousands of customers in your area'}
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSave} className="p-10 space-y-8">
-          {!profile.plan && (
-             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-400">
-               <Info size={20} />
-               <p className="text-sm font-bold">You need an active subscription to list your business on the marketplace.</p>
-             </div>
+      <div className="flex gap-4 mb-8">
+        <button 
+          onClick={() => setActiveTab('profile')}
+          className={cn(
+            "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition",
+            activeTab === 'profile' ? "bg-accent text-white" : "bg-card text-text-dim border border-border hover:text-white"
           )}
+        >
+          Station Profile
+        </button>
+        {business && (
+          <button 
+            onClick={() => setActiveTab('inventory')}
+            className={cn(
+              "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition",
+              activeTab === 'inventory' ? "bg-accent text-white" : "bg-card text-text-dim border border-border hover:text-white"
+            )}
+          >
+            Inventory & Services
+          </button>
+        )}
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {activeTab === 'profile' ? (
+        <div className="bg-card rounded-[3rem] border border-border overflow-hidden shadow-2xl">
+          <div className="h-64 relative bg-bg/50">
+            <img src={formData.image} className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
+            <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
+            <div className="absolute bottom-10 left-10">
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2">
+                {business ? 'Manage Your Station' : 'Launch Your Wash Station'}
+              </h2>
+              <p className="text-text-dim text-sm uppercase tracking-widest font-bold">
+                {business ? 'Keeping your digital storefront up to date' : 'Connect with thousands of customers in your area'}
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSave} className="p-10 space-y-8">
+            {!profile.plan && (
+               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-400">
+                 <Info size={20} />
+                 <p className="text-sm font-bold">You need an active subscription to list your business on the marketplace.</p>
+               </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Business Name</label>
+                <div className="relative">
+                  <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
+                  <input 
+                    type="text" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Downtown Shine Professionals"
+                    className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all placeholder:text-text-dim/30"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Location Details</label>
+                <div className="relative">
+                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
+                  <input 
+                    type="text" 
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="e.g., 123 Industrial Way, Suite B"
+                    className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all placeholder:text-text-dim/30"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Business Name</label>
+              <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Cover Image URL</label>
               <div className="relative">
-                <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
+                <Camera className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
                 <input 
                   type="text" 
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Downtown Shine Professionals"
-                  className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all placeholder:text-text-dim/30"
+                  value={formData.image}
+                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all font-mono text-xs placeholder:text-text-dim/30"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Location Details</label>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
+            <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center text-accent">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Verification Status</p>
+                  <p className="text-[10px] text-text-dim uppercase tracking-widest">{business ? 'Active & Listed' : 'Pending Registration'}</p>
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={saving || !profile.plan}
+                className="w-full md:w-auto px-8 py-4 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent-light transition-all shadow-xl shadow-accent/20 disabled:opacity-50 flex items-center justify-center gap-3"
+              >
+                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                {business ? 'Update Business Profile' : 'Register Wash Station'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <BusinessInventoryManagement business={business!} profile={profile} />
+      )}
+    </motion.div>
+  );
+}
+
+function BusinessInventoryManagement({ business, profile }: { business: Business, profile: UserProfile }) {
+  const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  const [newItem, setNewItem] = useState({
+    name: '',
+    price: 0,
+    category: 'accessory' as any,
+    image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400',
+    description: ''
+  });
+
+  useEffect(() => {
+    const q = query(collection(db, 'marketplace_items'), where('businessId', '==', business.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MarketplaceItem));
+      setItems(data);
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, [business.id]);
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await addDoc(collection(db, 'marketplace_items'), {
+        ...newItem,
+        businessId: business.id,
+        ownerUid: profile.uid,
+        vendor: business.name,
+        createdAt: serverTimestamp()
+      });
+      setShowAdd(false);
+      setNewItem({
+        name: '',
+        price: 0,
+        category: 'accessory',
+        image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400',
+        description: ''
+      });
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.CREATE, 'marketplace_items');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    if (!confirm("Are you sure you want to remove this item?")) return;
+    try {
+      await deleteDoc(doc(db, 'marketplace_items', id));
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.DELETE, 'marketplace_items');
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-2xl font-black text-white uppercase tracking-tight">Inventory & Services</h3>
+          <p className="text-text-dim text-sm mt-1">Manage products and specialized services you offer.</p>
+        </div>
+        <button 
+          onClick={() => setShowAdd(!showAdd)}
+          className="px-6 py-3 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-accent-light transition"
+        >
+          {showAdd ? <X size={14} /> : <Plus size={14} />}
+          {showAdd ? 'Cancel' : 'Add New Item'}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showAdd && (
+          <motion.form 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            onSubmit={handleAddItem}
+            className="bg-card border border-border rounded-3xl p-8 overflow-hidden space-y-6"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Item name</label>
                 <input 
-                  type="text" 
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="e.g., 123 Industrial Way, Suite B"
-                  className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all placeholder:text-text-dim/30"
+                  type="text"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Price (USD)</label>
+                <input 
+                  type="number"
+                  value={newItem.price}
+                  onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
+                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Category</label>
+                <select 
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
+                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                >
+                  <option value="accessory">Accessory</option>
+                  <option value="part">Spare Part</option>
+                  <option value="service">Specialized Service</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Image URL</label>
+                <input 
+                  type="text"
+                  value={newItem.image}
+                  onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
+                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
                   required
                 />
               </div>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Cover Image URL</label>
-            <div className="relative">
-              <Camera className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
-              <input 
-                type="text" 
-                value={formData.image}
-                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-white focus:border-accent transition-all font-mono text-xs placeholder:text-text-dim/30"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center text-accent">
-                <ShieldCheck size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white">Verification Status</p>
-                <p className="text-[10px] text-text-dim uppercase tracking-widest">{business ? 'Active & Listed' : 'Pending Registration'}</p>
-              </div>
-            </div>
-
             <button 
               type="submit" 
-              disabled={saving || !profile.plan}
-              className="w-full md:w-auto px-8 py-4 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent-light transition-all shadow-xl shadow-accent/20 disabled:opacity-50 flex items-center justify-center gap-3"
+              disabled={saving}
+              className="w-full py-4 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent-light transition"
             >
-              {saving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              {business ? 'Update Business Profile' : 'Register Wash Station'}
+              {saving ? 'Processing...' : 'Publish to Marketplace'}
             </button>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {loading ? (
+          [1, 2, 3].map(i => <div key={i} className="h-40 bg-card rounded-2xl border border-border animate-pulse" />)
+        ) : items.map(item => (
+          <div key={item.id} className="bg-card border border-border rounded-3xl p-6 group relative">
+            <button 
+              onClick={() => handleDeleteItem(item.id)}
+              className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition"
+            >
+              <Trash2 size={14} />
+            </button>
+            <div className="flex gap-4">
+              <img src={item.image} className="w-20 h-20 rounded-xl object-cover border border-border" referrerPolicy="no-referrer" />
+              <div>
+                <h4 className="font-bold text-white mb-1">{item.name}</h4>
+                <p className="text-accent font-black text-xs uppercase tracking-widest">{formatCurrency(item.price)}</p>
+                <p className="text-[10px] text-text-dim uppercase tracking-widest mt-2">{item.category}</p>
+              </div>
+            </div>
           </div>
-        </form>
+        ))}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -1913,26 +2120,58 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [filter, setFilter] = useState<'all' | 'accessory' | 'part' | 'service'>('all');
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [buying, setBuying] = useState<string | null>(null);
   
   useEffect(() => {
-    const q = query(collection(db, 'wash_businesses'), limit(20));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const bizQ = query(collection(db, 'wash_businesses'), limit(20));
+    const itemQ = query(collection(db, 'marketplace_items'), limit(24));
+    
+    const unsubBiz = onSnapshot(bizQ, (snapshot) => {
       const bizData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Business));
       setBusinesses(bizData);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching marketplace businesses:", err);
+    });
+
+    const unsubItems = onSnapshot(itemQ, (snapshot) => {
+      const itemData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MarketplaceItem));
+      setItems(itemData);
       setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubBiz();
+      unsubItems();
+    };
   }, []);
 
-  const items: MarketplaceItem[] = [
-    { id: 'i1', name: "Ultra-Soft Microfiber Set", price: 25, category: 'accessory', vendor: "CleanCo", image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400' },
-    { id: 'i2', name: "Ceramic Coating Kit", price: 85, category: 'accessory', vendor: "ShineArmor", image: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400' },
-    { id: 'i3', name: "Hydraulic Jack Stand", price: 120, category: 'part', vendor: "ToolPro", image: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400' },
-  ];
+  const handleBuy = async (item: MarketplaceItem) => {
+    if (!profile) return;
+    setBuying(item.id);
+    try {
+      const response = await fetch('/api/paystack/initialize-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: profile.email,
+          amount: item.price * 100, // Paystack amount in smallest unit
+          itemId: item.id,
+          itemName: item.name,
+          userId: profile.uid
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to initialize checkout.");
+      
+      window.location.href = data.authorization_url;
+    } catch (err: any) {
+      console.error("Buy error:", err);
+      alert(err.message);
+    } finally {
+      setBuying(null);
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className ="space-y-12 pb-20">
@@ -2048,17 +2287,29 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
           {items.filter(i => filter === 'all' || i.category === filter).map(item => (
             <div 
               key={item.id} 
-              className="group cursor-pointer"
-              onClick={() => alert(`Product Inquiry: ${item.name} is available from ${item.vendor}. Our e-commerce checkout is currently in sandbox mode.`)}
+              className="group bg-card border border-border rounded-[2.5rem] p-6 hover:border-accent/40 transition-all flex flex-col"
             >
-              <div className="aspect-square bg-white rounded-3xl mb-4 overflow-hidden relative border border-border">
+              <div className="aspect-square rounded-3xl mb-4 overflow-hidden relative bg-bg/50">
                 <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                <div className="absolute bottom-4 left-4 bg-white px-3 py-1.5 rounded-xl font-black text-bg shadow-xl">
+                <div className="absolute bottom-4 left-4 bg-white px-3 py-1.5 rounded-xl font-black text-bg shadow-xl text-xs">
                   {formatCurrency(item.price)}
                 </div>
               </div>
-              <h4 className="text-sm font-bold text-white mb-1 group-hover:text-accent transition">{item.name}</h4>
-              <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">By {item.vendor}</p>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-white mb-1">{item.name}</h4>
+                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">By {item.vendor}</p>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleBuy(item);
+                }}
+                disabled={!!buying}
+                className="mt-6 w-full py-3 bg-white/5 border border-border text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:border-transparent transition flex items-center justify-center gap-2"
+              >
+                {buying === item.id ? <RefreshCw size={12} className="animate-spin" /> : <ShoppingBag size={12} />}
+                {buying === item.id ? 'Processing...' : 'Quick Buy'}
+              </button>
             </div>
           ))}
         </div>

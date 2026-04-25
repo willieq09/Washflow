@@ -26,6 +26,44 @@ app.options("*", (req, res) => {
   res.sendStatus(204);
 });
 
+app.post("/api/paystack/initialize-order", async (req, res) => {
+  const { email, amount, itemId, itemName, userId } = req.body;
+  
+  if (!PAYSTACK_SECRET) {
+    return res.status(500).json({ error: "Paystack is not configured." });
+  }
+
+  try {
+    const origin = req.headers.origin || req.headers.referer || `http://localhost:${PORT}`;
+    
+    const response = await axios.post(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        email,
+        amount: amount, 
+        callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}`,
+        metadata: {
+          userId,
+          itemId,
+          itemName,
+          type: 'marketplace_item'
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    res.json(response.data.data);
+  } catch (error: any) {
+    console.error("Paystack Order Init Error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.message || "Failed to initialize order" });
+  }
+});
+
 app.post("/api/paystack/initialize", async (req, res) => {
   const { email, amount, plan, userId } = req.body;
   
