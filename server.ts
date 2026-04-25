@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import axios from "axios";
 import { fileURLToPath } from 'url';
+import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,9 +16,54 @@ app.use(express.json());
 // Paystack Configuration
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 
+// Nodemailer Lazy Initialization
+let transporter: nodemailer.Transporter | null = null;
+function getTransporter() {
+  if (!transporter) {
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+    if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
+      console.warn("SMTP configuration is missing. Emails will not be sent.");
+      return null;
+    }
+    transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: parseInt(SMTP_PORT),
+      secure: parseInt(SMTP_PORT) === 465,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+    });
+  }
+  return transporter;
+}
+
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.post("/api/notify", async (req, res) => {
+  const { to, subject, html } = req.body;
+  const mailTransporter = getTransporter();
+
+  if (!mailTransporter) {
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  try {
+    const info = await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM || `"NearWash System" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log("Email sent:", info.messageId);
+    res.json({ success: true, messageId: info.messageId });
+  } catch (error: any) {
+    console.error("Email send error:", error);
+    res.status(500).json({ error: "Failed to send email" });
+  }
 });
 
 app.options("*", (req, res) => {

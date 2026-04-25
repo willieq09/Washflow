@@ -25,6 +25,7 @@ import {
 import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
+import { sendEmail, generateBookingNotification } from './services/notificationService';
 
 // --- Types ---
 interface UserProfile {
@@ -1007,9 +1008,11 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
+  const [workers, setWorkers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   const handleViewReport = async () => {
     setReportLoading(true);
@@ -1020,6 +1023,51 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       console.error("Report generation failed:", error);
     } finally {
       setReportLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch Workers for assignment if owner/lead
+    if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
+      const qWorkers = query(collection(db, 'users'), where('role', '==', 'worker'));
+      const unsubWorkers = onSnapshot(qWorkers, (snap) => {
+        setWorkers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      });
+      return () => unsubWorkers();
+    }
+  }, [profile]);
+
+  const handleAssignWorker = async (booking: Booking, workerId: string) => {
+    setAssigningId(booking.id);
+    try {
+      const worker = workers.find(w => w.uid === workerId);
+      if (!worker) return;
+
+      await updateDoc(doc(db, 'bookings', booking.id), {
+        workerId: workerId,
+        status: 'confirmed'
+      });
+
+      // Send Notification to Worker
+      const workerNote = generateBookingNotification(booking, worker.name, 'worker');
+      sendEmail({ to: worker.email, ...workerNote });
+
+      // Notify Customer that someone is assigned (Optional but good)
+      const customerDoc = await getDoc(doc(db, 'users', booking.userId));
+      if (customerDoc.exists()) {
+         const customerData = customerDoc.data() as UserProfile;
+         const customerNote = {
+           subject: `Pro Assigned: ${booking.businessName}`,
+           html: `<p>Hi ${customerData.name}, ${worker.name} has been assigned to your wash booking.</p>`
+         };
+         sendEmail({ to: customerData.email, ...customerNote });
+      }
+
+    } catch (error: any) {
+      console.error("Assignment failed:", error);
+      alert(`Assignment Error: ${error.message}`);
+    } finally {
+      setAssigningId(null);
     }
   };
 
@@ -1311,16 +1359,31 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                      </p>
                    </div>
                 </div>
-                <button 
-                  onClick={() => onLogWash({ 
-                    carModel: booking.vehicleInfo?.split('(')[0].trim() || 'Service Request', 
-                    plateNumber: booking.vehicleInfo?.match(/\(([^)]+)\)/)?.[1] || '',
-                    bookingId: booking.id 
-                  })}
-                  className="bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl hover:bg-accent hover:text-white"
-                >
-                  Process
-                </button>
+                <div className="flex items-center gap-3">
+                  {(profile.role === 'owner' || profile.permissions?.canManageTeam) && !booking.workerId && workers.length > 0 && (
+                    <select 
+                      disabled={assigningId === booking.id}
+                      value=""
+                      onChange={(e) => handleAssignWorker(booking, e.target.value)}
+                      className="bg-bg/50 text-text-dim px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40"
+                    >
+                      <option value="" disabled>Assign Pro</option>
+                      {workers.map(w => (
+                        <option key={w.uid} value={w.uid}>{w.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <button 
+                    onClick={() => onLogWash({ 
+                      carModel: booking.vehicleInfo?.split('(')[0].trim() || 'Service Request', 
+                      plateNumber: booking.vehicleInfo?.match(/\(([^)]+)\)/)?.[1] || '',
+                      bookingId: booking.id 
+                    })}
+                    className="bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl hover:bg-accent hover:text-white"
+                  >
+                    Process
+                  </button>
+                </div>
               </div>
             ))}
             {upcomingBookings.length === 0 && (
@@ -1528,6 +1591,24 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
       };
 
       await addDoc(collection(db, 'bookings'), bookingData);
+      
+      // Send Notifications
+      try {
+        // Notify Customer
+        const customerNote = generateBookingNotification(bookingData, profile.name, 'customer');
+        sendEmail({ to: profile.email, ...customerNote });
+
+        // Notify Owner
+        const ownerDoc = await getDoc(doc(db, 'users', business.ownerUid));
+        if (ownerDoc.exists()) {
+          const ownerData = ownerDoc.data() as UserProfile;
+          const ownerNote = generateBookingNotification(bookingData, ownerData.name, 'owner');
+          sendEmail({ to: ownerData.email, ...ownerNote });
+        }
+      } catch (notifyError) {
+        console.warn("Notification error:", notifyError);
+      }
+
       alert(`Booking Confirmed! ${serviceType === 'home-service' ? "Our professional will arrive at your location." : "See you at the station!"}`);
       onClose();
     } catch (error: any) {
