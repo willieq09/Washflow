@@ -97,6 +97,8 @@ interface MarketplaceItem {
   category: 'accessory' | 'part' | 'service';
   image: string;
   vendor: string;
+  businessId?: string;
+  ownerUid?: string;
 }
 
 interface WashJob {
@@ -793,14 +795,60 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
       limit(5)
     );
 
-    const businessesQuery = query(collection(db, 'businesses'), limit(12));
+    const businessesQuery = query(collection(db, 'wash_businesses'), limit(12));
 
     const unsubBookings = onSnapshot(q, (snap) => {
       setUpcoming(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)));
     });
 
     const unsubBusinesses = onSnapshot(businessesQuery, (snap) => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Business));
+      let all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Business));
+      
+      // If empty, use samples (for UI experience)
+      if (all.length === 0) {
+        all = [
+          {
+            id: 'sample-1',
+            name: "Hydro-Dynamic Pros",
+            location: "742 Evergreen Terrace",
+            image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=1000",
+            rating: 4.9,
+            lat: -1.286389,
+            lng: 36.817223,
+            ownerUid: 'system'
+          } as Business,
+          {
+            id: 'sample-2',
+            name: "EcoShine Station",
+            location: "123 Industrial Way",
+            image: "https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=1000",
+            rating: 4.7,
+            lat: -1.300000,
+            lng: 36.790000,
+            ownerUid: 'system'
+          } as Business,
+          {
+            id: 'sample-3',
+            name: "Velocity Detailers",
+            location: "45 Business District",
+            image: "https://images.unsplash.com/photo-1552933529-e359b2477262?auto=format&fit=crop&q=80&w=1000",
+            rating: 4.8,
+            lat: -1.270000,
+            lng: 36.830000,
+            ownerUid: 'system'
+          } as Business,
+          {
+            id: 'sample-4',
+            name: "The Wash Vault",
+            location: "88 Coastal Ave",
+            image: "https://images.unsplash.com/photo-1599256621730-5353e6f99f1c?auto=format&fit=crop&q=80&w=1000",
+            rating: 4.5,
+            lat: -1.290000,
+            lng: 36.800000,
+            ownerUid: 'system',
+          } as Business
+        ];
+      }
       
       // Sort by proximity if location available
       if (location) {
@@ -2210,12 +2258,25 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
     const itemQ = query(collection(db, 'marketplace_items'), limit(24));
     
     const unsubBiz = onSnapshot(bizQ, (snapshot) => {
-      const bizData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Business));
+      let bizData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Business));
+      if (bizData.length === 0) {
+        bizData = [
+          { id: 'sb-1', name: "Hydro-Dynamic Pros", location: "Evergreen Terrace", image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=1000", rating: 4.9, ownerUid: 'system' } as Business,
+          { id: 'sb-2', name: "EcoShine Station", location: "Industrial Way", image: "https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=1000", rating: 4.7, ownerUid: 'system' } as Business
+        ];
+      }
       setBusinesses(bizData);
     });
 
     const unsubItems = onSnapshot(itemQ, (snapshot) => {
-      const itemData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MarketplaceItem));
+      let itemData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MarketplaceItem));
+      if (itemData.length === 0) {
+        itemData = [
+          { id: 'si-1', name: "Ultra-Soft Microfiber Set", price: 25, category: 'accessory', vendor: "Hydro-Dynamic", image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-1' },
+          { id: 'si-2', name: "Ceramic Coating Kit", price: 85, category: 'accessory', vendor: "EcoShine", image: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-2' },
+          { id: 'si-3', name: "Specialized Part X", price: 150, category: 'part', vendor: "Hydro-Dynamic", image: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-1' }
+        ] as MarketplaceItem[];
+      }
       setItems(itemData);
       setLoading(false);
     });
