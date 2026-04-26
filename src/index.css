@@ -60,6 +60,7 @@
 
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
+    height: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
@@ -67,9 +68,20 @@
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 10px;
+    transition: background 0.3s ease;
   }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
     background: var(--color-accent);
+  }
+
+  /* Modern Input Hover/Focus States */
+  input, select, textarea {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  input:focus, select:focus, textarea:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px -8px rgba(62, 99, 221, 0.25);
+    background-color: color-mix(in srgb, var(--color-card), var(--color-accent) 5%);
   }
 
   /* Hide number input arrows */

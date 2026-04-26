@@ -2999,36 +2999,51 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
-                         <input value={newVehicle.make} onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Toyota" />
+                         <input 
+                           value={newVehicle.make} 
+                           onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} 
+                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
+                           placeholder="Toyota" 
+                         />
                       </div>
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
-                         <input value={newVehicle.model} onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors" placeholder="Camry" />
+                         <input 
+                           value={newVehicle.model} 
+                           onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
+                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
+                           placeholder="Camry" 
+                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Year</label>
-                         <div className="relative">
+                         <div className="relative group">
                            <select 
                              value={newVehicle.year} 
                              onChange={e => setNewVehicle(v => ({ ...v, year: parseInt(e.target.value) }))} 
-                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors appearance-none cursor-pointer custom-scrollbar overflow-y-auto"
+                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none cursor-pointer custom-scrollbar overflow-y-auto"
                            >
                              {Array.from({ length: 76 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                               <option key={year} value={year} className="bg-card text-white">
+                               <option key={year} value={year} className="bg-card text-text-main">
                                  {year}
                                </option>
                              ))}
                            </select>
-                           <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim">
+                           <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim group-hover:text-accent transition-colors">
                              <ChevronRight size={14} className="rotate-90" />
                            </div>
                          </div>
                       </div>
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
-                         <input value={newVehicle.plate} onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white focus:border-accent transition-colors font-mono" placeholder="ABC-1234" />
+                         <input 
+                           value={newVehicle.plate} 
+                           onChange={e => setNewVehicle(v => ({ ...v, plate: e.target.value.toUpperCase() }))} 
+                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none font-mono" 
+                           placeholder="ABC-1234" 
+                         />
                       </div>
                     </div>
                   <div className="space-y-2">
@@ -4682,7 +4697,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       value={settings.businessName}
                       onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
                       placeholder="e.g. Lagos Premium Wash"
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                     />
                   </div>
                   <div className="space-y-2">
@@ -4691,7 +4706,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       value={settings.businessAddress}
                       onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
                       placeholder="123 Lekki Phase 1, Lagos"
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                     />
                   </div>
                 </div>
@@ -4713,7 +4728,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       type="number"
                       value={settings.businessLat}
                       onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                     />
                   </div>
                   <div className="space-y-2">
@@ -4722,7 +4737,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       type="number"
                       value={settings.businessLng}
                       onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                     />
                   </div>
                 </div>
@@ -4869,9 +4884,70 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
   const [cameraActive, setCameraActive] = useState(false);
   const [result, setResult] = useState<{ plate: string, vehicle: string } | null>(null);
   const [showGarage, setShowGarage] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    lighting: 'too-dark' | 'good' | 'too-bright';
+    quality: 'low' | 'med' | 'high';
+    brightnessLevel: number;
+  }>({ lighting: 'good', quality: 'high', brightnessLevel: 150 });
 
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const feedbackCanvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
+
+  useEffect(() => {
+    let animationFrameId: number;
+    if (!cameraActive) return;
+
+    const analyzeFrame = () => {
+      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+        const video = videoRef.current;
+        const canvas = feedbackCanvasRef.current;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        if (ctx) {
+          // Low res sample for performance
+          const sampleWidth = 100;
+          const sampleHeight = 100;
+          canvas.width = sampleWidth;
+          canvas.height = sampleHeight;
+          
+          // Draw center of video
+          const sw = video.videoWidth * 0.5;
+          const sh = video.videoHeight * 0.5;
+          const sx = (video.videoWidth - sw) / 2;
+          const sy = (video.videoHeight - sh) / 2;
+          
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sampleWidth, sampleHeight);
+          const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+          const data = imageData.data;
+          
+          let totalBrightness = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            totalBrightness += (data[i] + data[i+1] + data[i+2]) / 3;
+          }
+          const avgBrightness = totalBrightness / (data.length / 4);
+          
+          // Simplified Sharpness tracking (Variance of brightness)
+          let sumSquares = 0;
+          for (let i = 0; i < data.length; i += 4) {
+             const b = (data[i] + data[i+1] + data[i+2]) / 3;
+             sumSquares += Math.pow(b - avgBrightness, 2);
+          }
+          const variance = sumSquares / (data.length / 4);
+          
+          setFeedback({
+            lighting: avgBrightness < 60 ? 'too-dark' : avgBrightness > 220 ? 'too-bright' : 'good',
+            quality: variance < 200 ? 'low' : variance < 800 ? 'med' : 'high',
+            brightnessLevel: Math.round(avgBrightness)
+          });
+        }
+      }
+      animationFrameId = requestAnimationFrame(analyzeFrame);
+    };
+
+    analyzeFrame();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [cameraActive]);
 
   const startCamera = async () => {
     setCameraActive(true);
@@ -5013,10 +5089,41 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
                 className="w-full h-full object-cover"
               />
               <canvas ref={canvasRef} className="hidden" />
+              <div className="absolute inset-x-8 top-8 flex justify-between gap-4 pointer-events-none">
+                <div className="flex flex-col gap-2">
+                  <div className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border text-[10px] font-black uppercase tracking-widest transition-colors",
+                    feedback.lighting === 'good' ? "bg-success/20 border-success/40 text-success" : 
+                    feedback.lighting === 'too-dark' ? "bg-blue-500/20 border-blue-500/40 text-blue-400" :
+                    "bg-orange-500/20 border-orange-500/40 text-orange-400"
+                  )}>
+                    {feedback.lighting === 'good' ? <Sun size={12} /> : feedback.lighting === 'too-dark' ? <Moon size={12} /> : <Zap size={12} />}
+                    {feedback.lighting === 'good' ? 'Optimal Light' : feedback.lighting === 'too-dark' ? 'Low Light' : 'Excessive Light'}
+                  </div>
+                  <div className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border text-[10px] font-black uppercase tracking-widest transition-colors",
+                    feedback.quality === 'high' ? "bg-success/20 border-success/40 text-success" : 
+                    feedback.quality === 'med' ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-400" :
+                    "bg-red-500/20 border-red-500/40 text-red-400"
+                  )}>
+                    <Sparkles size={12} />
+                    {feedback.quality === 'high' ? 'High Focus' : feedback.quality === 'med' ? 'Minor Blur' : 'Re-position Plate'}
+                  </div>
+                </div>
+                
+                <div className="bg-black/60 backdrop-blur-md border border-white/10 p-3 rounded-2xl flex flex-col items-center justify-center min-w-[60px]">
+                  <p className="text-[8px] font-black text-text-dim uppercase mb-1">Index</p>
+                  <p className="text-sm font-black text-white">{feedback.brightnessLevel}</p>
+                </div>
+              </div>
+
               <div className="absolute inset-0 border-[40px] border-bg/40 pointer-events-none">
                 <div className="absolute inset-4 border-2 border-accent/40 rounded-3xl" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-64 h-32 border-2 border-white/20 rounded-xl" />
+                  <div className={cn(
+                    "w-64 h-32 border-2 rounded-xl transition-all duration-300",
+                    feedback.quality === 'high' && feedback.lighting === 'good' ? "border-success scale-105 shadow-[0_0_20px_rgba(48,209,88,0.3)]" : "border-white/20"
+                  )} />
                 </div>
               </div>
               <div className="absolute bottom-8 inset-x-8">
