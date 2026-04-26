@@ -4,6 +4,10 @@ import path from "path";
 import axios from "axios";
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +18,7 @@ const PORT = 3000;
 app.use(express.json());
 
 // Paystack Configuration
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET;
 
 // Nodemailer Lazy Initialization
 let transporter: nodemailer.Transporter | null = null;
@@ -76,7 +80,7 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
   const { email, amount, itemId, itemName, userId } = req.body;
   
   if (!PAYSTACK_SECRET) {
-    return res.status(500).json({ error: "Paystack is not configured." });
+    return res.status(500).json({ error: "Paystack is not configured. Please set PAYSTACK_SECRET_KEY." });
   }
 
   try {
@@ -86,7 +90,7 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email,
-        amount: amount, 
+        amount: Math.round(amount), // Ensure integer
         callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}`,
         metadata: {
           userId,
@@ -106,7 +110,7 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
     res.json(response.data.data);
   } catch (error: any) {
     console.error("Paystack Order Init Error:", error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data?.message || "Failed to initialize order" });
+    res.status(500).json({ error: error.response?.data?.message || error.message || "Failed to initialize order" });
   }
 });
 
@@ -114,7 +118,7 @@ app.post("/api/paystack/initialize", async (req, res) => {
   const { email, amount, plan, userId } = req.body;
   
   if (!PAYSTACK_SECRET) {
-    return res.status(500).json({ error: "Paystack is not configured." });
+    return res.status(500).json({ error: "Paystack is not configured. Please set PAYSTACK_SECRET_KEY in Environment Variables." });
   }
 
   try {
@@ -125,7 +129,7 @@ app.post("/api/paystack/initialize", async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email,
-        amount: amount, // In smallest unit (kobo/cents)
+        amount: Math.round(amount), // Enforce integer for Paystack (kobo/cents)
         callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
         metadata: {
           userId,
@@ -147,10 +151,15 @@ app.post("/api/paystack/initialize", async (req, res) => {
       }
     );
 
-    res.json(response.data.data);
+    if (response.data && response.data.status) {
+      res.json(response.data.data);
+    } else {
+      throw new Error(response.data?.message || "Paystack initialization failed");
+    }
   } catch (error: any) {
     console.error("Paystack Init Error:", error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data?.message || "Failed to initialize Paystack transaction" });
+    const errorMessage = error.response?.data?.message || error.message || "Failed to initialize Paystack transaction";
+    res.status(500).json({ error: errorMessage });
   }
 });
 
@@ -164,14 +173,27 @@ if (process.env.NODE_ENV === "production") {
 } else {
   // For development (local or AI Studio preview), we use the async start helper
   const startVite = async () => {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.error("Vite middleware failed to start:", e);
+    }
   };
   startVite();
 }
+
+// Global error handler to ensure JSON responses even on unexpected crashes
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Global Server Error:", err);
+  res.status(500).json({ 
+    error: "A critical server error occurred.", 
+    message: err.message || "Unknown error" 
+  });
+});
 
 // Start listener only if not on Vercel
 if (process.env.VERCEL !== '1') {
