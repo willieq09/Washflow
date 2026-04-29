@@ -174,9 +174,10 @@ app.post("/api/paystack/initialize", async (req, res) => {
 });
 
 app.get("/api/paystack/banks", async (req, res) => {
-  if (!PAYSTACK_SECRET) {
-    console.error("Bank Fetch Failed: PAYSTACK_SECRET not configured");
-    return res.status(500).json({ error: "Paystack secret key is missing in environment variables." });
+  const secret = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
+  if (!secret) {
+    console.error("Bank Fetch Failed: Secret missing");
+    return res.status(500).json({ error: "Paystack secret key is missing." });
   }
   
   try {
@@ -188,8 +189,8 @@ app.get("/api/paystack/banks", async (req, res) => {
     while (hasMore && page <= 5) {
       console.log(`Fetching Paystack banks page ${page}...`);
       const response = await axios.get(`https://api.paystack.co/bank?country=nigeria&per_page=100&page=${page}`, {
-        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-        timeout: 10000 // 10s timeout
+        headers: { Authorization: `Bearer ${secret}` },
+        timeout: 10000
       });
       
       if (!response.data.status) {
@@ -214,11 +215,12 @@ app.get("/api/paystack/banks", async (req, res) => {
       console.warn("Paystack call success but no banks found in data array.");
     }
     
-    res.json(allBanks);
+    // Ensure we always return JSON
+    return res.status(200).json(allBanks);
   } catch (error: any) {
     const errorData = error.response?.data;
     console.error("Fetch Banks Critical Error:", errorData || error.message);
-    res.status(error.response?.status || 500).json({ 
+    return res.status(error.response?.status || 500).json({ 
       error: errorData?.message || error.message || "Failed to fetch banks from Paystack" 
     });
   }
@@ -226,7 +228,12 @@ app.get("/api/paystack/banks", async (req, res) => {
 
 app.get("/api/paystack/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.query;
-  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+  const secret = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
+  
+  if (!secret) {
+    console.error("Account Resolve Failed: Secret missing");
+    return res.status(500).json({ error: "Paystack secret key is missing." });
+  }
   
   if (!account_number || !bank_code) {
     return res.status(400).json({ error: "Missing account_number or bank_code" });
@@ -234,7 +241,7 @@ app.get("/api/paystack/resolve-account", async (req, res) => {
 
   try {
     const response = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
+      headers: { Authorization: `Bearer ${secret}` },
       timeout: 10000
     });
     res.json(response.data.data);

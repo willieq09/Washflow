@@ -829,6 +829,18 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
   const [bankSearch, setBankSearch] = useState('');
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const majorBanks = [
+    { name: 'Access Bank', code: '044' },
+    { name: 'First Bank of Nigeria', code: '011' },
+    { name: 'Guaranty Trust Bank', code: '058' },
+    { name: 'United Bank For Africa', code: '033' },
+    { name: 'Zenith Bank', code: '057' },
+    { name: 'Kuda Bank', code: '50211' },
+    { name: 'Opay (Digital Bank)', code: '999992' },
+    { name: 'Palmpay', code: '999991' },
+    { name: 'Moniepoint', code: '50515' }
+  ];
+
   useEffect(() => {
     if (isOpen) {
       setForm(f => ({ ...f, amount: balance }));
@@ -851,16 +863,19 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
           }
         })
         .then(data => {
-          if (Array.isArray(data)) {
+          if (Array.isArray(data) && data.length > 0) {
             const sortedBanks = [...data].sort((a, b) => a.name.localeCompare(b.name));
             setBanks(sortedBanks);
           } else {
-            setFetchError('Invalid bank data received');
+            console.warn("Empty or invalid bank list from server, using fallbacks");
+            setBanks(majorBanks);
           }
         })
         .catch(err => {
-          console.error(err);
+          console.error("Bank fetch failed:", err);
           setFetchError(err.message);
+          // Use fallbacks if fetch continues to fail
+          setBanks(majorBanks);
         })
         .finally(() => setLoading(false));
     }
@@ -999,32 +1014,51 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
                   <input 
                     type="text" 
                     maxLength={10}
-                    className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
+                    className={cn(
+                      "w-full bg-bg border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none transition-all",
+                      resolved ? "border-success/50 bg-success/5" : "border-border"
+                    )}
                     value={form.accountNumber}
-                    onChange={e => { setForm({...form, accountNumber: e.target.value}); setResolved(false); }}
-                    onBlur={resolveAccount}
-                    placeholder="Account Number"
+                    onChange={e => { 
+                      const val = e.target.value.replace(/\D/g, '');
+                      setForm({...form, accountNumber: val}); 
+                      setResolved(false); 
+                    }}
+                    onBlur={() => { if (form.accountNumber.length === 10) resolveAccount(); }}
+                    placeholder="Enter 10 digits"
                   />
-                  {loading && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
+                  {loading && !banks.length && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
+                  {resolved && <CheckCircle size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-success" />}
                 </div>
                 <button 
+                  type="button"
                   onClick={resolveAccount}
-                  disabled={loading || form.accountNumber.length < 10 || !form.bankCode}
-                  className="bg-accent/10 text-accent px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50 h-[54px]"
+                  disabled={loading || form.accountNumber.length < 10 || !form.bankCode || resolved}
+                  className={cn(
+                    "px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all h-[54px] flex items-center gap-2",
+                    resolved 
+                      ? "bg-success/10 text-success cursor-default" 
+                      : "bg-accent/10 text-accent hover:bg-accent hover:text-white disabled:opacity-50"
+                  )}
                 >
-                  Verify
+                  {loading && form.accountNumber.length === 10 && form.bankCode ? <RefreshCw size={12} className="animate-spin" /> : null}
+                  {resolved ? 'Verified' : 'Verify'}
                 </button>
               </div>
             </div>
 
             {resolved && (
-              <div className="p-4 bg-success/10 border border-success/20 rounded-2xl animate-in items-center flex justify-between">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 bg-success/5 border border-success/20 rounded-2xl flex items-center justify-between"
+              >
                 <div>
-                  <span className="text-[10px] font-black text-success uppercase tracking-widest">Account Verified</span>
+                  <span className="text-[8px] font-black text-success uppercase tracking-widest leading-none">Authentication Success</span>
                   <div className="text-sm font-bold text-white uppercase mt-1">{form.accountName}</div>
                 </div>
                 <ShieldCheck className="text-success" size={24} />
-              </div>
+              </motion.div>
             )}
 
             <div className="space-y-2">
