@@ -826,6 +826,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ bankCode: '', accountNumber: '', amount: balance, accountName: '' });
   const [resolved, setResolved] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -842,6 +843,8 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
         .finally(() => setLoading(false));
     }
   }, [isOpen, balance]);
+
+  const filteredBanks = banks.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()));
 
   const resolveAccount = async () => {
     if (form.accountNumber.length !== 10 || !form.bankCode) return;
@@ -880,8 +883,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
       });
       const data = await res.json();
       
-      // Paystack response check: status can be true/false or a status string
-      if (data.status === 'success' || data.status === 200 || data.integration) {
+      if (data.status) {
         // Record in Firestore
         await addDoc(collection(db, 'withdrawals'), {
           ownerId: userId,
@@ -891,7 +893,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
           accountName: form.accountName,
           timestamp: serverTimestamp(),
           status: 'processed',
-          reference: data.transfer_code || data.reference || 'N/A'
+          reference: data.data?.transfer_code || data.data?.reference || 'N/A'
         });
 
         alert("Withdrawal initiated successfully! Funds should reflect shortly.");
@@ -928,16 +930,28 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Bank</label>
-              <select 
-                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
-                value={form.bankCode}
-                onChange={e => { setForm({...form, bankCode: e.target.value}); setResolved(false); }}
-              >
-                <option value="">Choose your bank</option>
-                {Array.isArray(banks) && banks.map(b => (
-                  <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
-                ))}
-              </select>
+              <div className="space-y-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search bank..."
+                    className="w-full bg-bg border border-border rounded-t-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
+                    value={bankSearch}
+                    onChange={e => setBankSearch(e.target.value)}
+                  />
+                  <Search size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-dim" />
+                </div>
+                <select 
+                  className="w-full bg-bg border border-border rounded-b-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
+                  value={form.bankCode}
+                  onChange={e => { setForm({...form, bankCode: e.target.value}); setResolved(false); }}
+                >
+                  <option value="">{loading ? 'Loading banks...' : 'Choose your bank'}</option>
+                  {Array.isArray(filteredBanks) && filteredBanks.map(b => (
+                    <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1427,6 +1441,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   const [reportLoading, setReportLoading] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [recentWithdrawals, setRecentWithdrawals] = useState<any[]>([]);
 
   const handleViewReport = async () => {
     setReportLoading(true);
@@ -1512,13 +1527,15 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
     });
 
     // Subscribe to withdrawals separately
-    const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid));
+    const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid), orderBy('timestamp', 'desc'));
     const unsubWithdrawals = onSnapshot(qWithdrawals, (withdrawSnap) => {
-      const totalWithdrawn = withdrawSnap.docs.reduce((acc, curr) => acc + (curr.data().amount || 0), 0);
+      const docs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const totalWithdrawn = docs.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
       setStats(prev => ({
         ...prev,
-        totalWithdrawn: totalWithdrawn // Store it separate to keep logic simple
+        totalWithdrawn: totalWithdrawn
       }));
+      setRecentWithdrawals(docs.slice(0, 5));
     });
 
     // Sync Bookings (Queue)
@@ -1659,7 +1676,24 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                 <div>
                   <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Pending Escrow</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-text-dim/60">{formatCurrency(stats.pendingEscrow)}</div>
-                  <p className="text-[9px] text-text-dim mt-4 lowercase leading-relaxed max-w-[150px]">Funds clearing after standard 48-hour verification window.</p>
+                  
+                  {recentWithdrawals.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                       <span className="text-[8px] font-black text-text-dim uppercase tracking-widest">Recent Payouts</span>
+                       {recentWithdrawals.map((w) => (
+                         <div key={w.id} className="flex justify-between items-center bg-white/5 p-2 rounded-lg border border-white/5">
+                            <div>
+                               <div className="text-[9px] font-bold text-white leading-tight uppercase">{w.bankName}</div>
+                               <div className="text-[7px] text-text-dim uppercase">{w.accountNumber}</div>
+                            </div>
+                            <div className="text-right">
+                               <div className="text-[9px] font-black text-accent">{formatCurrency(w.amount)}</div>
+                               <div className="text-[7px] text-success font-black uppercase">{w.status}</div>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
