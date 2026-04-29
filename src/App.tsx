@@ -820,6 +820,162 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
   );
 }
 
+function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean, onClose: () => void, balance: number, userId: string }) {
+  const [banks, setBanks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ bankCode: '', accountNumber: '', amount: balance, accountName: '' });
+  const [resolved, setResolved] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm(f => ({ ...f, amount: balance }));
+      setLoading(true);
+      fetch('/api/paystack/banks')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setBanks(data);
+          }
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [isOpen, balance]);
+
+  const resolveAccount = async () => {
+    if (form.accountNumber.length !== 10 || !form.bankCode) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/paystack/resolve-account?account_number=${form.accountNumber}&bank_code=${form.bankCode}`);
+      const data = await res.json();
+      if (data.account_name) {
+        setForm(f => ({ ...f, accountName: data.account_name }));
+        setResolved(true);
+      } else {
+        alert("Could not verify account name");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!resolved || form.amount <= 0 || form.amount > balance) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/paystack/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: form.amount * 100, // to kobo
+          account_number: form.accountNumber,
+          bank_code: form.bankCode,
+          account_name: form.accountName,
+          userId
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'success' || data.status === 200 || data.data?.status === 'success') {
+        alert("Withdrawal initiated successfully!");
+        onClose();
+      } else {
+        alert(data.message || data.error || "Withdrawal failed");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred during withdrawal");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-md rounded-[2.5rem] border border-border p-8 shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-black text-white uppercase italic">Withdrawal Console</h3>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-text-dim hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          <div className="p-4 bg-accent/5 border border-accent/20 rounded-2xl">
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Available to Clear</span>
+            <div className="text-2xl font-black text-white">{formatCurrency(balance)}</div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Bank</label>
+              <select 
+                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
+                value={form.bankCode}
+                onChange={e => { setForm({...form, bankCode: e.target.value}); setResolved(false); }}
+              >
+                <option value="">Choose your bank</option>
+                {Array.isArray(banks) && banks.map(b => (
+                  <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  maxLength={10}
+                  className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
+                  value={form.accountNumber}
+                  onChange={e => { setForm({...form, accountNumber: e.target.value}); setResolved(false); }}
+                  onBlur={resolveAccount}
+                  placeholder="0123456789"
+                />
+                {loading && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
+              </div>
+            </div>
+
+            {resolved && (
+              <div className="p-4 bg-success/10 border border-success/20 rounded-2xl animate-in items-center flex justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-success uppercase tracking-widest">Account Verified</span>
+                  <div className="text-sm font-bold text-white uppercase mt-1">{form.accountName}</div>
+                </div>
+                <ShieldCheck className="text-success" size={24} />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Amount to Withdraw (₦)</label>
+              <input 
+                type="number" 
+                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
+                value={form.amount}
+                onChange={e => setForm({...form, amount: parseFloat(e.target.value)})}
+                max={balance}
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={handleWithdraw}
+            disabled={submitting || !resolved || form.amount <= 0 || form.amount > balance}
+            className="w-full bg-accent text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+          >
+            {submitting ? <RefreshCw className="animate-spin" size={16} /> : <Zap size={16} />}
+            {submitting ? 'Processing...' : `Transmit ${formatCurrency(form.amount || 0)}`}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function AdminDashboardView() {
   const [stats, setStats] = useState({
     mrr: 0,
@@ -1246,6 +1402,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   const [report, setReport] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
   const handleViewReport = async () => {
     setReportLoading(true);
@@ -1399,6 +1556,13 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
+      {/* Withdrawal Modal */}
+      <WithdrawalModal 
+        isOpen={isWithdrawModalOpen} 
+        onClose={() => setIsWithdrawModalOpen(false)} 
+        balance={stats.availableBalance} 
+        userId={profile.uid} 
+      />
       <header className="mb-10 flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-white tracking-tight">AutoLux Dashboard</h2>
@@ -1447,7 +1611,10 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                 <div>
                   <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Available Balance</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-white">{formatCurrency(stats.availableBalance)}</div>
-                  <button className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2">
+                  <button 
+                    onClick={() => setIsWithdrawModalOpen(true)}
+                    className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2"
+                  >
                     <ArrowDown size={12} /> Withdraw to Bank
                   </button>
                 </div>

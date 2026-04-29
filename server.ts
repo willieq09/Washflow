@@ -173,6 +173,66 @@ app.post("/api/paystack/initialize", async (req, res) => {
   }
 });
 
+app.get("/api/paystack/banks", async (req, res) => {
+  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+  try {
+    const response = await axios.get("https://api.paystack.co/bank", {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    res.json(response.data.data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/paystack/resolve-account", async (req, res) => {
+  const { account_number, bank_code } = req.query;
+  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+  try {
+    const response = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    res.json(response.data.data);
+  } catch (error: any) {
+    res.status(400).json({ error: error.response?.data?.message || "Could not resolve account" });
+  }
+});
+
+app.post("/api/paystack/transfer", async (req, res) => {
+  const { amount, account_number, bank_code, account_name, userId } = req.body;
+  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+
+  try {
+    // 1. Create Transfer Recipient
+    const recipientRes = await axios.post("https://api.paystack.co/transferrecipient", {
+      type: "nuban",
+      name: account_name,
+      account_number: account_number,
+      bank_code: bank_code,
+      currency: "NGN"
+    }, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
+    });
+
+    const recipientCode = recipientRes.data.data.recipient_code;
+
+    // 2. Initiate Transfer
+    const transferRes = await axios.post("https://api.paystack.co/transfer", {
+      source: "balance",
+      amount: Math.round(amount), // in kobo
+      recipient: recipientCode,
+      reason: `AutoLux Withdrawal - ${userId}`
+    }, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
+    });
+
+    res.json(transferRes.data.data);
+  } catch (error: any) {
+    console.error("Transfer Error:", error.response?.data || error.message);
+    res.status(400).json({ error: error.response?.data?.message || "Transfer failed" });
+  }
+});
+
 // Production static file serving
 if (process.env.NODE_ENV === "production") {
   const distPath = path.join(process.cwd(), 'dist');
