@@ -134,11 +134,21 @@ app.post("/api/paystack/initialize", async (req, res) => {
         metadata: {
           userId,
           plan,
+          currency: "NGN",
+          gross_amount: amount,
+          autolux_commission_gross: Math.round(amount * 0.075),
+          paystack_fee: amount < 250000 ? Math.round(amount * 0.015) : Math.round(amount * 0.015 + 10000), // in kobo
+          owner_payout: Math.round(amount * 0.925),
           custom_fields: [
             {
               display_name: "Plan",
               variable_name: "plan",
               value: plan
+            },
+            {
+              display_name: "AutoLux Fee (7.5%)",
+              variable_name: "autolux_fee",
+              value: (amount * 0.075 / 100).toFixed(2)
             }
           ]
         }

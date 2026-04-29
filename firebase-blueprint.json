@@ -13,6 +13,15 @@
         "photoUrl": { "type": "string", "description": "Profile picture URL." },
         "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status." },
         "plan": { "type": "string", "description": "Active subscription plan ID or level." },
+        "credits": { "type": "number", "description": "Remaining wash credits." },
+        "pricing": {
+          "type": "object",
+          "properties": {
+            "sedan": { "type": "number" },
+            "suv": { "type": "number" },
+            "truck": { "type": "number" }
+          }
+        },
         "vehicles": {
           "type": "array",
           "items": {
@@ -44,7 +53,16 @@
         "status": { "type": "string", "enum": ["active", "inactive"] },
         "businessLat": { "type": "number" },
         "businessLng": { "type": "number" },
-        "businessRadius": { "type": "number" }
+        "businessRadius": { "type": "number" },
+        "pricing": {
+          "type": "object",
+          "properties": {
+            "sedan": { "type": "number" },
+            "suv": { "type": "number" },
+            "truck": { "type": "number" }
+          }
+        },
+        "qrCode": { "type": "string" }
       },
       "required": ["name", "ownerId", "status"]
     },

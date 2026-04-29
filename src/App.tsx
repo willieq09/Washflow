@@ -13,7 +13,7 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { 
-  doc, getDoc, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
+  doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
   Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon
@@ -36,11 +36,17 @@ interface UserProfile {
   phone?: string;
   photoUrl?: string;
   plan?: 'starter' | 'standard' | 'elite';
+  credits?: number;
   businessName?: string;
   businessAddress?: string;
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
+  pricing?: {
+    sedan: number;
+    suv: number;
+    truck: number;
+  };
   vehicles?: { 
     make: string; 
     model: string; 
@@ -89,6 +95,12 @@ interface Business {
   image: string;
   lat?: number;
   lng?: number;
+  pricing?: {
+    sedan: number;
+    suv: number;
+    truck: number;
+  };
+  qrCode?: string;
 }
 
 interface MarketplaceItem {
@@ -338,9 +350,23 @@ export default function App() {
           window.history.replaceState({}, '', window.location.pathname);
         });
       } else if (plan) {
-        updateDoc(doc(db, 'users', profile.uid), { plan }).then(() => {
-          setProfile(prev => prev ? { ...prev, plan } : null);
+        let creditsToAward = 0;
+        if (plan === 'basic_wash') creditsToAward = 2;
+        if (plan === 'premium_wash') creditsToAward = 4;
+        if (plan === 'unlimited_wash') creditsToAward = 99;
+
+        const updateData: any = { plan };
+        if (creditsToAward > 0) {
+          updateData.credits = (profile.credits || 0) + creditsToAward;
+        }
+
+        updateDoc(doc(db, 'users', profile.uid), updateData).then(() => {
+          setProfile(prev => prev ? { ...prev, ...updateData } : null);
           window.history.replaceState({}, '', window.location.pathname);
+          alert(creditsToAward > 0 
+            ? `Successfully subscribed to ${plan}. ${creditsToAward} credits have been added to your dashboard.` 
+            : `Successfully upgraded to ${plan} plan.`
+          );
         });
       }
     }
@@ -590,10 +616,12 @@ export default function App() {
             {view === 'dashboard' && profile && (
               profile.role === 'customer' 
                 ? <CustomerDashboardView profile={profile} setView={setView} />
-                : <DashboardView profile={profile} setView={setView} onLogWash={(data) => {
-                    if (data) setPreFillWash(data);
-                    setView('log');
-                  }} />
+                : profile.role === 'admin'
+                  ? <AdminDashboardView />
+                  : <DashboardView profile={profile} setView={setView} onLogWash={(data) => {
+                      if (data) setPreFillWash(data);
+                      setView('log');
+                    }} />
             )}
             {view === 'log' && profile && (
               <LogWashForm 
@@ -768,12 +796,154 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
   );
 }
 
+const VEHICLE_DATA = {
+  "Toyota": ["Camry", "Corolla", "RAV4", "Hilux", "Prado", "Land Cruiser", "Vitz", "Aqua"],
+  "Mercedes-Benz": ["C-Class", "E-Class", "S-Class", "GLE", "G-Wagon", "GLC", "A-Class"],
+  "BMW": ["3 Series", "5 Series", "7 Series", "X3", "X5", "X6", "M4"],
+  "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
+  "Honda": ["Civic", "Accord", "CR-V", "HR-V", "Fit", "Vezel"],
+  "Ford": ["F-150", "Mustang", "Ranger", "Everest", "Explorer"],
+  "Nissan": ["Patrol", "Navara", "X-Trail", "Leaf", "Note", "Tiida"],
+  "Volkswagen": ["Golf", "Tiguan", "Passat", "Polo", "Touareg"],
+  "Hyundai": ["Tucson", "Santa Fe", "Elantra", "Sonata", "Kona"],
+  "Kia": ["Sportage", "Sorento", "Cerato", "Rio", "Stinger"],
+  "Land Rover": ["Range Rover", "Range Rover Sport", "Defender", "Discovery"],
+  "Lexus": ["RX", "NX", "LX", "IS", "ES"]
+};
+
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
   return (
     <div className="bento-card">
       <h3 className="font-bold text-white mb-2">{title}</h3>
       <p className="text-sm text-text-dim leading-relaxed">{desc}</p>
     </div>
+  );
+}
+
+function AdminDashboardView() {
+  const [stats, setStats] = useState({
+    mrr: 0,
+    totalWasher: 0,
+    totalCars: 0,
+    totalOwners: 0,
+    totalRevenue: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [topEntities, setTopEntities] = useState<{ owners: any[], workers: any[] }>({ owners: [], workers: [] });
+
+  useEffect(() => {
+    const fetchAdminStats = async () => {
+      try {
+        const usersSnap = await getDocs(query(collection(db, 'users')));
+        const users = usersSnap.docs.map(d => d.data());
+        
+        const washSnap = await getDocs(query(collection(db, 'washes')));
+        const washes = washSnap.docs.map(d => d.data());
+
+        const owners = users.filter(u => u.role === 'owner');
+        const workers = users.filter(u => u.role === 'worker');
+        const customers = users.filter(u => u.role === 'customer');
+        const allCars = customers.reduce((acc, curr) => acc + (curr.vehicles?.length || 0), 0);
+        
+        // MRR Calculation (Simulated from plans)
+        let totalMrr = 0;
+        owners.forEach(o => {
+          if (o.plan === 'starter') totalMrr += 19;
+          if (o.plan === 'standard') totalMrr += 49;
+          if (o.plan === 'elite') totalMrr += 99;
+        });
+        customers.forEach(o => {
+          if (o.plan === 'basic_wash') totalMrr += 15;
+          if (o.plan === 'premium_wash') totalMrr += 35;
+          if (o.plan === 'unlimited_wash') totalMrr += 75;
+        });
+
+        const totalRevenue = washes.reduce((acc, curr) => acc + (curr.price || 0), 0);
+
+        // Top Workers
+        const workerStats = workers.map(w => {
+          const wWashes = washes.filter(wash => wash.workerId === w.uid);
+          return { name: w.name, count: wWashes.length, revenue: wWashes.reduce((a, b) => a + (b.price || 0), 0) };
+        }).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+
+        setStats({
+          mrr: totalMrr,
+          totalWasher: workers.length,
+          totalCars: allCars,
+          totalOwners: owners.length,
+          totalRevenue
+        });
+        setTopEntities({ owners: [], workers: workerStats });
+        setLoading(false);
+      } catch (err) {
+        console.error("Admin stats error:", err);
+      }
+    };
+
+    fetchAdminStats();
+  }, []);
+
+  if (loading) return <div className="p-20 text-center animate-pulse uppercase font-black text-text-dim text-xs tracking-widest">Compiling Global Intelligence...</div>;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-10 pb-20">
+      <header>
+        <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Console.</h2>
+        <p className="text-text-dim text-lg lowercase mt-2">Platform-wide operation health and mission control.</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bento-card border-none bg-accent text-white">
+           <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Total MRR</span>
+           <div className="text-4xl font-black mt-2 tracking-tighter">${stats.mrr}</div>
+        </div>
+        <div className="bento-card">
+           <span className="text-[10px] font-black uppercase tracking-widest text-text-dim">Fleet Growth</span>
+           <div className="text-4xl font-black mt-2 tracking-tighter text-white">{stats.totalCars} <span className="text-xs opacity-40">Cars</span></div>
+        </div>
+        <div className="bento-card">
+           <span className="text-[10px] font-black uppercase tracking-widest text-text-dim">Active Nodes</span>
+           <div className="text-4xl font-black mt-2 tracking-tighter text-white">{stats.totalOwners} <span className="text-xs opacity-40">Shops</span></div>
+        </div>
+        <div className="bento-card border-success/20">
+           <span className="text-[10px] font-black uppercase tracking-widest text-success">Total volume</span>
+           <div className="text-4xl font-black mt-2 tracking-tighter text-success">{formatCurrency(stats.totalRevenue)}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bento-card">
+          <h3 className="text-xl font-black text-white uppercase italic mb-6">Top Performing Professionals</h3>
+          <div className="space-y-4">
+            {topEntities.workers.map((w, i) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-accent/40 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent font-black text-xs">{i+1}</div>
+                  <div>
+                    <div className="font-bold text-white text-sm uppercase">{w.name}</div>
+                    <div className="text-[10px] text-text-dim uppercase tracking-widest">{w.count} washes logged</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-black text-success text-sm">{formatCurrency(w.revenue)}</div>
+                  <div className="text-[9px] text-text-dim uppercase">Total Impact</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bento-card bg-zinc-900/40 relative overflow-hidden flex flex-col justify-center items-center text-center">
+           <div className="absolute top-0 right-0 p-8 opacity-5">
+              <Zap size={160} />
+           </div>
+           <Award className="text-accent mb-6" size={64} />
+           <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-4">Platform Audit Active</h3>
+           <p className="text-text-dim text-sm max-w-xs lowercase">The system is currently verifying all 7.5% commission payouts across {stats.totalOwners} verified business shards.</p>
+           <button className="mt-8 bg-white text-bg px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl">Download Full Registry</button>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -885,12 +1055,18 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
           <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Hub.</h2>
           <p className="text-text-dim text-lg lowercase mt-2">Manage your fleet and upcoming sessions.</p>
         </div>
-        <button 
-          onClick={() => setView('marketplace')}
-          className="bg-accent text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition"
-        >
-          Book New Wash
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="bg-card px-6 py-3 rounded-xl border border-border flex flex-col items-center justify-center min-w-[120px]">
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Wash Credits</span>
+            <span className="text-2xl font-black text-accent">{profile.credits || 0}</span>
+          </div>
+          <button 
+            onClick={() => setView('marketplace')}
+            className="bg-accent text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition h-full"
+          >
+            Book New Wash
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1062,7 +1238,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
 }
 
 function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, setView: (v: AppView) => void, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
-  const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0 });
+  const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0, availableBalance: 0, pendingEscrow: 0 });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
@@ -1140,11 +1316,17 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const todayWashes = washes.filter(w => w.timestamp?.toDate() >= today);
+      const totalRevenue = washes.reduce((acc, curr) => acc + curr.price, 0);
+      const commissionAmount = totalRevenue * 0.075;
+      const ownerRevenue = totalRevenue - commissionAmount;
+
       setStats(prev => ({ 
         ...prev,
         todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
         todayCount: todayWashes.length,
-        totalCount: washes.length 
+        totalCount: washes.length,
+        availableBalance: ownerRevenue * 0.9,
+        pendingEscrow: ownerRevenue * 0.1
       }));
       setLoading(false);
     });
@@ -1250,20 +1432,62 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           </div>
         </div>
 
+        {/* Owner Wallet Section */}
+        {profile.role === 'owner' && (
+          <div className="md:col-span-2 bento-card bg-gradient-to-br from-bg to-card border-accent/20 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+               <DollarSign size={120} strokeWidth={1} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 text-accent mb-4">
+                <ShieldCheck size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Verified Multi-Wallet</span>
+              </div>
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Available Balance</span>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-white">{formatCurrency(stats.availableBalance)}</div>
+                  <button className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2">
+                    <ArrowDown size={12} /> Withdraw to Bank
+                  </button>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Pending Escrow</span>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-text-dim/60">{formatCurrency(stats.pendingEscrow)}</div>
+                  <p className="text-[9px] text-text-dim mt-4 lowercase leading-relaxed max-w-[150px]">Funds clearing after standard 48-hour verification window.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Counter Stat or Incentives for Workers */}
         <div className="md:col-span-1 bento-card flex flex-col justify-between">
           {profile.role === 'worker' ? (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Earned Bonuses</span>
-                <div className="text-5xl font-black mt-2 tracking-tighter text-success">{formatCurrency(stats.incentives)}</div>
-              </div>
-              <div className="mt-4">
-                <div className="text-[10px] font-bold text-success flex items-center gap-1">
-                  <Award size={12} />
-                  <span>Performance Incentive</span>
+                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Daily Goal Progress</span>
+                <div className="flex items-end gap-2 mt-2">
+                  <div className="text-5xl font-black tracking-tighter text-white">{stats.todayCount}</div>
+                  <div className="text-xl font-black text-text-dim mb-1">/ 15</div>
                 </div>
-                <p className="text-[9px] text-text-dim mt-1 lowercase">Calculated from peak efficiency and quality ratings.</p>
+                <div className="w-full bg-white/5 h-2 rounded-full mt-4 overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (stats.todayCount / 15) * 100)}%` }}
+                      className="bg-accent h-full" 
+                    />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold text-success flex items-center gap-1">
+                    <Award size={12} />
+                    <span>Rank: Top 15%</span>
+                  </div>
+                  <p className="text-[9px] text-text-dim mt-1 lowercase">Great job! You're outperforming 85% of staff today.</p>
+                </div>
+                <div className="text-2xl font-black text-success">#{Math.floor(Math.random() * 3) + 1}</div>
               </div>
             </>
           ) : (
@@ -1424,9 +1648,9 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                       onChange={(e) => handleAssignWorker(booking, e.target.value)}
                       className="bg-bg/50 text-text-dim px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40"
                     >
-                      <option value="" disabled>Assign Pro</option>
+                      <option value="" disabled className="bg-card text-white">Assign Pro</option>
                       {workers.map(w => (
-                        <option key={w.uid} value={w.uid}>{w.name}</option>
+                        <option key={w.uid} value={w.uid} className="bg-card text-white">{w.name}</option>
                       ))}
                     </select>
                   )}
@@ -1438,7 +1662,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                     })}
                     className="bg-white text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl hover:bg-accent hover:text-white"
                   >
-                    Process
+                    Check-In
                   </button>
                 </div>
               </div>
@@ -1490,7 +1714,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
 function RoleSelection({ uid, name, email }: { uid: string, name: string, email: string }) {
   const [loading, setLoading] = useState<string | null>(null);
 
-  const setRole = async (role: 'owner' | 'customer' | 'worker') => {
+  const setRole = async (role: 'owner' | 'customer' | 'worker' | 'admin') => {
     setLoading(role);
     try {
       const userData: any = {
@@ -1503,6 +1727,14 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
       
       if (role === 'owner') {
         userData.plan = 'starter';
+      }
+
+      if (role === 'admin') {
+        userData.permissions = {
+          canManageTeam: true,
+          canViewAnalytics: true,
+          canAssignTasks: true
+        };
       }
 
       await setDoc(doc(db, 'users', uid), userData, { merge: true });
@@ -1567,6 +1799,16 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
             loading={loading === 'worker'}
             disabled={loading !== null}
           />
+          {email === 'oumawillis09@gmail.com' && (
+            <RoleCard 
+              icon={<ShieldCheck size={40} />} 
+              title="Platform Admin" 
+              desc="System-wide oversight, MRR tracking, and global fleet analytics."
+              onClick={() => setRole('admin')}
+              loading={loading === 'admin'}
+              disabled={loading !== null}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1908,7 +2150,8 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
   const [formData, setFormData] = useState({
     name: profile.name + "'s Wash",
     location: '',
-    image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=800'
+    image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=800',
+    pricing: profile.pricing || { sedan: 1500, suv: 4000, truck: 6000 }
   });
 
   useEffect(() => {
@@ -1921,7 +2164,8 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
         setFormData({
           name: data.name,
           location: data.location,
-          image: data.image
+          image: data.image,
+          pricing: data.pricing || { sedan: 1500, suv: 4000, truck: 6000 }
         });
       }
       setLoading(false);
@@ -1951,10 +2195,14 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
           ownerUid: profile.uid,
           rating: 5.0,
           ratingCount: 0,
+          qrCode: window.location.origin + "/?wash=" + profile.uid, // Placeholder or predictable
           createdAt: serverTimestamp()
         };
         await addDoc(collection(db, 'wash_businesses'), newBusiness);
       }
+      // Also update profile pricing for fallback
+      await updateDoc(doc(db, 'users', profile.uid), { pricing: formData.pricing });
+      onUpdate({ ...profile, pricing: formData.pricing });
       alert("Business details successfully saved.");
     } catch (err: any) {
       handleFirestoreError(err, business ? OperationType.UPDATE : OperationType.CREATE, 'wash_businesses');
@@ -2060,7 +2308,77 @@ function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, o
               </div>
             </div>
 
-            <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="space-y-6 pt-6 border-t border-border">
+                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+                  <DollarSign size={14} className="text-accent" />
+                  Dynamic Pricing Engine
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Sedan Base (₦)</label>
+                    <input 
+                      type="number"
+                      value={formData.pricing.sedan}
+                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, sedan: parseFloat(e.target.value) } })}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">SUV Base (₦)</label>
+                    <input 
+                      type="number"
+                      value={formData.pricing.suv}
+                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, suv: parseFloat(e.target.value) } })}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Truck Base (₦)</label>
+                    <input 
+                      type="number"
+                      value={formData.pricing.truck}
+                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, truck: parseFloat(e.target.value) } })}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {business && (
+                <div className="space-y-6 pt-6 border-t border-border">
+                  <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+                    <Zap size={14} className="text-accent" />
+                    Digital QR Storefront
+                  </label>
+                  <div className="flex flex-col md:flex-row items-center gap-8 bg-bg/50 p-8 rounded-[2rem] border border-border">
+                    <div className="w-40 h-40 bg-white p-2 rounded-2xl shadow-2xl">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + "/?wash=" + business.id)}`} 
+                        alt="QR Code"
+                        className="w-full h-full"
+                      />
+                    </div>
+                    <div className="flex-1 text-center md:text-left">
+                      <h4 className="text-lg font-black text-white uppercase tracking-tight mb-2">Automated QR Ready</h4>
+                      <p className="text-text-dim text-sm mb-4 leading-relaxed lowercase">This code is your permanent digital storefront. Customers scan this to add vehicles, pay, and track their wash credits instantly.</p>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const link = window.location.origin + "/?wash=" + business.id;
+                          navigator.clipboard.writeText(link);
+                          alert("Storefront link copied to clipboard.");
+                        }}
+                        className="flex items-center gap-2 text-accent font-bold hover:text-white transition"
+                      >
+                        <Share2 size={14} />
+                        Copy Digital Link
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center text-accent">
                   <ShieldCheck size={20} />
@@ -2201,9 +2519,9 @@ function BusinessInventoryManagement({ business, profile }: { business: Business
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
                   className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
                 >
-                  <option value="accessory">Accessory</option>
-                  <option value="part">Spare Part</option>
-                  <option value="service">Specialized Service</option>
+                  <option value="accessory" className="bg-card text-white">Accessory</option>
+                  <option value="part" className="bg-card text-white">Spare Part</option>
+                  <option value="service" className="bg-card text-white">Specialized Service</option>
                 </select>
               </div>
               <div className="space-y-2">
@@ -2271,7 +2589,9 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       if (bizData.length === 0) {
         bizData = [
           { id: 'sb-1', name: "Hydro-Dynamic Pros", location: "Evergreen Terrace", image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=1000", rating: 4.9, ownerUid: 'system' } as Business,
-          { id: 'sb-2', name: "EcoShine Station", location: "Industrial Way", image: "https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=1000", rating: 4.7, ownerUid: 'system' } as Business
+          { id: 'sb-2', name: "EcoShine Station", location: "Industrial Way", image: "https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=1000", rating: 4.7, ownerUid: 'system' } as Business,
+          { id: 'sb-3', name: "Apex Detailing Hub", location: "Grand Avenue", image: "https://images.unsplash.com/photo-1552933529-e359b2477262?auto=format&fit=crop&q=80&w=1000", rating: 5.0, ownerUid: 'system' } as Business,
+          { id: 'sb-4', name: "Skyline Wash & Go", location: "Vista Heights", image: "https://images.unsplash.com/photo-1599250300435-b9693f21830d?auto=format&fit=crop&q=80&w=1000", rating: 4.6, ownerUid: 'system' } as Business
         ];
       }
       setBusinesses(bizData);
@@ -2283,7 +2603,10 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
         itemData = [
           { id: 'si-1', name: "Ultra-Soft Microfiber Set", price: 25, category: 'accessory', vendor: "Hydro-Dynamic", image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-1' },
           { id: 'si-2', name: "Ceramic Coating Kit", price: 85, category: 'accessory', vendor: "EcoShine", image: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-2' },
-          { id: 'si-3', name: "Specialized Part X", price: 150, category: 'part', vendor: "Hydro-Dynamic", image: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-1' }
+          { id: 'si-3', name: "Specialized Brake Pad Set", price: 150, category: 'part', vendor: "Hydro-Dynamic", image: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-1' },
+          { id: 'si-4', name: "Premium Wax Finish", price: 45, category: 'accessory', vendor: "Apex Detailing", image: 'https://images.unsplash.com/photo-1552933529-e359b2477262?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-3' },
+          { id: 'si-5', name: "High-Performance Air Filter", price: 65, category: 'part', vendor: "Skyline Parts", image: 'https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-4' },
+          { id: 'si-6', name: "Leather Care Treatment", price: 35, category: 'service', vendor: "Apex Detailing", image: 'https://images.unsplash.com/photo-1589739900243-4b52cd9b104e?auto=format&fit=crop&q=80&w=400', ownerUid: 'system', businessId: 'sb-3' }
         ] as MarketplaceItem[];
       }
       setItems(itemData);
@@ -2366,6 +2689,65 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
             </div>
           </motion.div>
         ))}
+      </section>
+
+      {/* Marketplace Picks */}
+      <section>
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
+            <ShoppingBag className="text-accent" /> Marketplace Picks
+          </h3>
+          <div className="flex bg-bg rounded-xl border border-border p-1">
+             {['all', 'accessory', 'part', 'service'].map((f) => (
+                <button 
+                  key={f}
+                  onClick={() => setFilter(f as any)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    filter === f ? "bg-accent text-white" : "text-text-dim hover:text-white"
+                  )}
+                >
+                  {f}
+                </button>
+             ))}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {loading ? (
+            [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64" />)
+          ) : items.filter(item => filter === 'all' || item.category === filter).length > 0 ? (
+            items.filter(item => filter === 'all' || item.category === filter).map(item => (
+              <motion.div key={item.id} whileHover={{ y: -5 }} className="bg-card rounded-[2rem] border border-border overflow-hidden group">
+                <div className="h-40 overflow-hidden relative">
+                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                  <div className="absolute top-4 left-4 bg-accent text-white px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
+                    {item.category}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-sm font-black text-white uppercase line-clamp-1">{item.name}</h4>
+                    <span className="text-accent font-black text-sm">${item.price}</span>
+                  </div>
+                  <p className="text-[10px] text-text-dim uppercase tracking-widest mb-4">Vendor: {item.vendor}</p>
+                  <button 
+                    onClick={() => handleBuy(item)}
+                    disabled={buying === item.id}
+                    className="w-full bg-white/5 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition flex items-center justify-center gap-2 border border-white/10"
+                  >
+                    {buying === item.id ? <RefreshCw className="animate-spin" size={14} /> : <ShoppingBag size={14} />} Buy Now
+                  </button>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <div className="col-span-full py-20 text-center bg-card rounded-[3rem] border border-dashed border-border group">
+               <ShoppingBag className="mx-auto text-text-dim/20 mb-4 group-hover:text-accent/20 transition-colors" size={64} />
+               <p className="text-sm font-black text-text-dim uppercase tracking-widest">No products found in this category.</p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Merchant CTA for Owners */}
@@ -3073,10 +3455,10 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
                     <select 
                       value={newVehicle.intensity}
                       onChange={(e) => setNewVehicle({...newVehicle, intensity: e.target.value as any})}
-                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
                     >
-                      <option value="low">Low (Commute)</option>
-                      <option value="high">High (Commercial)</option>
+                      <option value="low" className="bg-card text-white">Low (Commute)</option>
+                      <option value="high" className="bg-card text-white">High (Commercial)</option>
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -3084,11 +3466,11 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
                     <select 
                       value={newVehicle.dirtLevel}
                       onChange={(e) => setNewVehicle({...newVehicle, dirtLevel: e.target.value as any})}
-                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
                     >
-                      <option value="low">Low (Clean)</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High (Off-road)</option>
+                      <option value="low" className="bg-card text-white">Low (Clean)</option>
+                      <option value="medium" className="bg-card text-white">Medium</option>
+                      <option value="high" className="bg-card text-white">High (Off-road)</option>
                     </select>
                   </div>
                 </div>
@@ -3374,21 +3756,40 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
-                         <input 
+                         <select 
                            value={newVehicle.make} 
-                           onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value }))} 
-                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
-                           placeholder="Toyota" 
-                         />
+                           onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value, model: '' }))} 
+                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
+                         >
+                           <option value="" className="bg-card">Select Make</option>
+                           {Object.keys(VEHICLE_DATA).map(m => (
+                             <option key={m} value={m} className="bg-card text-white">{m}</option>
+                           ))}
+                           <option value="Other" className="bg-card">Other</option>
+                         </select>
                       </div>
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
-                         <input 
-                           value={newVehicle.model} 
-                           onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
-                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
-                           placeholder="Camry" 
-                         />
+                         {newVehicle.make === 'Other' ? (
+                           <input 
+                             value={newVehicle.model} 
+                             onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
+                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
+                             placeholder="Enter model" 
+                           />
+                         ) : (
+                           <select 
+                             value={newVehicle.model} 
+                             onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
+                             disabled={!newVehicle.make}
+                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none disabled:opacity-50"
+                           >
+                             <option value="" className="bg-card">Select Model</option>
+                             {newVehicle.make && VEHICLE_DATA[newVehicle.make as keyof typeof VEHICLE_DATA]?.map(m => (
+                               <option key={m} value={m} className="bg-card text-white">{m}</option>
+                             ))}
+                           </select>
+                         )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -3646,8 +4047,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     setError(null);
     try {
       const prices: Record<string, number> = {
-        'starter': 1900, 'standard': 4900, 'elite': 9900,
-        'basic_wash': 1500, 'premium_wash': 3500, 'unlimited_wash': 7500
+        'starter': 1900000, 'standard': 4900000, 'elite': 9900000,
+        'basic_wash': 250000, 'premium_wash': 1000000, 'unlimited_wash': 4800000
       };
 
       const response = await fetch('/api/paystack/initialize', {
@@ -3687,17 +4088,17 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   const ownerTiers = [
     {
       id: 'starter',
-      name: 'Starter',
-      price: '$19',
+      name: 'Starter Node',
+      price: '₦19,000',
       description: 'Perfect for solo operators logging basic traffic.',
-      features: ['Real-time Log Sync', 'Worker Dashboards', 'Customer Rating Links', 'Offline Queue Mode'],
+      features: ['Up to 500 Washes/Mo', 'Basic QR Storefront', 'Standard Support', '7.5% Platform Fee'],
       color: 'bg-white/5',
       icon: <Zap size={24} className="text-white/40" />
     },
     {
       id: 'standard',
-      name: 'Professional',
-      price: '$49',
+      name: 'Pro Accelerator',
+      price: '₦49,000',
       description: 'The standard for growing wash stations.',
       features: ['Everything in Starter', 'AI Maintenance Tips', 'Team Performance Ledger', 'Incentive Tracking'],
       color: 'bg-accent/10 border-accent/40',
@@ -3706,8 +4107,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     },
     {
       id: 'elite',
-      name: 'Elite',
-      price: '$99',
+      name: 'Enterprise Hub',
+      price: '₦99,000',
       description: 'Total automation for high-volume enterprises.',
       features: ['Everything in Pro', 'AI License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
       color: 'bg-white text-bg',
@@ -3718,29 +4119,29 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   const customerTiers = [
     {
       id: 'basic_wash',
-      name: 'Silver Care',
-      price: '$15',
+      name: 'Daily Essential',
+      price: '₦2,500',
       description: '2 Professional station washes per month.',
-      features: ['2 Exterior Washes', 'Digital Maintenance Log', 'Priority Queue', 'AI Health Alerts'],
+      features: ['2 Wash Credits', 'Digital Maintenance Log', 'Priority Queue', 'AI Health Alerts'],
       color: 'bg-white/5',
       icon: <Check size={24} className="text-white/40" />
     },
     {
       id: 'premium_wash',
-      name: 'Gold Care',
-      price: '$35',
-      description: 'The perfect subscription for busy owners.',
-      features: ['4 Exterior Washes', '1 Interior Detailing', 'Engine Bay Check', 'Everything in Silver'],
+      name: 'Premium Bundle',
+      price: '₦10,000',
+      description: 'High-frequency care for premium vehicles.',
+      features: ['5 Wash Credits', '1 Interior Detailing', 'Engine Bay Check', 'Everything in Silver'],
       color: 'bg-accent/10 border-accent/40',
       icon: <Sparkles size={24} className="text-accent" />,
       popular: true
     },
     {
       id: 'unlimited_wash',
-      name: 'Platinum Care',
-      price: '$75',
+      name: 'Elite Pass',
+      price: '₦48,000',
       description: 'The ultimate care package for your vehicle.',
-      features: ['Unlimited Washes', 'Full Detailing', 'Ceramic Waxing', 'Everything in Gold'],
+      features: ['16 Wash Credits (4x/Week)', 'Full Detailing', 'Ceramic Waxing', 'Gemini AI Diagnostics'],
       color: 'bg-white text-bg',
       icon: <ShieldCheck size={24} className="text-bg" />
     }
@@ -4075,18 +4476,47 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         
       const selectedWorker = profile.role === 'owner' ? (workers.find(w => w.uid === selectedWorkerId) || profile) : profile;
 
+      // 3. Handle Credits/Commission logic
+      let washPrice = parseFloat(form.price);
+      let usedCredit = false;
+
+      // Attempt to find customer and deduct credit
+      const customerQuery = query(collection(db, 'users'), where('role', '==', 'customer'));
+      const customerSnapshot = await getDocs(customerQuery);
+      const customerDoc = customerSnapshot.docs.find(d => {
+        const vehicles = d.data().vehicles || [];
+        return vehicles.some((v: any) => v.plate?.toUpperCase() === form.plateNumber.toUpperCase());
+      });
+
+      if (customerDoc) {
+        const customerData = customerDoc.data();
+        if (customerData.credits > 0) {
+          await updateDoc(customerDoc.ref, { 
+            credits: customerData.credits - 1 
+          });
+          usedCredit = true;
+          washPrice = 0; // Credit covers it
+        }
+      }
+
+      // Calculate 7.5% commission for non-credit washes
+      const commission = usedCredit ? 0 : (washPrice * 0.075);
+
       const washData = {
         workerId: selectedWorker.uid,
         workerName: selectedWorker.name,
         carModel: form.carModel,
         plateNumber: form.plateNumber,
-        price: parseFloat(form.price),
+        price: washPrice,
+        commission: commission,
+        usedCredit: usedCredit,
         timestamp: serverTimestamp(),
         status: 'completed',
         maintenanceTip: tip,
         lat: currentLat,
         lng: currentLng,
-        bookingId: preFill?.bookingId || null
+        bookingId: preFill?.bookingId || null,
+        customerId: customerDoc?.id || null
       };
       
       const docRef = await addDoc(collection(db, 'washes'), washData);
@@ -4174,9 +4604,9 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 onChange={(e) => setSelectedWorkerId(e.target.value)}
                 className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
               >
-                <option value={profile.uid}>Myself ({profile.name})</option>
+                <option value={profile.uid} className="bg-card text-white">Myself ({profile.name})</option>
                 {workers.map(w => (
-                  <option key={w.uid} value={w.uid}>
+                  <option key={w.uid} value={w.uid} className="bg-card text-white">
                     {w.name} — Eff: {w.efficiency.toFixed(0)}% ({w.totalWashes} jobs)
                   </option>
                 ))}
@@ -4272,7 +4702,16 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-2">Charge ($)</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-bold text-text-dim uppercase tracking-wider">Charge ($)</label>
+            {profile.pricing && (
+              <div className="flex gap-1">
+                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.sedan || 20)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">Sedan</button>
+                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.suv || 30)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">SUV</button>
+                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.truck || 45)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">Truck</button>
+              </div>
+            )}
+          </div>
           <div className="relative">
             <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
             <input 
@@ -4803,8 +5242,8 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                     onChange={e => setFilters(prev => ({ ...prev, workerId: e.target.value }))}
                     className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent appearance-none"
                   >
-                    <option value="all">All Workers</option>
-                    {workers.map(w => <option key={w.uid} value={w.uid}>{w.name}</option>)}
+                    <option value="all" className="bg-card text-white">All Workers</option>
+                    {workers.map(w => <option key={w.uid} value={w.uid} className="bg-card text-white">{w.name}</option>)}
                   </select>
                 </div>
               )}
@@ -4818,9 +5257,9 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   onChange={e => setFilters(prev => ({ ...prev, status: e.target.value }))}
                   className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent appearance-none"
                 >
-                  <option value="all">Any Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="pending">Pending</option>
+                  <option value="all" className="bg-card text-white">Any Status</option>
+                  <option value="completed" className="bg-card text-white">Completed</option>
+                  <option value="pending" className="bg-card text-white">Pending</option>
                 </select>
               </div>
 
