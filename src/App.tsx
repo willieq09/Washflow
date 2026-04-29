@@ -1410,7 +1410,15 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
 }
 
 function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, setView: (v: AppView) => void, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
-  const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, totalCount: 0, incentives: 0, availableBalance: 0, pendingEscrow: 0 });
+  const [stats, setStats] = useState({ 
+    todayRevenue: 0, 
+    todayCount: 0, 
+    totalCount: 0, 
+    incentives: 0, 
+    ownerRevenue: 0, 
+    totalWithdrawn: 0,
+    pendingEscrow: 0 
+  });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
@@ -1493,21 +1501,24 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       const commissionAmount = totalRevenue * 0.075;
       const ownerRevenue = totalRevenue - commissionAmount;
 
-      // Subscribe to withdrawals to get actual balance
-      const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid));
-      onSnapshot(qWithdrawals, (withdrawSnap) => {
-        const totalWithdrawn = withdrawSnap.docs.reduce((acc, curr) => acc + (curr.data().amount || 0), 0);
-        
-        setStats(prev => ({ 
-          ...prev,
-          todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
-          todayCount: todayWashes.length,
-          totalCount: washes.length,
-          availableBalance: (ownerRevenue * 0.9) - totalWithdrawn,
-          pendingEscrow: ownerRevenue * 0.1
-        }));
-        setLoading(false);
-      });
+      setStats(prev => ({ 
+        ...prev,
+        todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
+        todayCount: todayWashes.length,
+        totalCount: washes.length,
+        ownerRevenue: ownerRevenue,
+        pendingEscrow: ownerRevenue * 0.1
+      }));
+    });
+
+    // Subscribe to withdrawals separately
+    const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid));
+    const unsubWithdrawals = onSnapshot(qWithdrawals, (withdrawSnap) => {
+      const totalWithdrawn = withdrawSnap.docs.reduce((acc, curr) => acc + (curr.data().amount || 0), 0);
+      setStats(prev => ({
+        ...prev,
+        totalWithdrawn: totalWithdrawn // Store it separate to keep logic simple
+      }));
     });
 
     // Sync Bookings (Queue)
@@ -1537,13 +1548,18 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       }
       
       setUpcomingBookings(bookings);
+      setLoading(false); // First time bookings/washes load, we are ready
     });
 
     return () => {
       unsubWashes();
       unsubBookings();
+      unsubWithdrawals();
     };
   }, [profile]);
+
+  // Combined stats calculation for balance
+  const availableBalance = (stats.ownerRevenue * 0.9) - stats.totalWithdrawn;
 
   useEffect(() => {
     if (profile.role === 'worker') {
@@ -1582,7 +1598,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       <WithdrawalModal 
         isOpen={isWithdrawModalOpen} 
         onClose={() => setIsWithdrawModalOpen(false)} 
-        balance={stats.availableBalance} 
+        balance={availableBalance} 
         userId={profile.uid} 
       />
       <header className="mb-10 flex justify-between items-end">
@@ -1632,7 +1648,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
               <div className="grid grid-cols-2 gap-8">
                 <div>
                   <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Available Balance</span>
-                  <div className="text-4xl font-black mt-2 tracking-tighter text-white">{formatCurrency(stats.availableBalance)}</div>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-white">{formatCurrency(availableBalance)}</div>
                   <button 
                     onClick={() => setIsWithdrawModalOpen(true)}
                     className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2"
@@ -4500,7 +4516,8 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (userSnap) => {
         const workerProfiles = userSnap.docs.map(d => d.data() as UserProfile);
         
-        const unsubWashes = onSnapshot(collection(db, 'washes'), (washSnap) => {
+        // Use a more restrictive query for worker stats (last 30 days or similar if possible)
+        const unsubWashes = onSnapshot(query(collection(db, 'washes'), limit(200)), (washSnap) => {
           const washes = washSnap.docs.map(d => d.data() as any);
           
           const workerData = workerProfiles.map(worker => {
@@ -4519,24 +4536,13 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
           });
 
           setWorkers(workerData);
-          
-          // Auto-select the best worker for owners if nothing is specifically selected yet or if it's a new session
-          if (profile.role === 'owner' && workerData.length > 0) {
-            const best = [...workerData].sort((a, b) => b.efficiency - a.efficiency)[0];
-            // If we are just initializing (current selection is the owner themselves)
-            // suggest the best staff member instead to optimize throughput
-            if (selectedWorkerId === profile.uid || preFill?.bookingId) {
-              setSelectedWorkerId(best.uid);
-            }
-          }
-          
           setLoadingWorkers(false);
         });
         return () => unsubWashes();
       });
       return () => unsubUsers();
     }
-  }, [profile, preFill]);
+  }, [profile]);
 
   const startCamera = async () => {
     if (profile.plan !== 'elite' && profile.email !== 'oumawillis09@gmail.com') {
