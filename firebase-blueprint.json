@@ -168,7 +168,7 @@
         "bankName": { "type": "string" },
         "accountNumber": { "type": "string" },
         "accountName": { "type": "string" },
-        "status": { "type": "string", "enum": ["processed", "failed"] },
+        "status": { "type": "string", "enum": ["pending", "processed", "failed"] },
         "reference": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },

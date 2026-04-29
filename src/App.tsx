@@ -16,7 +16,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -26,6 +26,10 @@ import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 import { sendEmail, generateBookingNotification } from './services/notificationService';
+
+// --- Constants ---
+const COMMISSION_RATE = 0.075; // 7.5% Platform Fee, 92.5% Owner Split
+const MIN_WITHDRAWAL = 1000;
 
 // --- Types ---
 interface UserProfile {
@@ -914,7 +918,14 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
 
   const handleWithdraw = async () => {
     if (!resolved || form.amount <= 0 || form.amount > balance) return;
+    
+    if (form.amount < MIN_WITHDRAWAL) {
+      alert(`Minimum withdrawal amount is ${formatCurrency(MIN_WITHDRAWAL)}`);
+      return;
+    }
+
     setSubmitting(true);
+    const path = 'withdrawals';
     try {
       // Phase 1 Workaround: Skip Paystack Transfer API
       // Instead, record in Firestore as 'pending' for manual settlement
@@ -936,8 +947,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
       alert("Withdrawal request queued! Our team will process this manually within 24-48 hours. You will see it in your pending balance.");
       onClose();
     } catch (err: any) {
-      console.error(err);
-      alert("Failed to queue withdrawal: " + (err.message || "Unknown error"));
+      handleFirestoreError(err, OperationType.CREATE, path);
     } finally {
       setSubmitting(false);
     }
@@ -1150,14 +1160,16 @@ function AdminDashboardView() {
 
   const handleSettle = async (id: string) => {
     setSettlingId(id);
+    const path = `withdrawals/${id}`;
     try {
       await updateDoc(doc(db, 'withdrawals', id), {
         status: 'processed',
-        processedAt: serverTimestamp()
+        processedAt: serverTimestamp(),
+        settledBy: auth.currentUser?.email
       });
       alert("Withdrawal marked as PAID. Internal ledger synchronized.");
     } catch (error: any) {
-      alert("Settlement Error: " + error.message);
+      handleFirestoreError(error, OperationType.UPDATE, path);
     } finally {
       setSettlingId(null);
     }
@@ -1585,6 +1597,8 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
     incentives: 0, 
     ownerRevenue: 0, 
     totalWithdrawn: 0,
+    pendingPayouts: 0,
+    completedPayouts: 0,
     pendingEscrow: 0 
   });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
@@ -1667,7 +1681,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       today.setHours(0, 0, 0, 0);
       const todayWashes = washes.filter(w => w.timestamp?.toDate() >= today);
       const totalRevenue = washes.reduce((acc, curr) => acc + curr.price, 0);
-      const commissionAmount = totalRevenue * 0.075;
+      const commissionAmount = totalRevenue * COMMISSION_RATE;
       const ownerRevenue = totalRevenue - commissionAmount;
 
       setStats(prev => ({ 
@@ -1676,7 +1690,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
         todayCount: todayWashes.length,
         totalCount: washes.length,
         ownerRevenue: ownerRevenue,
-        pendingEscrow: ownerRevenue * 0.1
+        pendingEscrow: ownerRevenue * 0.05
       }));
     });
 
@@ -1823,36 +1837,37 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
               </div>
               <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Available Balance</span>
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Liquid Balance</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-white">{formatCurrency(availableBalance)}</div>
                   <button 
                     onClick={() => setIsWithdrawModalOpen(true)}
-                    className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2"
+                    disabled={availableBalance <= 0}
+                    className="mt-4 bg-accent text-white px-6 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ArrowDown size={12} /> Withdraw to Bank
+                    <ArrowDown size={12} /> Claim to Bank
                   </button>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Pending Settlement</span>
-                  <div className="text-4xl font-black mt-2 tracking-tighter text-text-dim/60">{formatCurrency(stats.pendingPayouts || 0)}</div>
-                  <p className="text-[8px] text-text-dim/50 uppercase mt-1">Awaiting manager validation</p>
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">In Queue (Manual)</span>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-amber-500">{formatCurrency(stats.pendingPayouts || 0)}</div>
+                  <p className="text-[8px] text-text-dim/50 uppercase mt-1">Pending admin wire transfer</p>
                   
                   {recentWithdrawals.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                       <span className="text-[8px] font-black text-text-dim uppercase tracking-widest">Recent Payouts</span>
+                    <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2">
+                       <span className="text-[8px] font-black text-text-dim uppercase tracking-widest">Payout History</span>
                        {recentWithdrawals.map((w) => (
                          <div key={w.id} className="flex justify-between items-center bg-white/5 p-2 rounded-lg border border-white/5">
-                            <div>
-                               <div className="text-[9px] font-bold text-white leading-tight uppercase">{w.bankName}</div>
+                            <div className="overflow-hidden">
+                               <div className="text-[9px] font-bold text-white leading-tight uppercase truncate">{w.bankName}</div>
                                <div className="text-[7px] text-text-dim uppercase">{w.accountNumber}</div>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex-shrink-0">
                                <div className="text-[9px] font-black text-accent">{formatCurrency(w.amount)}</div>
                                <div className={cn(
-                                 "text-[7px] font-black uppercase",
-                                 w.status === 'pending' ? "text-amber-500" : "text-success"
+                                 "text-[7px] font-black uppercase px-1 rounded-sm",
+                                 w.status === 'pending' ? "text-amber-500 bg-amber-500/10" : "text-success bg-success/10"
                                )}>
-                                 {w.status}
+                                 {w.status === 'pending' ? 'Queued' : 'Settled'}
                                </div>
                             </div>
                          </div>
@@ -4893,8 +4908,8 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         }
       }
 
-      // Calculate 7.5% commission for non-credit washes
-      const commission = usedCredit ? 0 : (washPrice * 0.075);
+      // Calculate commission for non-credit washes
+      const commission = usedCredit ? 0 : (washPrice * COMMISSION_RATE);
 
       const washData = {
         workerId: selectedWorker.uid,
