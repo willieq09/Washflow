@@ -836,9 +836,19 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
       setFetchError(null);
       setLoading(true);
       fetch('/api/paystack/banks')
-        .then(res => {
-          if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'Failed to fetch banks') });
-          return res.json();
+        .then(async res => {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+            const data = await res.json();
+            if (!res.ok) {
+              throw new Error(data.error || `Server Error: ${res.status}`);
+            }
+            return data;
+          } else {
+            const text = await res.text();
+            console.warn("Non-JSON response:", text);
+            throw new Error(`Server returned non-JSON response (${res.status}).`);
+          }
         })
         .then(data => {
           if (Array.isArray(data)) {
@@ -863,12 +873,21 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
     setLoading(true);
     try {
       const res = await fetch(`/api/paystack/resolve-account?account_number=${form.accountNumber}&bank_code=${form.bankCode}`);
-      const data = await res.json();
-      if (data.account_name) {
+      
+      const contentType = res.headers.get("content-type");
+      let data;
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error("Invalid response from server. Check logs.");
+      }
+
+      if (res.ok && data.account_name) {
         setForm(f => ({ ...f, accountName: data.account_name }));
         setResolved(true);
       } else {
-        alert("Could not verify account name");
+        alert(data?.error || "Could not verify account name. Please check details.");
       }
     } catch (err: any) {
       console.error(err);
@@ -975,17 +994,26 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  maxLength={10}
-                  className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
-                  value={form.accountNumber}
-                  onChange={e => { setForm({...form, accountNumber: e.target.value}); setResolved(false); }}
-                  onBlur={resolveAccount}
-                  placeholder="0123456789"
-                />
-                {loading && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input 
+                    type="text" 
+                    maxLength={10}
+                    className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
+                    value={form.accountNumber}
+                    onChange={e => { setForm({...form, accountNumber: e.target.value}); setResolved(false); }}
+                    onBlur={resolveAccount}
+                    placeholder="Account Number"
+                  />
+                  {loading && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
+                </div>
+                <button 
+                  onClick={resolveAccount}
+                  disabled={loading || form.accountNumber.length < 10 || !form.bankCode}
+                  className="bg-accent/10 text-accent px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition disabled:opacity-50 h-[54px]"
+                >
+                  Verify
+                </button>
               </div>
             </div>
 

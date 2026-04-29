@@ -174,27 +174,32 @@ app.post("/api/paystack/initialize", async (req, res) => {
 });
 
 app.get("/api/paystack/banks", async (req, res) => {
-  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+  if (!PAYSTACK_SECRET) {
+    console.error("Bank Fetch Failed: PAYSTACK_SECRET not configured");
+    return res.status(500).json({ error: "Paystack secret key is missing in environment variables." });
+  }
+  
   try {
     let allBanks: any[] = [];
     let page = 1;
     let hasMore = true;
 
-    while (hasMore) {
-      console.log(`Fetching banks page ${page}...`);
+    // Use a single request if possible, or limit pages
+    while (hasMore && page <= 5) {
+      console.log(`Fetching Paystack banks page ${page}...`);
       const response = await axios.get(`https://api.paystack.co/bank?country=nigeria&per_page=100&page=${page}`, {
-        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
+        timeout: 10000 // 10s timeout
       });
       
       if (!response.data.status) {
-        console.error("Paystack Bank Fetch Error:", response.data);
+        console.error("Paystack API returned status false:", response.data);
         break;
       }
 
       const data = response.data.data;
       if (data && Array.isArray(data) && data.length > 0) {
         allBanks = [...allBanks, ...data];
-        console.log(`Added ${data.length} banks. Total: ${allBanks.length}`);
         if (data.length < 100) {
           hasMore = false;
         } else {
@@ -203,30 +208,42 @@ app.get("/api/paystack/banks", async (req, res) => {
       } else {
         hasMore = false;
       }
-      
-      if (page > 12) hasMore = false;
     }
 
     if (allBanks.length === 0) {
-      console.warn("No banks found after fetching.");
+      console.warn("Paystack call success but no banks found in data array.");
     }
+    
     res.json(allBanks);
   } catch (error: any) {
-    console.error("Fetch Banks Error:", error.message);
-    res.status(500).json({ error: error.message });
+    const errorData = error.response?.data;
+    console.error("Fetch Banks Critical Error:", errorData || error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: errorData?.message || error.message || "Failed to fetch banks from Paystack" 
+    });
   }
 });
 
 app.get("/api/paystack/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.query;
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
+  
+  if (!account_number || !bank_code) {
+    return res.status(400).json({ error: "Missing account_number or bank_code" });
+  }
+
   try {
     const response = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
+      timeout: 10000
     });
     res.json(response.data.data);
   } catch (error: any) {
-    res.status(400).json({ error: error.response?.data?.message || "Could not resolve account" });
+    const errorData = error.response?.data;
+    console.error("Account Resolve Error:", errorData || error.message);
+    res.status(error.response?.status || 400).json({ 
+      error: errorData?.message || error.message || "Could not resolve account with Paystack" 
+    });
   }
 });
 
