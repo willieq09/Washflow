@@ -827,18 +827,30 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
   const [form, setForm] = useState({ bankCode: '', accountNumber: '', amount: balance, accountName: '' });
   const [resolved, setResolved] = useState(false);
   const [bankSearch, setBankSearch] = useState('');
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setForm(f => ({ ...f, amount: balance }));
+      setBankSearch('');
+      setFetchError(null);
       setLoading(true);
       fetch('/api/paystack/banks')
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'Failed to fetch banks') });
+          return res.json();
+        })
         .then(data => {
           if (Array.isArray(data)) {
             const sortedBanks = [...data].sort((a, b) => a.name.localeCompare(b.name));
             setBanks(sortedBanks);
+          } else {
+            setFetchError('Invalid bank data received');
           }
+        })
+        .catch(err => {
+          console.error(err);
+          setFetchError(err.message);
         })
         .finally(() => setLoading(false));
     }
@@ -942,14 +954,21 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
                   <Search size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-dim" />
                 </div>
                 <select 
-                  className="w-full bg-bg border border-border rounded-b-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
+                  className={cn(
+                    "w-full bg-bg border rounded-b-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none",
+                    fetchError ? "border-error/50" : "border-border"
+                  )}
                   value={form.bankCode}
                   onChange={e => { setForm({...form, bankCode: e.target.value}); setResolved(false); }}
                 >
-                  <option value="">{loading ? 'Loading banks...' : 'Choose your bank'}</option>
-                  {Array.isArray(filteredBanks) && filteredBanks.map(b => (
-                    <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
-                  ))}
+                  <option value="">{loading ? 'Loading banks...' : fetchError ? `Error: ${fetchError}` : 'Choose your bank'}</option>
+                  {Array.isArray(filteredBanks) && filteredBanks.length > 0 ? (
+                    filteredBanks.map(b => (
+                      <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
+                    ))
+                  ) : !loading && bankSearch && (
+                    <option disabled value="">No banks found matching "{bankSearch}"</option>
+                  )}
                 </select>
               </div>
             </div>

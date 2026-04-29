@@ -181,23 +181,35 @@ app.get("/api/paystack/banks", async (req, res) => {
     let hasMore = true;
 
     while (hasMore) {
+      console.log(`Fetching banks page ${page}...`);
       const response = await axios.get(`https://api.paystack.co/bank?country=nigeria&per_page=100&page=${page}`, {
         headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
       });
+      
+      if (!response.data.status) {
+        console.error("Paystack Bank Fetch Error:", response.data);
+        break;
+      }
+
       const data = response.data.data;
-      if (data && data.length > 0) {
+      if (data && Array.isArray(data) && data.length > 0) {
         allBanks = [...allBanks, ...data];
-        page++;
-        // If we got fewer than 100, we probably reached the end
-        if (data.length < 100) hasMore = false;
+        console.log(`Added ${data.length} banks. Total: ${allBanks.length}`);
+        if (data.length < 100) {
+          hasMore = false;
+        } else {
+          page++;
+        }
       } else {
         hasMore = false;
       }
       
-      // Safety cap to prevent infinite loops (though Paystack won't have 100+ pages of banks)
-      if (page > 10) hasMore = false;
+      if (page > 12) hasMore = false;
     }
 
+    if (allBanks.length === 0) {
+      console.warn("No banks found after fetching.");
+    }
     res.json(allBanks);
   } catch (error: any) {
     console.error("Fetch Banks Error:", error.message);
