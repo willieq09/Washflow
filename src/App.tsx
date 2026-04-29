@@ -916,40 +916,28 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
     if (!resolved || form.amount <= 0 || form.amount > balance) return;
     setSubmitting(true);
     try {
-      const res = await fetch('/api/paystack/transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: form.amount * 100, // to kobo
-          account_number: form.accountNumber,
-          bank_code: form.bankCode,
-          account_name: form.accountName,
-          userId
-        })
-      });
-      const data = await res.json();
+      // Phase 1 Workaround: Skip Paystack Transfer API
+      // Instead, record in Firestore as 'pending' for manual settlement
+      const bankName = banks.find(b => b.code === form.bankCode)?.name || 'Manual Entry';
       
-      if (data.status) {
-        // Record in Firestore
-        await addDoc(collection(db, 'withdrawals'), {
-          ownerId: userId,
-          amount: form.amount,
-          bankName: banks.find(b => b.code === form.bankCode)?.name,
-          accountNumber: form.accountNumber,
-          accountName: form.accountName,
-          timestamp: serverTimestamp(),
-          status: 'processed',
-          reference: data.data?.transfer_code || data.data?.reference || 'N/A'
-        });
+      await addDoc(collection(db, 'withdrawals'), {
+        ownerId: userId,
+        amount: form.amount,
+        bankName: bankName,
+        bankCode: form.bankCode,
+        accountNumber: form.accountNumber,
+        accountName: form.accountName,
+        timestamp: serverTimestamp(),
+        status: 'pending',
+        method: 'manual',
+        reference: `REQU-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      });
 
-        alert("Withdrawal initiated successfully! Funds should reflect shortly.");
-        onClose();
-      } else {
-        alert(data.message || data.error || "Withdrawal failed");
-      }
+      alert("Withdrawal request queued! Our team will process this manually within 24-48 hours. You will see it in your pending balance.");
+      onClose();
     } catch (err: any) {
       console.error(err);
-      alert("An error occurred: " + (err.message || "Transfer failed"));
+      alert("Failed to queue withdrawal: " + (err.message || "Unknown error"));
     } finally {
       setSubmitting(false);
     }
@@ -1095,6 +1083,8 @@ function AdminDashboardView() {
     totalOwners: 0,
     totalRevenue: 0
   });
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [topEntities, setTopEntities] = useState<{ owners: any[], workers: any[] }>({ owners: [], workers: [] });
 
@@ -1148,7 +1138,30 @@ function AdminDashboardView() {
     };
 
     fetchAdminStats();
+
+    // Subscribe to pending withdrawals
+    const qW = query(collection(db, 'withdrawals'), where('status', '==', 'pending'), orderBy('timestamp', 'asc'));
+    const unsubW = onSnapshot(qW, (snap) => {
+      setPendingWithdrawals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    
+    return () => unsubW();
   }, []);
+
+  const handleSettle = async (id: string) => {
+    setSettlingId(id);
+    try {
+      await updateDoc(doc(db, 'withdrawals', id), {
+        status: 'processed',
+        processedAt: serverTimestamp()
+      });
+      alert("Withdrawal marked as PAID. Internal ledger synchronized.");
+    } catch (error: any) {
+      alert("Settlement Error: " + error.message);
+    } finally {
+      setSettlingId(null);
+    }
+  };
 
   if (loading) return <div className="p-20 text-center animate-pulse uppercase font-black text-text-dim text-xs tracking-widest">Compiling Global Intelligence...</div>;
 
@@ -1158,6 +1171,66 @@ function AdminDashboardView() {
         <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Console.</h2>
         <p className="text-text-dim text-lg lowercase mt-2">Platform-wide operation health and mission control.</p>
       </header>
+      
+      {/* Withdrawal Queue */}
+      <section className="bento-card border-accent/20 bg-accent/5">
+        <div className="flex items-center gap-3 mb-6">
+          <DollarSign className="text-accent" />
+          <h3 className="text-xl font-black text-white uppercase italic">Withdrawal Settlement Queue</h3>
+          {pendingWithdrawals.length > 0 && (
+            <span className="bg-accent text-white px-2 py-0.5 rounded-full text-[10px] font-black">{pendingWithdrawals.length} REQUESTS</span>
+          )}
+        </div>
+
+        {pendingWithdrawals.length === 0 ? (
+          <div className="p-12 text-center border border-dashed border-white/10 rounded-2xl">
+            <p className="text-text-dim text-sm uppercase font-bold tracking-widest">No pending payouts require action.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingWithdrawals.map((w) => (
+              <div key={w.id} className="bg-bg border border-white/5 p-5 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <span className="text-[8px] font-black text-text-dim uppercase tracking-[0.2em]">Request Amount</span>
+                      <div className="text-2xl font-black text-white">{formatCurrency(w.amount)}</div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-black text-text-dim uppercase tracking-[0.2em]">Target Node</span>
+                      <div className="text-[10px] font-bold text-accent uppercase">ID: {w.ownerId.substring(0,8)}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/5 p-3 rounded-xl border border-white/5 space-y-1">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-text-dim uppercase">Account:</span>
+                      <span className="text-white font-bold uppercase truncate max-w-[120px]">{w.accountName}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-text-dim uppercase">Bank:</span>
+                      <span className="text-white font-bold truncate max-w-[120px]">{w.bankName}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-text-dim uppercase">Number:</span>
+                      <span className="text-white font-mono">{w.accountNumber}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handleSettle(w.id)}
+                  disabled={settlingId === w.id}
+                  className="mt-6 w-full bg-success/10 text-success border border-success/20 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-success hover:text-white transition flex items-center justify-center gap-2 group"
+                >
+                  {settlingId === w.id ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} className="group-hover:scale-125 transition" />}
+                  Confirm Manual Payment
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bento-card border-none bg-accent text-white">
@@ -1610,11 +1683,16 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
     // Subscribe to withdrawals separately
     const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid), orderBy('timestamp', 'desc'));
     const unsubWithdrawals = onSnapshot(qWithdrawals, (withdrawSnap) => {
-      const docs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const totalWithdrawn = docs.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+      const docs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const totalRequested = docs.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const pendingAmount = docs.filter(w => w.status === 'pending').reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      const processedAmount = docs.filter(w => w.status === 'processed').reduce((acc, curr) => acc + (curr.amount || 0), 0);
+      
       setStats(prev => ({
         ...prev,
-        totalWithdrawn: totalWithdrawn
+        totalWithdrawn: totalRequested,
+        pendingPayouts: pendingAmount,
+        completedPayouts: processedAmount
       }));
       setRecentWithdrawals(docs.slice(0, 5));
     });
@@ -1657,7 +1735,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   }, [profile]);
 
   // Combined stats calculation for balance
-  const availableBalance = (stats.ownerRevenue * 0.9) - stats.totalWithdrawn;
+  const availableBalance = stats.ownerRevenue - stats.totalWithdrawn;
 
   useEffect(() => {
     if (profile.role === 'worker') {
@@ -1755,8 +1833,9 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                   </button>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Pending Escrow</span>
-                  <div className="text-4xl font-black mt-2 tracking-tighter text-text-dim/60">{formatCurrency(stats.pendingEscrow)}</div>
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Pending Settlement</span>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-text-dim/60">{formatCurrency(stats.pendingPayouts || 0)}</div>
+                  <p className="text-[8px] text-text-dim/50 uppercase mt-1">Awaiting manager validation</p>
                   
                   {recentWithdrawals.length > 0 && (
                     <div className="mt-4 space-y-2">
@@ -1769,7 +1848,12 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                             </div>
                             <div className="text-right">
                                <div className="text-[9px] font-black text-accent">{formatCurrency(w.amount)}</div>
-                               <div className="text-[7px] text-success font-black uppercase">{w.status}</div>
+                               <div className={cn(
+                                 "text-[7px] font-black uppercase",
+                                 w.status === 'pending' ? "text-amber-500" : "text-success"
+                               )}>
+                                 {w.status}
+                               </div>
                             </div>
                          </div>
                        ))}
