@@ -157,6 +157,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "itemId", "amount", "status"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "Owner fund extraction from platform balance.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "accountName": { "type": "string" },
+        "status": { "type": "string", "enum": ["processed", "failed"] },
+        "reference": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "amount", "bankName", "accountNumber", "accountName", "status"]
     }
   },
   "firestore": {
@@ -168,6 +184,7 @@
     "/reviews/{id}": { "schema": "Review", "description": "Customer feedback." },
     "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." },
     "/marketplace_items/{id}": { "schema": "MarketplaceItem", "description": "Product and services." },
-    "/orders/{id}": { "schema": "Order", "description": "Transaction records." }
+    "/orders/{id}": { "schema": "Order", "description": "Transaction records." },
+    "/withdrawals/{id}": { "schema": "Withdrawal", "description": "Owner cash-out records." }
   }
 }

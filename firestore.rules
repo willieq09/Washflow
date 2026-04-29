@@ -149,5 +149,26 @@ service cloud.firestore {
       allow create: if isSignedIn() && (isWorker() || isAdmin());
       allow delete: if isAdmin();
     }
+
+    match /withdrawals/{id} {
+      allow read: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().ownerId) && 
+                    incoming().keys().hasAll(['ownerId', 'amount', 'bankName', 'status', 'timestamp']) &&
+                    incoming().amount is number && incoming().amount > 0 &&
+                    incoming().status == 'processed' &&
+                    incoming().timestamp == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /marketplace_items/{id} {
+      allow read: if true;
+      allow write: if isAdmin() || (isStationOwner() && (existing() == null || existing().ownerUid == request.auth.uid) && (incoming() == null || incoming().ownerUid == request.auth.uid));
+    }
+
+    match /orders/{id} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || (isStationOwner() && resource.data.businessId == get(/databases/$(database)/documents/wash_businesses/$(request.auth.uid)).id));
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isAdmin();
+    }
   }
 }

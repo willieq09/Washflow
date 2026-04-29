@@ -226,10 +226,10 @@ app.post("/api/paystack/transfer", async (req, res) => {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
     });
 
-    res.json(transferRes.data.data);
+    res.json(transferRes.data);
   } catch (error: any) {
     console.error("Transfer Error:", error.response?.data || error.message);
-    res.status(400).json({ error: error.response?.data?.message || "Transfer failed" });
+    res.status(400).json(error.response?.data || { error: "Transfer failed" });
   }
 });
 

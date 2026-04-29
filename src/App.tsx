@@ -835,7 +835,8 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setBanks(data);
+            const sortedBanks = [...data].sort((a, b) => a.name.localeCompare(b.name));
+            setBanks(sortedBanks);
           }
         })
         .finally(() => setLoading(false));
@@ -854,8 +855,9 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
       } else {
         alert("Could not verify account name");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || "Failed to resolve account. Verify details.");
     } finally {
       setLoading(false);
     }
@@ -877,15 +879,29 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
         })
       });
       const data = await res.json();
-      if (data.status === 'success' || data.status === 200 || data.data?.status === 'success') {
-        alert("Withdrawal initiated successfully!");
+      
+      // Paystack response check: status can be true/false or a status string
+      if (data.status === 'success' || data.status === 200 || data.integration) {
+        // Record in Firestore
+        await addDoc(collection(db, 'withdrawals'), {
+          ownerId: userId,
+          amount: form.amount,
+          bankName: banks.find(b => b.code === form.bankCode)?.name,
+          accountNumber: form.accountNumber,
+          accountName: form.accountName,
+          timestamp: serverTimestamp(),
+          status: 'processed',
+          reference: data.transfer_code || data.reference || 'N/A'
+        });
+
+        alert("Withdrawal initiated successfully! Funds should reflect shortly.");
         onClose();
       } else {
         alert(data.message || data.error || "Withdrawal failed");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("An error occurred during withdrawal");
+      alert("An error occurred: " + (err.message || "Transfer failed"));
     } finally {
       setSubmitting(false);
     }
@@ -1477,15 +1493,21 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       const commissionAmount = totalRevenue * 0.075;
       const ownerRevenue = totalRevenue - commissionAmount;
 
-      setStats(prev => ({ 
-        ...prev,
-        todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
-        todayCount: todayWashes.length,
-        totalCount: washes.length,
-        availableBalance: ownerRevenue * 0.9,
-        pendingEscrow: ownerRevenue * 0.1
-      }));
-      setLoading(false);
+      // Subscribe to withdrawals to get actual balance
+      const qWithdrawals = query(collection(db, 'withdrawals'), where('ownerId', '==', profile.uid));
+      onSnapshot(qWithdrawals, (withdrawSnap) => {
+        const totalWithdrawn = withdrawSnap.docs.reduce((acc, curr) => acc + (curr.data().amount || 0), 0);
+        
+        setStats(prev => ({ 
+          ...prev,
+          todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
+          todayCount: todayWashes.length,
+          totalCount: washes.length,
+          availableBalance: (ownerRevenue * 0.9) - totalWithdrawn,
+          pendingEscrow: ownerRevenue * 0.1
+        }));
+        setLoading(false);
+      });
     });
 
     // Sync Bookings (Queue)
