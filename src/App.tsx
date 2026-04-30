@@ -132,6 +132,7 @@ interface WashJob {
   review?: string;
   maintenanceTip?: string;
   isPending?: boolean;
+  usedCredit?: boolean;
 }
 
 interface Incentive {
@@ -471,6 +472,12 @@ export default function App() {
     return <RoleSelection uid={profile.uid} name={profile.name} email={profile.email} />;
   }
 
+  // Determine if user has access to AI Scanner (Elite or Admin or specifically granted)
+  const hasScannerAccess = profile.plan === 'elite' || 
+                          profile.email === 'oumawillis09@gmail.com' || 
+                          profile.role === 'admin' ||
+                          (profile.role === 'worker' && profile.permissions?.canManageTeam);
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-bg flex flex-col md:flex-row relative overflow-x-hidden">
@@ -570,23 +577,21 @@ export default function App() {
                       />
                     </>
                   )}
-                  {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || (profile.permissions?.canManageTeam && profile.role !== 'customer')) && (
-                    <>
-                      <NavItem 
-                        icon={<Camera size={20} className="text-accent" />} 
-                        label="AI Scanner" 
-                        active={view === 'scanner'} 
-                        onClick={() => navigate('scanner')} 
-                      />
-                      {profile.email === 'oumawillis09@gmail.com' && (
-                        <NavItem 
-                          icon={<ShieldCheck size={20} className="text-success" />} 
-                          label="Admin Console" 
-                          active={view === 'admin'} 
-                          onClick={() => navigate('admin')} 
-                        />
-                      )}
-                    </>
+                  {hasScannerAccess && (
+                    <NavItem 
+                      icon={<Camera size={20} className="text-accent" />} 
+                      label="AI Scanner" 
+                      active={view === 'scanner'} 
+                      onClick={() => navigate('scanner')} 
+                    />
+                  )}
+                  {profile.email === 'oumawillis09@gmail.com' && (
+                    <NavItem 
+                      icon={<ShieldCheck size={20} className="text-success" />} 
+                      label="Admin Console" 
+                      active={view === 'admin'} 
+                      onClick={() => navigate('admin')} 
+                    />
                   )}
                 </>
               )}
@@ -836,21 +841,23 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 
 function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean, onClose: () => void, balance: number, userId: string }) {
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ bankName: '', accountNumber: '', amount: balance, accountName: '' });
+  const [form, setForm] = useState({ bankName: '', accountNumber: '', amount: balance.toString(), accountName: '' });
 
   useEffect(() => {
     if (isOpen) {
-      setForm(f => ({ ...f, amount: balance }));
+      setForm(f => ({ ...f, amount: balance.toString() }));
     }
   }, [isOpen, balance]);
 
   const handleWithdraw = async () => {
-    if (!form.bankName || !form.accountNumber || !form.accountName || form.amount <= 0 || form.amount > balance) {
-      alert("Please fill all fields correctly.");
+    const numericAmount = parseFloat(form.amount);
+    
+    if (!form.bankName || !form.accountNumber || !form.accountName || isNaN(numericAmount) || numericAmount <= 0 || numericAmount > balance) {
+      alert("Please fill all fields correctly. Ensure you have sufficient balance.");
       return;
     }
     
-    if (form.amount < MIN_WITHDRAWAL) {
+    if (numericAmount < MIN_WITHDRAWAL) {
       alert(`Minimum withdrawal amount is ${formatCurrency(MIN_WITHDRAWAL)}`);
       return;
     }
@@ -860,7 +867,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
     try {
       await addDoc(collection(db, 'withdrawals'), {
         ownerId: userId,
-        amount: form.amount,
+        amount: numericAmount,
         bankName: form.bankName,
         accountNumber: form.accountNumber,
         accountName: form.accountName,
@@ -939,14 +946,14 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
                   type="number"
                   className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-accent outline-none"
                   value={form.amount}
-                  onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                 />
               </div>
             </div>
 
             <button
               onClick={handleWithdraw}
-              disabled={submitting || form.amount <= 0 || form.amount > balance}
+              disabled={submitting || !form.amount || parseFloat(form.amount) <= 0 || parseFloat(form.amount) > balance}
               className="w-full py-4 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-xl shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? <RefreshCw className="animate-spin" size={16} /> : <Check size={16} />}
@@ -977,38 +984,34 @@ function AdminDashboardView() {
   const [topEntities, setTopEntities] = useState<{ owners: any[], workers: any[] }>({ owners: [], workers: [] });
 
   useEffect(() => {
-    const fetchAdminStats = async () => {
-      try {
-        const usersSnap = await getDocs(query(collection(db, 'users')));
-        const users = usersSnap.docs.map(d => d.data());
-        
-        const washSnap = await getDocs(query(collection(db, 'washes')));
+    const unsubUsers = onSnapshot(query(collection(db, 'users')), (usersSnap) => {
+      const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      
+      const unsubWashes = onSnapshot(query(collection(db, 'washes')), (washSnap) => {
         const washes = washSnap.docs.map(d => d.data());
 
-        const owners = users.filter(u => u.role === 'owner');
-        const workers = users.filter(u => u.role === 'worker');
-        const customers = users.filter(u => u.role === 'customer');
-        const allCars = customers.reduce((acc, curr) => acc + (curr.vehicles?.length || 0), 0);
+        const owners = users.filter((u: any) => u.role === 'owner');
+        const workers = users.filter((u: any) => u.role === 'worker');
+        const customers = users.filter((u: any) => u.role === 'customer');
+        const allCars = customers.reduce((acc, curr: any) => acc + (curr.vehicles?.length || 0), 0);
         
-        // MRR Calculation (Simulated from plans)
         let totalMrr = 0;
-        owners.forEach(o => {
+        owners.forEach((o: any) => {
           if (o.plan === 'starter') totalMrr += 19;
           if (o.plan === 'standard') totalMrr += 49;
           if (o.plan === 'elite') totalMrr += 99;
         });
-        customers.forEach(o => {
+        customers.forEach((o: any) => {
           if (o.plan === 'basic_wash') totalMrr += 15;
           if (o.plan === 'premium_wash') totalMrr += 35;
           if (o.plan === 'unlimited_wash') totalMrr += 75;
         });
 
-        const totalRevenue = washes.reduce((acc, curr) => acc + (curr.price || 0), 0);
+        const totalRevenue = washes.reduce((acc, curr: any) => acc + (curr.price || 0), 0);
 
-        // Top Workers
-        const workerStats = workers.map(w => {
+        const workerStats = workers.map((w: any) => {
           const wWashes = washes.filter(wash => wash.workerId === w.uid);
-          return { name: w.name, count: wWashes.length, revenue: wWashes.reduce((a, b) => a + (b.price || 0), 0) };
+          return { name: w.name, count: wWashes.length, revenue: wWashes.reduce((a, b: any) => a + (b.price || 0), 0) };
         }).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
         setStats({
@@ -1020,20 +1023,19 @@ function AdminDashboardView() {
         });
         setTopEntities({ owners: [], workers: workerStats });
         setLoading(false);
-      } catch (err) {
-        console.error("Admin stats error:", err);
-      }
-    };
+      });
+      return () => unsubWashes();
+    });
 
-    fetchAdminStats();
-
-    // Subscribe to pending withdrawals
     const qW = query(collection(db, 'withdrawals'), where('status', '==', 'pending'), orderBy('timestamp', 'asc'));
     const unsubW = onSnapshot(qW, (snap) => {
       setPendingWithdrawals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     
-    return () => unsubW();
+    return () => {
+      unsubUsers();
+      unsubW();
+    };
   }, []);
 
   const handleSettle = async (id: string) => {
@@ -1552,19 +1554,32 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(50))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(50));
 
-    const unsubWashes = onSnapshot(qWashes, (snap) => {
-      const washes = snap.docs.map(d => ({ id: d.id, ...d.data() } as WashJob));
+    const unsubWashes = onSnapshot(qWashes, { includeMetadataChanges: true }, (snap) => {
+      const washes = snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        isPending: d.metadata.hasPendingWrites 
+      } as WashJob));
       setRecentWashes(washes.slice(0, 10));
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayWashes = washes.filter(w => w.timestamp?.toDate() >= today);
-      const totalRevenue = washes.reduce((acc, curr) => acc + curr.price, 0);
+      
+      const todayWashes = washes.filter(w => {
+        if (!w.timestamp) return true; // Assume today if pending local write
+        try {
+          return w.timestamp.toDate() >= today;
+        } catch (e) {
+          return true; // Fallback for edge cases
+        }
+      });
+      
+      const totalRevenue = washes.reduce((acc, curr) => acc + (curr.price || 0), 0);
       const commissionAmount = totalRevenue * COMMISSION_RATE;
       const ownerRevenue = totalRevenue - commissionAmount;
 
       setStats(prev => ({ 
         ...prev,
-        todayRevenue: todayWashes.reduce((acc, curr) => acc + curr.price, 0),
+        todayRevenue: todayWashes.reduce((acc, curr) => acc + (curr.price || 0), 0),
         todayCount: todayWashes.length,
         totalCount: washes.length,
         ownerRevenue: ownerRevenue,
@@ -1972,34 +1987,43 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           </div>
         </div>
 
-        {/* Activity Feed in Bento style */}
-        <div className="md:col-span-2 bento-card overflow-hidden">
+        {/* Live Activity Feed */}
+        <div className="md:col-span-2 bento-card overflow-hidden h-full flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-text-dim uppercase tracking-wider">Live Feed</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-text-dim uppercase tracking-wider">Live Station Activity</span>
+              <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
+            </div>
             <button 
               onClick={() => setView('history')}
-              className="text-[10px] font-bold text-accent hover:underline"
+              className="text-[10px] font-bold text-accent hover:underline uppercase tracking-widest"
             >
-              See full log
+              Full Ledger
             </button>
           </div>
-          <div className="space-y-3">
-            {recentWashes.slice(0, 3).map(wash => (
-              <div key={wash.id} className="flex items-center justify-between text-sm group">
+          <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            {recentWashes.map(wash => (
+              <div key={wash.id} className="flex items-center justify-between text-sm group p-2 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={cn("w-1.5 h-1.5 rounded-full", wash.isPending ? "bg-accent animate-pulse" : "bg-accent")} />
-                  <span className="font-medium">{wash.carModel}</span>
-                  <span className="text-text-dim text-xs select-none">•</span>
-                  <span className="text-text-dim text-xs font-mono">{wash.plateNumber}</span>
-                  {wash.isPending && <RefreshCw size={10} className="text-accent animate-spin" />}
+                  <div className="flex flex-col">
+                    <span className="font-bold text-white text-xs uppercase">{wash.carModel}</span>
+                    <span className="text-[9px] text-text-dim uppercase font-mono tracking-widest">{wash.plateNumber}</span>
+                  </div>
                 </div>
-                <span className="text-xs text-text-dim group-hover:text-white transition">
-                  {wash.isPending ? "Queued" : wash.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                <div className="text-right">
+                  <div className="text-xs font-black text-white">{formatCurrency(wash.price)}</div>
+                  <div className="text-[8px] text-text-dim uppercase font-bold">
+                    {wash.isPending ? "Syncing..." : wash.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
               </div>
             ))}
             {recentWashes.length === 0 && (
-              <p className="text-xs italic text-text-dim">No activity yet...</p>
+              <div className="h-full flex flex-col items-center justify-center opacity-30">
+                <RefreshCw className="animate-spin mb-2" size={20} />
+                <p className="text-[10px] font-black uppercase tracking-[0.2em]">Monitoring station link...</p>
+              </div>
             )}
           </div>
         </div>
@@ -4579,12 +4603,13 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const [form, setForm] = useState({ 
     carModel: preFill?.carModel || '', 
     plateNumber: preFill?.plateNumber || '', 
-    price: '20' 
+    price: profile.pricing?.sedan?.toString() || '2000' 
   });
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [recentLogs, setRecentLogs] = useState<WashJob[]>([]);
   
   const [workers, setWorkers] = useState<any[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>(
@@ -4601,6 +4626,18 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    // Current user's recent logs for quick verification
+    const q = query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(5));
+    return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      setRecentLogs(snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        isPending: d.metadata.hasPendingWrites 
+      } as WashJob)));
+    });
+  }, [profile]);
 
   useEffect(() => {
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
@@ -4990,39 +5027,127 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         </div>
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-bold text-text-dim uppercase tracking-wider">Charge ($)</label>
-            {profile.pricing && (
-              <div className="flex gap-1">
-                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.sedan || 20)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">Sedan</button>
-                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.suv || 30)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">SUV</button>
-                <button type="button" onClick={() => setForm({...form, price: String(profile.pricing?.truck || 45)})} className="px-2 py-0.5 bg-white/5 rounded-md text-[8px] font-black uppercase hover:bg-accent hover:text-white transition border border-white/10">Truck</button>
-              </div>
-            )}
+            <label className="block text-xs font-bold text-text-dim uppercase tracking-wider">Service Tier (₦)</label>
+            <div className="flex gap-1.5">
+              <button 
+                type="button" 
+                onClick={() => setForm({...form, price: String(profile.pricing?.sedan || 2000)})} 
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.sedan || 2000) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                )}
+              >
+                Sedan
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setForm({...form, price: String(profile.pricing?.suv || 3500)})} 
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.suv || 3500) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                )}
+              >
+                SUV
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setForm({...form, price: String(profile.pricing?.truck || 5000)})} 
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.truck || 5000) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                )}
+              >
+                Truck
+              </button>
+            </div>
           </div>
-          <div className="relative">
-            <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
+          <div className="relative group">
+            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent transition-colors font-bold">₦</div>
             <input 
               required
               type="number"
               value={form.price}
               onChange={e => setForm({...form, price: e.target.value})}
-              className="w-full bg-bg pl-14 pr-5 py-4 rounded-xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-white text-xl font-bold"
+              className="w-full bg-bg pl-12 pr-5 py-5 rounded-[2rem] border border-border focus:border-accent outline-none transition text-white text-2xl font-black tracking-tighter"
             />
           </div>
         </div>
         
         <button 
-          disabled={submitting}
-          className="w-full bg-accent text-white font-bold py-5 rounded-2xl hover:bg-accent/90 transition shadow-xl shadow-accent/20 flex items-center justify-center gap-3 group disabled:opacity-50 mt-4 active:scale-95"
+          disabled={submitting || !form.carModel || !form.plateNumber}
+          className="w-full bg-accent text-white font-black py-5 rounded-[2rem] hover:bg-accent/90 transition shadow-[0_20px_50px_rgba(62,99,221,0.3)] flex items-center justify-center gap-3 group disabled:opacity-50 mt-4 active:scale-95 italic uppercase tracking-[0.1em]"
         >
-          {submitting ? "Processing Transaction..." : (
+          {submitting ? (
             <>
-              Submit Log Entry
-              <ChevronRight size={20} className="group-hover:translate-x-1 transition" />
+              <RefreshCw className="animate-spin" size={20} />
+              Encrypting Service Log...
+            </>
+          ) : (
+            <>
+              Broadcast Service Log
+              <Zap size={20} className="group-hover:scale-125 transition fill-white" />
             </>
           )}
         </button>
       </form>
+
+      {/* User's Recent Wash History (Inline Feedback) */}
+      <div className="mt-16 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
+             <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Transmission Registry</h3>
+          </div>
+          <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Active Verification Flow</span>
+        </div>
+        
+        <div className="space-y-4">
+          {recentLogs.map((log) => (
+            <div key={log.id} className={cn(
+              "bento-card border-none flex items-center justify-between p-6 transition-all duration-500",
+              log.isPending ? "bg-accent/5 opacity-60" : "bg-card hover:bg-white/[0.02]"
+            )}>
+              <div className="flex items-center gap-5">
+                <div className="w-14 h-14 rounded-[1.5rem] bg-bg flex items-center justify-center text-accent shadow-inner">
+                  <CarFront size={28} />
+                </div>
+                <div>
+                  <div className="font-black text-white uppercase text-sm leading-none flex items-center gap-2">
+                    {log.carModel}
+                    {log.usedCredit && <div className="bg-success/10 text-success text-[8px] px-1.5 py-0.5 rounded uppercase">Credit</div>}
+                  </div>
+                  <div className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em] mt-2 font-mono">{log.plateNumber}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-black text-white text-xl tracking-tighter">
+                  {log.usedCredit ? "0.00" : formatCurrency(log.price)}
+                </div>
+                <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                  {log.isPending ? (
+                    <RefreshCw size={10} className="animate-spin text-accent" />
+                  ) : (
+                    <CheckCircle size={10} className="text-success" />
+                  )}
+                  <span className={cn(
+                    "text-[8px] font-black uppercase tracking-widest",
+                    log.isPending ? "text-accent" : "text-success"
+                  )}>
+                    {log.isPending ? "Syncing Ledger" : log.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {recentLogs.length === 0 && (
+            <div className="py-20 text-center bg-white/[0.02] rounded-[3rem] border-2 border-dashed border-white/5 group hover:border-accent/20 transition-colors">
+               <p className="text-[10px] font-black text-text-dim uppercase tracking-widest leading-loose opacity-30 group-hover:opacity-60 transition-opacity">
+                 Awaiting first service transmission for this operative session.
+               </p>
+            </div>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
