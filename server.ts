@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import axios from "axios";
+import fs from "fs";
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
@@ -144,15 +145,7 @@ app.post("/api/paystack/initialize", async (req, res) => {
         metadata: {
           userId,
           plan,
-          currency: "NGN",
-          gross_amount: cleanAmount,
-          autolux_commission_gross: Math.round(cleanAmount * 0.075),
-          paystack_fee: cleanAmount < 250000 ? Math.round(cleanAmount * 0.015) : Math.round(cleanAmount * 0.015 + 10000),
-          owner_payout: Math.round(cleanAmount * 0.925),
-          custom_fields: [
-            { display_name: "Plan", variable_name: "plan", value: plan },
-            { display_name: "AutoLux Fee (7.5%)", variable_name: "autolux_fee", value: (cleanAmount * 0.00075).toFixed(2) }
-          ]
+          type: 'subscription'
         }
       },
       {
@@ -263,11 +256,18 @@ app.post("/api/paystack/transfer", async (req, res) => {
 
 // Middleware & Server Logic
 async function configureApp() {
-  if (process.env.NODE_ENV === "production" || process.env.VERCEL === '1') {
-    const distPath = path.join(process.cwd(), 'dist');
+  const distPath = path.join(process.cwd(), 'dist');
+  const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === '1' || fs.existsSync(distPath);
+
+  if (isProd) {
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPage = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPage)) {
+        res.sendFile(indexPage);
+      } else {
+        res.status(404).send("Application build not found. Please run build.");
+      }
     });
   } else {
     try {
@@ -282,15 +282,23 @@ async function configureApp() {
     }
   }
 
-  // Global Error Handler
+  // Global Error Handler - Returns JSON
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Global Error:", err);
-    res.status(500).json({ error: "Internal Server Error", message: err.message });
+    console.error("Global Server Error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: "Internal Server Error", 
+        message: err.message || "An unexpected error occurred on the server.",
+        requestId: req.headers['x-request-id'] || 'unknown'
+      });
+    }
   });
 
+  // Start listener only if not on Vercel
   if (process.env.VERCEL !== '1') {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server running on http://localhost:${PORT} [${isProd ? 'PROD' : 'DEV'}]`);
+      console.log(`Paystack Configured: ${PAYSTACK_SECRET ? 'YES (Length: ' + PAYSTACK_SECRET.length + ')' : 'NO'}`);
     });
   }
 }
