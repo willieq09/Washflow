@@ -78,43 +78,47 @@ app.post("/api/notify", async (req, res) => {
 
 // Helper for cleaned origins
 function getOrigin(req: express.Request) {
-  // Priority: X-Forwarded-Proto/Host (for proxies) > Origin > Referer
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const forwardedHost = req.headers['x-forwarded-host'];
+  const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
   
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
+  }
+
   if (req.headers.origin) return req.headers.origin.toString().replace(/\/$/, "");
   
   if (req.headers.referer) {
     try {
       const url = new URL(req.headers.referer as string);
       return `${url.protocol}//${url.host}`;
-    } catch (e) {
-      // ignore invalid referer urls
-    }
+    } catch (e) { /* ignore */ }
   }
   
-  if (host) return `${proto}://${host}`;
-  return `http://localhost:${PORT}`;
+  const host = req.headers.host;
+  return host ? `${forwardedProto}://${host}` : `http://localhost:${PORT}`;
 }
 
 app.post("/api/paystack/initialize-order", async (req, res) => {
   const { email, amount, itemId, itemName, userId } = req.body;
-  console.log(`[PAYSTACK] Init Order: User=${userId}, Item=${itemName}, Email=${email}`);
+  const reference = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   
-  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack secret key is missing on server." });
+  console.log(`[PAYSTACK] Order: ${reference} for ${email}`);
+  
+  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack secret key is missing." });
 
   const origin = getOrigin(req);
   const cleanAmount = Math.round(Number(amount));
-  if (isNaN(cleanAmount) || cleanAmount <= 0) return res.status(400).json({ error: "Invalid payment amount." });
     
   const response = await axios.post("https://api.paystack.co/transaction/initialize", {
     email, 
     amount: cleanAmount,
-    callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}`,
-    metadata: { userId, itemId, itemName, type: 'marketplace_item' }
+    reference,
+    callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
+    metadata: { userId, itemId, itemName, type: 'marketplace_item' },
+    channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
   }, {
     headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-    timeout: 15000
+    timeout: 20000
   });
   
   res.json(response.data.data);
@@ -122,69 +126,38 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
 
 app.post("/api/paystack/initialize", async (req, res) => {
   const { email, amount, plan, userId } = req.body;
-  console.log(`[PAYSTACK] Initializing subscription: User=${userId}, Plan=${plan}, Amount=${amount}, Email=${email}`);
+  const reference = `SUB-${plan}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+  console.log(`[PAYSTACK] Sub: ${reference} for ${email}`);
   
   if (!PAYSTACK_SECRET || PAYSTACK_SECRET.length < 5) {
-    console.error("[PAYSTACK] Config error: Secret is missing or too short");
-    return res.status(500).json({ 
-      error: "Paystack secret key is missing on the server. Please add PAYSTACK_SECRET_KEY to your environment variables." 
-    });
-  }
-
-  if (!email || !amount || !plan) {
-    return res.status(400).json({ error: "Missing required fields: email, amount, or plan" });
+    return res.status(500).json({ error: "Paystack secret key is missing on the server." });
   }
 
   const origin = getOrigin(req);
   const cleanAmount = Math.round(Number(amount));
   
-  if (isNaN(cleanAmount) || cleanAmount <= 0) {
-    return res.status(400).json({ error: `Invalid amount: ${amount}` });
-  }
-
   try {
-    const paystackPayload = {
+    const response = await axios.post("https://api.paystack.co/transaction/initialize", {
       email, 
       amount: cleanAmount,
-      callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
-      metadata: { 
-        userId, 
-        plan, 
-        type: 'subscription',
-        source: 'AutoLux Web App'
-      },
+      reference,
+      callback_url: `${origin}/?paystack_success=true&plan=${plan}&ref=${reference}`,
+      metadata: { userId, plan, type: 'subscription' },
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
-    };
-
-    console.log(`[PAYSTACK] Sending request to Paystack API for ${email}...`);
-    const response = await axios.post("https://api.paystack.co/transaction/initialize", paystackPayload, {
-      headers: { 
-        Authorization: `Bearer ${PAYSTACK_SECRET}`, 
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache"
-      },
-      timeout: 20000 // Increased timeout
+    }, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
+      timeout: 20000
     });
 
     if (response.data && response.data.status) {
-      console.log(`[PAYSTACK] Success: ${response.data.data.reference}`);
       return res.json(response.data.data);
     } else {
-      console.error("[PAYSTACK] API returned status false:", response.data);
-      return res.status(400).json({ error: response.data?.message || "Paystack failed to initialize transaction" });
+      return res.status(400).json({ error: response.data?.message || "Failed to init" });
     }
   } catch (error: any) {
-    const paystackError = error.response?.data;
-    console.error("[PAYSTACK CRITICAL ERROR]", {
-      status: error.response?.status,
-      message: error.message,
-      data: paystackError
-    });
-
-    return res.status(error.response?.status || 500).json({ 
-      error: paystackError?.message || error.message || "An error occurred while connecting to Paystack.",
-      code: "PAYSTACK_INIT_FAILED"
-    });
+    console.error("[PAYSTACK ERROR]", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || error.message });
   }
 });
 

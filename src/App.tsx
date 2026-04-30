@@ -3044,7 +3044,12 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       if (!response.ok) throw new Error(responseData.error || "Failed to initialize checkout.");
       if (!responseData.authorization_url) throw new Error("No authorization URL received.");
       
-      window.location.href = responseData.authorization_url;
+      // Use top.location to escape the AI Studio iframe for payments
+      if (window.top) {
+        window.top.location.href = responseData.authorization_url;
+      } else {
+        window.location.href = responseData.authorization_url;
+      }
     } catch (err: any) {
       console.error("Buy error:", err);
       alert(err.message || "An unexpected error occurred during checkout initialization.");
@@ -4486,7 +4491,12 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       }
 
       if (data && data.authorization_url) {
-        window.location.href = data.authorization_url;
+        // Use top.location to escape the AI Studio iframe for payments
+        if (window.top) {
+          window.top.location.href = data.authorization_url;
+        } else {
+          window.location.href = data.authorization_url;
+        }
       } else {
         throw new Error("Invalid response from payment server: missing checkout URL.");
       }
