@@ -1098,6 +1098,40 @@ function AdminDashboardView() {
     }
   };
 
+  const handleDownloadRegistry = async () => {
+    try {
+      const usersSnap = await getDocs(query(collection(db, 'users')));
+      const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      
+      const headers = ['UID', 'Name', 'Email', 'Role', 'Status', 'Plan', 'StationID', 'BusinessName', 'JoinedAt'];
+      const rows = users.map((u: any) => [
+        u.uid,
+        u.name || '',
+        u.email || '',
+        u.role || '',
+        u.status || 'active',
+        u.plan || 'none',
+        u.stationId || '',
+        u.businessName || '',
+        u.createdAt?.toDate ? u.createdAt.toDate().toISOString() : ''
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('hidden', '');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `registry_audit_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Failed to compile registry for export.");
+    }
+  };
+
   if (loading) return <div className="p-20 text-center animate-pulse uppercase font-black text-text-dim text-xs tracking-widest">Compiling Global Intelligence...</div>;
 
   return (
@@ -1215,7 +1249,12 @@ function AdminDashboardView() {
            <Award className="text-accent mb-6" size={64} />
            <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-4">Platform Audit Active</h3>
            <p className="text-text-dim text-sm max-w-xs lowercase">The system is currently verifying all 7.5% commission payouts across {stats.totalOwners} verified business shards.</p>
-           <button className="mt-8 bg-white text-bg px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl">Download Full Registry</button>
+           <button 
+             onClick={handleDownloadRegistry}
+             className="mt-8 bg-white text-bg px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl"
+           >
+             Download Full Registry
+           </button>
         </div>
       </div>
     </motion.div>
