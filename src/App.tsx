@@ -4590,7 +4590,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
                        Retry Selection
                      </button>
                      <button 
-                       onClick={() => window.open('https://support.stripe.com/questions/declined-payments', '_blank')}
+                       onClick={() => window.open('https://dashboard.paystack.com/#/login', '_blank')}
                        className="bg-white/5 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2"
                      >
                        Payment Help <Info size={12} />
