@@ -46,11 +46,21 @@ function getTransporter() {
 
 // API Routes
 app.get("/api/health", (req, res) => {
+  const secretStatus = !!PAYSTACK_SECRET;
   res.json({ 
     status: "ok", 
     timestamp: new Date().toISOString(),
-    paystack_configured: !!PAYSTACK_SECRET,
+    paystack_configured: secretStatus,
+    secret_prefix: secretStatus ? PAYSTACK_SECRET.substring(0, 4) : null,
     node_env: process.env.NODE_ENV || 'development'
+  });
+});
+
+app.get("/api/paystack/debug", (req, res) => {
+  res.json({
+    has_secret: !!PAYSTACK_SECRET,
+    secret_length: PAYSTACK_SECRET.length,
+    env_keys: Object.keys(process.env).filter(k => k.includes('PAYSTACK'))
   });
 });
 
@@ -112,31 +122,69 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
 
 app.post("/api/paystack/initialize", async (req, res) => {
   const { email, amount, plan, userId } = req.body;
-  console.log(`[PAYSTACK] Init Subscription: User=${userId}, Plan=${plan}, Amount=${amount}, Email=${email}`);
+  console.log(`[PAYSTACK] Initializing subscription: User=${userId}, Plan=${plan}, Amount=${amount}, Email=${email}`);
   
-  if (!PAYSTACK_SECRET) {
-    console.error("[PAYSTACK] Error: PAYSTACK_SECRET is missing");
-    return res.status(500).json({ error: "Paystack secret key is missing on the server configuration." });
+  if (!PAYSTACK_SECRET || PAYSTACK_SECRET.length < 5) {
+    console.error("[PAYSTACK] Config error: Secret is missing or too short");
+    return res.status(500).json({ 
+      error: "Paystack secret key is missing on the server. Please add PAYSTACK_SECRET_KEY to your environment variables." 
+    });
+  }
+
+  if (!email || !amount || !plan) {
+    return res.status(400).json({ error: "Missing required fields: email, amount, or plan" });
   }
 
   const origin = getOrigin(req);
   const cleanAmount = Math.round(Number(amount));
-  if (isNaN(cleanAmount) || cleanAmount <= 0) return res.status(400).json({ error: "Invalid amount provided." });
   
-  const response = await axios.post("https://api.paystack.co/transaction/initialize", {
-    email, 
-    amount: cleanAmount,
-    callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
-    metadata: { userId, plan, type: 'subscription' }
-  }, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-    timeout: 15000
-  });
+  if (isNaN(cleanAmount) || cleanAmount <= 0) {
+    return res.status(400).json({ error: `Invalid amount: ${amount}` });
+  }
 
-  if (response.data && response.data.status) {
-    res.json(response.data.data);
-  } else {
-    throw new Error(response.data?.message || "Paystack initialization failed");
+  try {
+    const paystackPayload = {
+      email, 
+      amount: cleanAmount,
+      callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
+      metadata: { 
+        userId, 
+        plan, 
+        type: 'subscription',
+        source: 'AutoLux Web App'
+      },
+      channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
+    };
+
+    console.log(`[PAYSTACK] Sending request to Paystack API for ${email}...`);
+    const response = await axios.post("https://api.paystack.co/transaction/initialize", paystackPayload, {
+      headers: { 
+        Authorization: `Bearer ${PAYSTACK_SECRET}`, 
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache"
+      },
+      timeout: 20000 // Increased timeout
+    });
+
+    if (response.data && response.data.status) {
+      console.log(`[PAYSTACK] Success: ${response.data.data.reference}`);
+      return res.json(response.data.data);
+    } else {
+      console.error("[PAYSTACK] API returned status false:", response.data);
+      return res.status(400).json({ error: response.data?.message || "Paystack failed to initialize transaction" });
+    }
+  } catch (error: any) {
+    const paystackError = error.response?.data;
+    console.error("[PAYSTACK CRITICAL ERROR]", {
+      status: error.response?.status,
+      message: error.message,
+      data: paystackError
+    });
+
+    return res.status(error.response?.status || 500).json({ 
+      error: paystackError?.message || error.message || "An error occurred while connecting to Paystack.",
+      code: "PAYSTACK_INIT_FAILED"
+    });
   }
 });
 

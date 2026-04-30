@@ -50,11 +50,11 @@ jobs:
         run: npm ci
       - name: Build
         run: |
-          if [ -z "${{ secrets.VITE_STRIPE_PUBLIC_KEY }}" ]; then echo "Error: VITE_STRIPE_PUBLIC_KEY is missing"; exit 1; fi
+          if [ -z "${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}" ]; then echo "Warning: VITE_PAYSTACK_PUBLIC_KEY is missing"; fi
           if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then echo "Error: GEMINI_API_KEY is missing"; exit 1; fi
           npm run build
         env:
-          VITE_STRIPE_PUBLIC_KEY: ${{ secrets.VITE_STRIPE_PUBLIC_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4

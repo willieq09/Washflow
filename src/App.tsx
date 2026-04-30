@@ -4449,6 +4449,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   }, []);
 
   const handleSubscribe = async (plan: string) => {
+    if (!profile) return;
     setLoading(plan);
     setError(null);
     try {
@@ -4457,33 +4458,41 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         'basic_wash': 250000, 'premium_wash': 1000000, 'unlimited_wash': 4800000
       };
 
+      const requestedAmount = prices[plan];
+      if (!requestedAmount) throw new Error(`Unknown plan: ${plan}`);
+
       const response = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan,
           email: profile.email,
-          amount: prices[plan] || 1900,
+          amount: requestedAmount,
           userId: profile.uid
         })
       });
 
-      let responseData;
       const contentType = response.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        responseData = await response.json();
+      let data;
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
       } else {
-        const text = await response.text();
-        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+        const rawText = await response.text();
+        throw new Error(`Server error (${response.status}): ${rawText.substring(0, 100)}`);
       }
 
-      if (!response.ok) throw new Error(responseData.error || "Failed to initialize payment");
-      if (!responseData.authorization_url) throw new Error("No authorization URL received.");
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `Payment initialization failed (${response.status})`);
+      }
 
-      window.location.href = responseData.authorization_url;
+      if (data && data.authorization_url) {
+        window.location.href = data.authorization_url;
+      } else {
+        throw new Error("Invalid response from payment server: missing checkout URL.");
+      }
     } catch (error: any) {
-      console.error("Subscription Error:", error);
-      setError(error.message || "An unexpected error occurred during checkout initialization.");
+      console.error("[PAYSTACK ERROR]", error);
+      setError(error.message || "Could not start payment process. Please check your connection.");
     } finally {
       setLoading(null);
     }

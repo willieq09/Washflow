@@ -52,4 +52,5 @@ The repository is configured with an automated pipeline. If your builds are fail
 
 ### Application Build Secrets
 *   `GEMINI_API_KEY`: Required for the AI functionality.
-*   `VITE_STRIPE_PUBLIC_KEY`: Used during the build for Stripe integration.
+*   `VITE_PAYSTACK_PUBLIC_KEY`: Used during the build for Paystack integration.
+*   `PAYSTACK_SECRET_KEY`: Required on the server for transaction processing.
