@@ -40,6 +40,7 @@ interface UserProfile {
   phone?: string;
   photoUrl?: string;
   plan?: 'starter' | 'standard' | 'elite';
+  stationId?: string; // Links worker to station owner
   credits?: number;
   businessName?: string;
   businessAddress?: string;
@@ -77,6 +78,7 @@ interface Booking {
   vehicleId?: string; // or vehicle plate
   vehicleInfo?: string;
   businessId: string;
+  stationId?: string;
   businessName: string;
   slot: Timestamp;
   status: 'pending' | 'confirmed' | 'completed' | 'canceled';
@@ -122,6 +124,7 @@ interface WashJob {
   id: string;
   workerId: string;
   workerName: string;
+  stationId?: string;
   carModel: string;
   plateNumber: string;
   price: number;
@@ -307,16 +310,32 @@ export default function App() {
             setProfile(docSnap.data() as UserProfile);
           } else {
             const isOwnerEmail = u.email === 'oumawillis09@gmail.com';
-            // Provide base info, but don't set role yet (unless superadmin)
+            
+            // Check if this email is an authorized worker
+            let assignedRole: any = isOwnerEmail ? 'owner' : null;
+            let assignedStationId: string | null = null;
+
+            if (!assignedRole && u.email) {
+              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', u.email));
+              const authWorkerSnap = await getDocs(authWorkerQuery);
+              if (!authWorkerSnap.empty) {
+                const authData = authWorkerSnap.docs[0].data();
+                assignedRole = 'worker';
+                assignedStationId = authData.stationId;
+              }
+            }
+
             const newProfile: any = {
               uid: u.uid,
               name: u.displayName || 'Anonymous User',
               email: u.email || '',
-              role: isOwnerEmail ? 'owner' : null,
+              role: assignedRole,
+              stationId: assignedStationId,
               photoUrl: u.photoURL || null
             };
-            if (isOwnerEmail) {
-               await setDoc(docRef, { ...newProfile, role: 'owner', createdAt: serverTimestamp() });
+            
+            if (assignedRole) {
+               await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
             }
             setProfile(newProfile);
           }
@@ -470,6 +489,30 @@ export default function App() {
 
   if (profile && !profile.role) {
     return <RoleSelection uid={profile.uid} name={profile.name} email={profile.email} />;
+  }
+
+  // Block workers who aren't assigned to a station
+  if (profile?.role === 'worker' && !profile.stationId) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-6">
+          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
+            <ShieldCheck size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Access Unauthorized</h2>
+          <p className="text-text-dim lowercase font-medium">
+            Your worker account is not linked to an active station. 
+            Please contact your station owner to verify your authorization.
+          </p>
+          <button 
+            onClick={logout}
+            className="px-8 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-500 hover:text-white transition"
+          >
+            Switch Account
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Determine if user has access to AI Scanner (Elite or Admin or specifically granted)
@@ -845,9 +888,9 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
 
   useEffect(() => {
     if (isOpen) {
-      setForm(f => ({ ...f, amount: balance.toString() }));
+      setForm({ bankName: '', accountNumber: '', amount: balance.toString(), accountName: '' });
     }
-  }, [isOpen, balance]);
+  }, [isOpen]);
 
   const handleWithdraw = async () => {
     const numericAmount = parseFloat(form.amount);
@@ -1506,11 +1549,14 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   useEffect(() => {
     // Fetch Workers for assignment if owner/lead
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
-      const qWorkers = query(collection(db, 'users'), where('role', '==', 'worker'));
-      const unsubWorkers = onSnapshot(qWorkers, (snap) => {
-        setWorkers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
-      });
-      return () => unsubWorkers();
+      const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
+      if (stationId) {
+        const qWorkers = query(collection(db, 'users'), where('role', '==', 'worker'), where('stationId', '==', stationId));
+        const unsubWorkers = onSnapshot(qWorkers, (snap) => {
+          setWorkers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+        });
+        return () => unsubWorkers();
+      }
     }
   }, [profile]);
 
@@ -1549,9 +1595,13 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   };
 
   useEffect(() => {
+    if (profile.role === 'customer') return;
+
+    const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
+    
     // Sync Washes
     const qWashes = (profile.role === 'owner' || profile.permissions?.canManageTeam) 
-      ? query(collection(db, 'washes'), orderBy('timestamp', 'desc'), limit(50))
+      ? query(collection(db, 'washes'), where('stationId', '==', stationId), orderBy('timestamp', 'desc'), limit(50))
       : query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(50));
 
     const unsubWashes = onSnapshot(qWashes, { includeMetadataChanges: true }, (snap) => {
@@ -1607,6 +1657,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
     // Sync Bookings (Queue)
     const qBookings = query(
       collection(db, 'bookings'),
+      where('stationId', '==', stationId),
       where('status', '==', 'pending'),
       orderBy('slot', 'asc'),
       limit(10)
@@ -2094,7 +2145,7 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
           <p className="text-text-dim max-w-lg mx-auto lowercase font-medium">Select the path that matches your position in the vehicle transparency ecosystem.</p>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <RoleCard 
             icon={<Briefcase size={40} />} 
             title="Business Owner" 
@@ -2112,25 +2163,10 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
             disabled={loading !== null}
             highlight
           />
-          <RoleCard 
-            icon={<Users size={40} />} 
-            title="Wash Worker" 
-            desc="Log jobs instantly, verify plates, and track your performance rewards."
-            onClick={() => setRole('worker')}
-            loading={loading === 'worker'}
-            disabled={loading !== null}
-          />
-          {email === 'oumawillis09@gmail.com' && (
-            <RoleCard 
-              icon={<ShieldCheck size={40} />} 
-              title="Platform Admin" 
-              desc="System-wide oversight, MRR tracking, and global fleet analytics."
-              onClick={() => setRole('admin')}
-              loading={loading === 'admin'}
-              disabled={loading !== null}
-            />
-          )}
         </div>
+        <p className="text-center mt-12 text-[10px] text-text-dim uppercase tracking-[0.3em] font-black">
+          Worker accounts are provisioned exclusively by station owners.
+        </p>
       </div>
     </div>
   );
@@ -2202,6 +2238,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
         vehicleId: selectedVehicle,
         vehicleInfo: `${selectedVehicle}`,
         businessId: business.id,
+        stationId: business.ownerUid,
         businessName: business.name,
         slot: Timestamp.fromDate(slot),
         status: 'pending',
@@ -4642,11 +4679,12 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   useEffect(() => {
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
       setLoadingWorkers(true);
-      const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (userSnap) => {
+      const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
+      const unsubUsers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker'), where('stationId', '==', stationId)), (userSnap) => {
         const workerProfiles = userSnap.docs.map(d => d.data() as UserProfile);
         
         // Use a more restrictive query for worker stats (last 30 days or similar if possible)
-        const unsubWashes = onSnapshot(query(collection(db, 'washes'), limit(200)), (washSnap) => {
+        const unsubWashes = onSnapshot(query(collection(db, 'washes'), where('stationId', '==', stationId), limit(200)), (washSnap) => {
           const washes = washSnap.docs.map(d => d.data() as any);
           
           const workerData = workerProfiles.map(worker => {
@@ -4825,10 +4863,12 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
       // Calculate commission for non-credit washes
       const commission = usedCredit ? 0 : (washPrice * COMMISSION_RATE);
+      const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
 
       const washData = {
         workerId: selectedWorker.uid,
         workerName: selectedWorker.name,
+        stationId: stationId,
         carModel: form.carModel,
         plateNumber: form.plateNumber,
         price: washPrice,
@@ -5465,18 +5505,28 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   useEffect(() => {
     // Workers should be available for everyone to filter by, but we'll only fetch the relevant ones
     let usersQuery: Query<DocumentData>;
+    const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
+
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
-      usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'));
+      usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'), where('stationId', '==', stationId));
     } else {
-      // For customers/workers, only fetch active workers (or we could fetch from washes but that's harder)
-      // For simplicity, let's allow fetching worker names if needed, or stick to role='worker'
-      usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'));
+      // For customers/workers, filter workers by station if applicable
+      if (stationId) {
+        usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'), where('stationId', '==', stationId));
+      } else {
+        usersQuery = query(collection(db, 'users'), where('role', '==', 'worker'), limit(10));
+      }
     }
 
     const unsubUsers = onSnapshot(usersQuery, (userSnap) => {
       const users = userSnap.docs.map(d => d.data() as UserProfile);
       
-      onSnapshot(collection(db, 'washes'), (washSnap) => {
+      const washesCol = collection(db, 'washes');
+      const washSnapQuery = (profile.role === 'owner' || profile.permissions?.canManageTeam)
+        ? query(washesCol, where('stationId', '==', stationId))
+        : washesCol;
+
+      onSnapshot(washSnapQuery, (washSnap) => {
         const washesData = washSnap.docs.map(d => d.data() as any);
         
         const workerData = users.map(worker => {
@@ -5502,9 +5552,10 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   useEffect(() => {
     let q: Query<DocumentData>;
     const washesRef = collection(db, 'washes');
+    const stationId = profile.role === 'owner' ? profile.uid : profile.stationId;
 
     if (profile.role === 'owner' || profile.permissions?.canManageTeam) {
-      q = query(washesRef, orderBy('timestamp', 'desc'));
+      q = query(washesRef, where('stationId', '==', stationId), orderBy('timestamp', 'desc'));
     } else if (profile.role === 'worker') {
       q = query(washesRef, where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'));
     } else {
@@ -5836,6 +5887,8 @@ function HistoryView({ profile }: { profile: UserProfile }) {
 function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
+  const [authorizedEmails, setAuthorizedEmails] = useState<any[]>([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [settings, setSettings] = useState({
     businessName: profile.businessName || '',
     businessAddress: profile.businessAddress || '',
@@ -5847,12 +5900,29 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
   useEffect(() => {
     if (profile.role === 'owner') {
-      const unsub = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker')), (snap) => {
+      const unsubWorkers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'worker'), where('stationId', '==', profile.uid)), (snap) => {
         setWorkers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
       });
-      return () => unsub();
+      
+      const unsubAuthorized = onSnapshot(query(collection(db, 'authorized_workers'), where('stationId', '==', profile.uid)), (snap) => {
+        setAuthorizedEmails(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+
+      return () => {
+        unsubWorkers();
+        unsubAuthorized();
+      };
     }
   }, [profile]);
+
+  const handleDeleteInvitation = async (id: string) => {
+    if (!confirm("Are you sure you want to revoke this invitation?")) return;
+    try {
+      await deleteDoc(doc(db, 'authorized_workers', id));
+    } catch (error) {
+      console.error("Delete error:", error);
+    }
+  };
 
   const togglePermission = async (workerUid: string, permission: keyof NonNullable<UserProfile['permissions']>) => {
     const worker = workers.find(w => w.uid === workerUid);
@@ -5916,6 +5986,11 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
       </header>
 
       <div className="space-y-6">
+        <AddWorkerModal 
+          isOpen={isAddModalOpen} 
+          onClose={() => setIsAddModalOpen(false)} 
+          stationId={profile.uid} 
+        />
         <div className="bento-card space-y-10">
           {profile.role === 'owner' && (
             <>
@@ -6055,22 +6130,37 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
         {/* Team Delegation - Only for Owners */}
         <div className="bento-card space-y-8">
-          <header>
-            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2 mb-2">
-              <Users size={14} className="text-accent" />
-              Team Delegation
-            </label>
-            <p className="text-xs text-text-dim leading-relaxed">
-              Designate high-performance workers as <span className="text-white font-bold italic lowercase">Team Leads</span>. Leads can manage schedules, assign tasks, and view workforce analytics.
-            </p>
+          <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2 mb-2">
+                <Users size={14} className="text-accent" />
+                Staff Registry
+              </label>
+              <p className="text-xs text-text-dim leading-relaxed">
+                Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
+              </p>
+            </div>
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-6 py-3 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2"
+            >
+              <Plus size={16} /> Provision Worker
+            </button>
           </header>
 
           <div className="space-y-4">
+            {/* Active Workers */}
             {workers.map(worker => (
               <div key={worker.uid} className="flex items-center justify-between p-4 bg-bg/50 border border-border rounded-2xl hover:border-accent/40 transition-colors group">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <img src={worker.photoUrl || ""} alt={worker.name} className="w-10 h-10 rounded-xl border border-border group-hover:scale-105 transition-transform" />
+                    {worker.photoUrl ? (
+                      <img src={worker.photoUrl} alt={worker.name} className="w-10 h-10 rounded-xl border border-border group-hover:scale-105 transition-transform" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20">
+                        <Users size={20} />
+                      </div>
+                    )}
                     {worker.permissions?.canManageTeam && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full flex items-center justify-center text-white border-2 border-card">
                         <Zap size={8} fill="currentColor" />
@@ -6078,7 +6168,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-white">{worker.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white">{worker.name}</p>
+                      <span className="px-1.5 py-0.5 bg-success/10 text-success text-[8px] font-black uppercase rounded">Active</span>
+                    </div>
                     <p className="text-[10px] text-text-dim uppercase tracking-widest font-black">
                       {worker.permissions?.canManageTeam ? "Team Lead" : "Professional Staff"}
                     </p>
@@ -6101,7 +6194,35 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
               </div>
             ))}
 
-            {workers.length === 0 && (
+            {/* Invited but not yet joined */}
+            {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
+              <div key={auth.id} className="flex items-center justify-between p-4 bg-white/5 border border-dashed border-border rounded-2xl opacity-70 group">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-text-dim border border-white/10 italic font-black text-xs">
+                    ?
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-text-dim">{auth.name}</p>
+                      <span className="px-1.5 py-0.5 bg-white/10 text-text-dim text-[8px] font-black uppercase rounded">Pending Invite</span>
+                    </div>
+                    <p className="text-[10px] text-text-dim/60 font-mono tracking-tighter truncate max-w-[150px]">
+                      {auth.email}
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handleDeleteInvitation(auth.id)}
+                  className="p-2 text-text-dim hover:text-red-500 transition-colors"
+                  title="Revoke Invitation"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+
+            {workers.length === 0 && authorizedEmails.length === 0 && (
               <div className="py-10 text-center opacity-50 border-2 border-dashed border-border rounded-3xl">
                 <p className="text-xs text-text-dim italic">No staff members identified in your registry.</p>
               </div>
@@ -6110,6 +6231,103 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClose: () => void, stationId: string }) {
+  const [form, setForm] = useState({ email: '', name: '' });
+  const [loading, setLoading] = useState(false);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.email || !form.name) return;
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'authorized_workers'), {
+        ...form,
+        stationId,
+        createdAt: serverTimestamp()
+      });
+      setForm({ email: '', name: '' });
+      onClose();
+    } catch (error) {
+       console.error("Provision error:", error);
+       alert("Failed to provision worker.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-bg/90 backdrop-blur-md">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-card border border-white/10 w-full max-w-md rounded-[2.5rem] shadow-2xl relative overflow-hidden"
+      >
+        <div className="p-8 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent">
+               <Plus size={24} />
+             </div>
+             <div>
+               <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Provision Worker</h3>
+               <p className="text-[10px] text-accent font-black uppercase tracking-widest">Linked Station Access</p>
+             </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition text-text-dim">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleAdd} className="p-8 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Full Name</label>
+              <input 
+                required
+                value={form.name}
+                onChange={e => setForm({...form, name: e.target.value})}
+                placeholder="e.g. John Doe"
+                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Email Address</label>
+              <div className="relative">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim" size={16} />
+                <input 
+                  required
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({...form, email: e.target.value})}
+                  placeholder="worker@gmail.com"
+                  className="w-full bg-bg pl-12 pr-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-white text-sm"
+                />
+              </div>
+              <p className="text-[9px] text-text-dim/60 italic lowercase mt-2 px-1">
+                Note: Worker must use this exact Google Email to authenticate.
+              </p>
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className="w-full py-5 bg-white text-bg rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2 group disabled:opacity-50"
+          >
+            {loading ? <RefreshCw className="animate-spin text-bg group-hover:text-white" size={18} /> : (
+              <>
+                <ShieldCheck size={18} />
+                Authorize Registry Access
+              </>
+            )}
+          </button>
+        </form>
+      </motion.div>
+    </div>
   );
 }
 

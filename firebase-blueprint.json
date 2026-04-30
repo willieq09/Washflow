@@ -10,6 +10,7 @@
         "email": { "type": "string", "description": "Email address of the user." },
         "phone": { "type": "string", "description": "Phone number for contact." },
         "role": { "type": "string", "enum": ["owner", "worker", "customer", "admin"], "description": "Role determining access levels." },
+        "stationId": { "type": "string", "description": "ID of the station owner this user belongs to (for workers)." },
         "photoUrl": { "type": "string", "description": "Profile picture URL." },
         "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status." },
         "plan": { "type": "string", "description": "Active subscription plan ID or level." },
@@ -102,6 +103,7 @@
         "userId": { "type": "string" },
         "vehicleId": { "type": "string" },
         "businessId": { "type": "string" },
+        "stationId": { "type": "string" },
         "workerId": { "type": "string" },
         "slot": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "canceled"] },
@@ -110,7 +112,38 @@
         "lat": { "type": "number" },
         "lng": { "type": "number" }
       },
-      "required": ["userId", "vehicleId", "businessId", "slot", "status"]
+      "required": ["userId", "vehicleId", "businessId", "stationId", "slot", "status"]
+    },
+    "WashLog": {
+      "title": "Wash Log",
+      "description": "Historical record of a completed wash service.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "stationId": { "type": "string" },
+        "carModel": { "type": "string" },
+        "plateNumber": { "type": "string" },
+        "price": { "type": "number" },
+        "commission": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "maintenanceTip": { "type": "string" }
+      },
+      "required": ["workerId", "stationId", "carModel", "plateNumber", "price"]
+    },
+    "AuthorizedWorker": {
+      "title": "Authorized Worker",
+      "description": "Email whitelist for workers allowed to join a specific station.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "stationId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "stationId"]
     },
     "Review": {
       "title": "Review",
@@ -181,6 +214,8 @@
     "/plans/{id}": { "schema": "Plan", "description": "Subscription pricing." },
     "/subscriptions/{id}": { "schema": "Subscription", "description": "Active user memberships." },
     "/bookings/{id}": { "schema": "Booking", "description": "Service records (replacing /washes)." },
+    "/washes/{id}": { "schema": "WashLog", "description": "Completed service records." },
+    "/authorized_workers/{id}": { "schema": "AuthorizedWorker", "description": "Staff provisioning whitelist." },
     "/reviews/{id}": { "schema": "Review", "description": "Customer feedback." },
     "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." },
     "/marketplace_items/{id}": { "schema": "MarketplaceItem", "description": "Product and services." },

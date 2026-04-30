@@ -17,27 +17,34 @@ service cloud.firestore {
 
     // Auth tokens never contain custom claims. Look up roles from the DB.
     // Caution: get() inside list queries counts towards the 10-read limit per request.
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        getUserRole() == 'admin' || 
+        getUserData().role == 'admin' || 
         (request.auth.token.email == 'oumawillis09@gmail.com' && request.auth.token.email_verified == true)
       );
     }
 
     function isStationOwner() {
-      return isSignedIn() && getUserRole() == 'owner';
+      return isSignedIn() && getUserData().role == 'owner';
     }
 
     function isWorker() {
-      return isSignedIn() && getUserRole() == 'worker';
+      return isSignedIn() && getUserData().role == 'worker';
+    }
+
+    function isStationMember(stationId) {
+      return isSignedIn() && (
+        request.auth.uid == stationId ||
+        getUserData().stationId == stationId
+      );
     }
 
     function isCustomer() {
-      return isSignedIn() && getUserRole() == 'customer';
+      return isSignedIn() && getUserData().role == 'customer';
     }
 
     function isValidId(id) { 
@@ -56,13 +63,15 @@ service cloud.firestore {
              data.email is string && data.email.size() > 0 &&
              data.role in ['owner', 'worker', 'customer', 'admin'] &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
+             (!('stationId' in data) || (data.stationId is string || data.stationId == null)) &&
              (!('vehicles' in data) || data.vehicles is list);
     }
 
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'businessId', 'slot', 'status', 'createdAt']) &&
+      return data.keys().hasAll(['userId', 'businessId', 'stationId', 'slot', 'status', 'createdAt']) &&
              data.userId == request.auth.uid &&
              data.businessId is string &&
+             data.stationId is string &&
              data.slot is timestamp &&
              data.status in ['pending', 'confirmed', 'completed', 'canceled'] &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0);
@@ -77,8 +86,17 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isWorker() || isStationOwner() || isAdmin());
-      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
+      allow read: if isSignedIn() && (
+        isOwner(userId) || 
+        isAdmin() || 
+        (isStationOwner() && (resource.data.stationId == request.auth.uid || resource.data.uid == request.auth.uid)) ||
+        (isWorker() && resource.data.stationId == getUserData().stationId)
+      );
+      allow create: if isSignedIn() && (
+        (isOwner(userId) && isValidUser(incoming())) ||
+        // Auto-provisioned workers on first login
+        (incoming().role == 'worker' && incoming().email == request.auth.token.email && incoming().uid == request.auth.uid)
+      );
       allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && 
                     // Protect immutable fields
                     incoming().uid == existing().uid &&
@@ -86,6 +104,10 @@ service cloud.firestore {
                     isValidUser(incoming());
     }
 
+    match /authorized_workers/{id} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.stationId || request.auth.token.email == resource.data.email || isAdmin());
+      allow create, delete: if isSignedIn() && (isStationOwner() || isAdmin());
+    }
 
     match /wash_businesses/{id} {
       allow read: if true;
@@ -107,8 +129,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         isOwner(resource.data.userId) || 
         isOwner(resource.data.workerId) ||
-        isWorker() || 
-        isStationOwner() || 
+        isStationMember(resource.data.stationId) ||
         isAdmin()
       );
       
@@ -116,9 +137,9 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         isAdmin() || 
-        (isWorker() && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'workerId'])) ||
+        (isWorker() && resource.data.stationId == getUserData().stationId && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'workerId'])) ||
         (isOwner(existing().userId) && incoming().status == 'canceled' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
-        (isStationOwner() && (get(/databases/$(database)/documents/wash_businesses/$(existing().businessId)).data.ownerId == request.auth.uid))
+        (isStationOwner() && resource.data.stationId == request.auth.uid)
       );
       
       allow delete: if isAdmin();
@@ -127,12 +148,11 @@ service cloud.firestore {
     match /washes/{id} {
       allow read: if isSignedIn() && (
         isOwner(resource.data.workerId) || 
+        isStationMember(resource.data.stationId) ||
         isAdmin() || 
-        isStationOwner() || 
-        isWorker() ||
         isCustomer()
       );
-      allow create: if isSignedIn() && (isWorker() || isStationOwner() || isAdmin());
+      allow create: if isSignedIn() && (isStationMember(incoming().stationId) || isAdmin());
       allow update: if isAdmin();
     }
 
