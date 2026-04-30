@@ -3025,20 +3025,29 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: profile.email,
-          amount: item.price * 100, // Paystack amount in smallest unit
+          amount: Math.round(item.price * 100), // Paystack amount in smallest unit
           itemId: item.id,
           itemName: item.name,
           userId: profile.uid
         })
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to initialize checkout.");
+      let responseData;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        responseData = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+      }
+
+      if (!response.ok) throw new Error(responseData.error || "Failed to initialize checkout.");
+      if (!responseData.authorization_url) throw new Error("No authorization URL received.");
       
-      window.location.href = data.authorization_url;
+      window.location.href = responseData.authorization_url;
     } catch (err: any) {
       console.error("Buy error:", err);
-      alert(err.message);
+      alert(err.message || "An unexpected error occurred during checkout initialization.");
     } finally {
       setBuying(null);
     }

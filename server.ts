@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import axios from "axios";
 import { fileURLToPath } from 'url';
@@ -18,7 +17,7 @@ const PORT = 3000;
 app.use(express.json());
 
 // Paystack Configuration
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET;
+const PAYSTACK_SECRET = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
 
 // Nodemailer Lazy Initialization
 let transporter: nodemailer.Transporter | null = null;
@@ -44,7 +43,7 @@ function getTransporter() {
 
 // API Routes
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.post("/api/notify", async (req, res) => {
@@ -80,17 +79,22 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
   const { email, amount, itemId, itemName, userId } = req.body;
   
   if (!PAYSTACK_SECRET) {
-    return res.status(500).json({ error: "Paystack is not configured. Please set PAYSTACK_SECRET_KEY." });
+    return res.status(500).json({ error: "Paystack is not configured. Please set PAYSTACK_SECRET_KEY in Environment Variables." });
   }
 
   try {
     const origin = req.headers.origin || req.headers.referer || `http://localhost:${PORT}`;
+    const cleanAmount = Math.round(Number(amount));
+
+    if (isNaN(cleanAmount) || cleanAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount provided." });
+    }
     
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
         email,
-        amount: Math.round(amount), // Ensure integer
+        amount: cleanAmount,
         callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}`,
         metadata: {
           userId,
@@ -103,7 +107,8 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
         headers: {
           Authorization: `Bearer ${PAYSTACK_SECRET}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 15000
       }
     );
 
@@ -123,33 +128,30 @@ app.post("/api/paystack/initialize", async (req, res) => {
 
   try {
     const origin = req.headers.origin || req.headers.referer || `http://localhost:${PORT}`;
+    const cleanAmount = Math.round(Number(amount));
+
+    if (isNaN(cleanAmount) || cleanAmount <= 0) {
+      return res.status(400).json({ error: "Invalid amount provided." });
+    }
     
     // Paystack initialization
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
         email,
-        amount: Math.round(amount), // Enforce integer for Paystack (kobo/cents)
+        amount: cleanAmount,
         callback_url: `${origin}/?paystack_success=true&plan=${plan}`,
         metadata: {
           userId,
           plan,
           currency: "NGN",
-          gross_amount: amount,
-          autolux_commission_gross: Math.round(amount * 0.075),
-          paystack_fee: amount < 250000 ? Math.round(amount * 0.015) : Math.round(amount * 0.015 + 10000), // in kobo
-          owner_payout: Math.round(amount * 0.925),
+          gross_amount: cleanAmount,
+          autolux_commission_gross: Math.round(cleanAmount * 0.075),
+          paystack_fee: cleanAmount < 250000 ? Math.round(cleanAmount * 0.015) : Math.round(cleanAmount * 0.015 + 10000),
+          owner_payout: Math.round(cleanAmount * 0.925),
           custom_fields: [
-            {
-              display_name: "Plan",
-              variable_name: "plan",
-              value: plan
-            },
-            {
-              display_name: "AutoLux Fee (7.5%)",
-              variable_name: "autolux_fee",
-              value: (amount * 0.075 / 100).toFixed(2)
-            }
+            { display_name: "Plan", variable_name: "plan", value: plan },
+            { display_name: "AutoLux Fee (7.5%)", variable_name: "autolux_fee", value: (cleanAmount * 0.00075).toFixed(2) }
           ]
         }
       },
@@ -157,7 +159,8 @@ app.post("/api/paystack/initialize", async (req, res) => {
         headers: {
           Authorization: `Bearer ${PAYSTACK_SECRET}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 15000
       }
     );
 
@@ -174,9 +177,7 @@ app.post("/api/paystack/initialize", async (req, res) => {
 });
 
 app.get("/api/paystack/banks", async (req, res) => {
-  const secret = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
-  if (!secret) {
-    console.error("Bank Fetch Failed: Secret missing");
+  if (!PAYSTACK_SECRET) {
     return res.status(500).json({ error: "Paystack secret key is missing." });
   }
   
@@ -185,72 +186,43 @@ app.get("/api/paystack/banks", async (req, res) => {
     let page = 1;
     let hasMore = true;
 
-    // Use a single request if possible, or limit pages
-    while (hasMore && page <= 5) {
-      console.log(`Fetching Paystack banks page ${page}...`);
+    while (hasMore && page <= 3) { // Limit to 3 pages for speed in serverless
       const response = await axios.get(`https://api.paystack.co/bank?country=nigeria&per_page=100&page=${page}`, {
-        headers: { Authorization: `Bearer ${secret}` },
-        timeout: 10000
+        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
+        timeout: 8000
       });
       
-      if (!response.data.status) {
-        console.error("Paystack API returned status false:", response.data);
-        break;
-      }
+      if (!response.data.status) break;
 
       const data = response.data.data;
       if (data && Array.isArray(data) && data.length > 0) {
         allBanks = [...allBanks, ...data];
-        if (data.length < 100) {
-          hasMore = false;
-        } else {
-          page++;
-        }
+        if (data.length < 100) hasMore = false; else page++;
       } else {
         hasMore = false;
       }
     }
-
-    if (allBanks.length === 0) {
-      console.warn("Paystack call success but no banks found in data array.");
-    }
-    
-    // Ensure we always return JSON
-    return res.status(200).json(allBanks);
+    return res.json(allBanks);
   } catch (error: any) {
-    const errorData = error.response?.data;
-    console.error("Fetch Banks Critical Error:", errorData || error.message);
-    return res.status(error.response?.status || 500).json({ 
-      error: errorData?.message || error.message || "Failed to fetch banks from Paystack" 
-    });
+    console.error("Fetch Banks Error:", error.response?.data || error.message);
+    return res.status(500).json({ error: "Failed to fetch banks" });
   }
 });
 
 app.get("/api/paystack/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.query;
-  const secret = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
-  
-  if (!secret) {
-    console.error("Account Resolve Failed: Secret missing");
-    return res.status(500).json({ error: "Paystack secret key is missing." });
-  }
-  
-  if (!account_number || !bank_code) {
-    return res.status(400).json({ error: "Missing account_number or bank_code" });
-  }
+  if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack secret key is missing." });
+  if (!account_number || !bank_code) return res.status(400).json({ error: "Missing account_number or bank_code" });
 
   try {
     const response = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
-      headers: { Authorization: `Bearer ${secret}` },
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
       timeout: 10000
     });
     res.json(response.data.data);
   } catch (error: any) {
-    const errorData = error.response?.data;
-    console.error("Account Resolve Error:", errorData || error.message);
-    res.status(error.response?.status || 400).json({ 
-      error: errorData?.message || error.message || "Could not resolve account with Paystack" 
-    });
+    console.error("Account Resolve Error:", error.response?.data || error.message);
+    res.status(400).json({ error: error.response?.data?.message || "Could not resolve account" });
   }
 });
 
@@ -259,73 +231,73 @@ app.post("/api/paystack/transfer", async (req, res) => {
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack not configured" });
 
   try {
-    // 1. Create Transfer Recipient
     const recipientRes = await axios.post("https://api.paystack.co/transferrecipient", {
       type: "nuban",
       name: account_name,
-      account_number: account_number,
-      bank_code: bank_code,
+      account_number,
+      bank_code,
       currency: "NGN"
     }, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
+      timeout: 10000
     });
 
     const recipientCode = recipientRes.data.data.recipient_code;
 
-    // 2. Initiate Transfer
     const transferRes = await axios.post("https://api.paystack.co/transfer", {
       source: "balance",
-      amount: Math.round(amount), // in kobo
+      amount: Math.round(Number(amount)),
       recipient: recipientCode,
       reason: `AutoLux Withdrawal - ${userId}`
     }, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
+      timeout: 10000
     });
 
     res.json(transferRes.data);
   } catch (error: any) {
     console.error("Transfer Error:", error.response?.data || error.message);
-    res.status(400).json(error.response?.data || { error: "Transfer failed" });
+    res.status(400).json({ error: error.response?.data?.message || "Transfer failed" });
   }
 });
 
-// Production static file serving
-if (process.env.NODE_ENV === "production") {
-  const distPath = path.join(process.cwd(), 'dist');
-  app.use(express.static(distPath));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-} else {
-  // For development (local or AI Studio preview), we use the async start helper
-  const startVite = async () => {
+// Middleware & Server Logic
+async function configureApp() {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL === '1') {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
     try {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
       });
       app.use(vite.middlewares);
     } catch (e) {
-      console.error("Vite middleware failed to start:", e);
+      console.error("Vite failed to initialize:", e);
     }
-  };
-  startVite();
+  }
+
+  // Global Error Handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Global Error:", err);
+    res.status(500).json({ error: "Internal Server Error", message: err.message });
+  });
+
+  if (process.env.VERCEL !== '1') {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
-// Global error handler to ensure JSON responses even on unexpected crashes
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Global Server Error:", err);
-  res.status(500).json({ 
-    error: "A critical server error occurred.", 
-    message: err.message || "Unknown error" 
-  });
+configureApp().catch(err => {
+  console.error("Failed to start application:", err);
 });
 
-// Start listener only if not on Vercel
-if (process.env.VERCEL !== '1') {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
-
 export default app;
+
