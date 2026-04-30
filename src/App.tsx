@@ -69,7 +69,7 @@ interface UserProfile {
   theme?: 'light' | 'dark';
 }
 
-type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner' | 'business';
+type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner' | 'business' | 'admin';
 
 interface Booking {
   id: string;
@@ -571,12 +571,22 @@ export default function App() {
                     </>
                   )}
                   {(profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || (profile.permissions?.canManageTeam && profile.role !== 'customer')) && (
-                    <NavItem 
-                      icon={<Camera size={20} className="text-accent" />} 
-                      label="AI Scanner" 
-                      active={view === 'scanner'} 
-                      onClick={() => navigate('scanner')} 
-                    />
+                    <>
+                      <NavItem 
+                        icon={<Camera size={20} className="text-accent" />} 
+                        label="AI Scanner" 
+                        active={view === 'scanner'} 
+                        onClick={() => navigate('scanner')} 
+                      />
+                      {profile.email === 'oumawillis09@gmail.com' && (
+                        <NavItem 
+                          icon={<ShieldCheck size={20} className="text-success" />} 
+                          label="Admin Console" 
+                          active={view === 'admin'} 
+                          onClick={() => navigate('admin')} 
+                        />
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -617,10 +627,10 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
-            {view === 'dashboard' && profile && (
+            {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
                 ? <CustomerDashboardView profile={profile} setView={setView} />
-                : profile.role === 'admin'
+                : (profile.role === 'admin' || view === 'admin')
                   ? <AdminDashboardView />
                   : <DashboardView profile={profile} setView={setView} onLogWash={(data) => {
                       if (data) setPreFillWash(data);
