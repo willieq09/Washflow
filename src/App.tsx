@@ -835,99 +835,20 @@ function FeatureCard({ title, desc }: { title: string, desc: string }) {
 }
 
 function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean, onClose: () => void, balance: number, userId: string }) {
-  const [banks, setBanks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ bankCode: '', accountNumber: '', amount: balance, accountName: '' });
-  const [resolved, setResolved] = useState(false);
-  const [bankSearch, setBankSearch] = useState('');
-  const [fetchError, setFetchError] = useState<string | null>(null);
-
-  const majorBanks = [
-    { name: 'Access Bank', code: '044' },
-    { name: 'First Bank of Nigeria', code: '011' },
-    { name: 'Guaranty Trust Bank', code: '058' },
-    { name: 'United Bank For Africa', code: '033' },
-    { name: 'Zenith Bank', code: '057' },
-    { name: 'Kuda Bank', code: '50211' },
-    { name: 'Opay (Digital Bank)', code: '999992' },
-    { name: 'Palmpay', code: '999991' },
-    { name: 'Moniepoint', code: '50515' }
-  ];
+  const [form, setForm] = useState({ bankName: '', accountNumber: '', amount: balance, accountName: '' });
 
   useEffect(() => {
     if (isOpen) {
       setForm(f => ({ ...f, amount: balance }));
-      setBankSearch('');
-      setFetchError(null);
-      setLoading(true);
-      fetch('/api/paystack/banks')
-        .then(async res => {
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            const data = await res.json();
-            if (!res.ok) {
-              throw new Error(data.error || `Server Error: ${res.status}`);
-            }
-            return data;
-          } else {
-            const text = await res.text();
-            console.warn("Non-JSON response:", text);
-            throw new Error(`Server returned non-JSON response (${res.status}).`);
-          }
-        })
-        .then(data => {
-          if (Array.isArray(data) && data.length > 0) {
-            const sortedBanks = [...data].sort((a, b) => a.name.localeCompare(b.name));
-            setBanks(sortedBanks);
-          } else {
-            console.warn("Empty or invalid bank list from server, using fallbacks");
-            setBanks(majorBanks);
-          }
-        })
-        .catch(err => {
-          console.error("Bank fetch failed:", err);
-          setFetchError(err.message);
-          // Use fallbacks if fetch continues to fail
-          setBanks(majorBanks);
-        })
-        .finally(() => setLoading(false));
     }
   }, [isOpen, balance]);
 
-  const filteredBanks = banks.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()));
-
-  const resolveAccount = async () => {
-    if (form.accountNumber.length !== 10 || !form.bankCode) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/paystack/resolve-account?account_number=${form.accountNumber}&bank_code=${form.bankCode}`);
-      
-      const contentType = res.headers.get("content-type");
-      let data;
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error("Invalid response from server. Check logs.");
-      }
-
-      if (res.ok && data.account_name) {
-        setForm(f => ({ ...f, accountName: data.account_name }));
-        setResolved(true);
-      } else {
-        alert(data?.error || "Could not verify account name. Please check details.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || "Failed to resolve account. Verify details.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleWithdraw = async () => {
-    if (!resolved || form.amount <= 0 || form.amount > balance) return;
+    if (!form.bankName || !form.accountNumber || !form.accountName || form.amount <= 0 || form.amount > balance) {
+      alert("Please fill all fields correctly.");
+      return;
+    }
     
     if (form.amount < MIN_WITHDRAWAL) {
       alert(`Minimum withdrawal amount is ${formatCurrency(MIN_WITHDRAWAL)}`);
@@ -937,15 +858,10 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
     setSubmitting(true);
     const path = 'withdrawals';
     try {
-      // Phase 1 Workaround: Skip Paystack Transfer API
-      // Instead, record in Firestore as 'pending' for manual settlement
-      const bankName = banks.find(b => b.code === form.bankCode)?.name || 'Manual Entry';
-      
       await addDoc(collection(db, 'withdrawals'), {
         ownerId: userId,
         amount: form.amount,
-        bankName: bankName,
-        bankCode: form.bankCode,
+        bankName: form.bankName,
         accountNumber: form.accountNumber,
         accountName: form.accountName,
         timestamp: serverTimestamp(),
@@ -954,7 +870,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
         reference: `REQU-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
       });
 
-      alert("Withdrawal request queued! Our team will process this manually within 24-48 hours. You will see it in your pending balance.");
+      alert("Withdrawal request queued! Our team will process this manually within 24-48 hours.");
       onClose();
     } catch (err: any) {
       handleFirestoreError(err, OperationType.CREATE, path);
@@ -982,113 +898,65 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Bank</label>
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search bank..."
-                    className="w-full bg-bg border border-border rounded-t-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
-                    value={bankSearch}
-                    onChange={e => setBankSearch(e.target.value)}
-                  />
-                  <Search size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-dim" />
-                </div>
-                <select 
-                  className={cn(
-                    "w-full bg-bg border rounded-b-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none",
-                    fetchError ? "border-error/50" : "border-border"
-                  )}
-                  value={form.bankCode}
-                  onChange={e => { setForm({...form, bankCode: e.target.value}); setResolved(false); }}
-                >
-                  <option value="">{loading ? 'Loading banks...' : fetchError ? `Error: ${fetchError}` : 'Choose your bank'}</option>
-                  {Array.isArray(filteredBanks) && filteredBanks.length > 0 ? (
-                    filteredBanks.map(b => (
-                      <option key={b.code} value={b.code} className="bg-card">{b.name}</option>
-                    ))
-                  ) : !loading && bankSearch && (
-                    <option disabled value="">No banks found matching "{bankSearch}"</option>
-                  )}
-                </select>
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Bank Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Zenith Bank"
+                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
+                  value={form.bankName}
+                  onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
+                <input
+                  type="text"
+                  placeholder="10 Digits"
+                  maxLength={10}
+                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
+                  value={form.accountNumber}
+                  onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '') }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Name</label>
+                <input
+                  type="text"
+                  placeholder="Full Legal Name"
+                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none uppercase"
+                  value={form.accountName}
+                  onChange={e => setForm(f => ({ ...f, accountName: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Amount to Withdraw</label>
+                <input
+                  type="number"
+                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-accent outline-none"
+                  value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input 
-                    type="text" 
-                    maxLength={10}
-                    className={cn(
-                      "w-full bg-bg border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none transition-all",
-                      resolved ? "border-success/50 bg-success/5" : "border-border"
-                    )}
-                    value={form.accountNumber}
-                    onChange={e => { 
-                      const val = e.target.value.replace(/\D/g, '');
-                      setForm({...form, accountNumber: val}); 
-                      setResolved(false); 
-                    }}
-                    onBlur={() => { if (form.accountNumber.length === 10) resolveAccount(); }}
-                    placeholder="Enter 10 digits"
-                  />
-                  {loading && !banks.length && <RefreshCw size={14} className="absolute right-5 top-1/2 -translate-y-1/2 animate-spin text-accent" />}
-                  {resolved && <CheckCircle size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-success" />}
-                </div>
-                <button 
-                  type="button"
-                  onClick={resolveAccount}
-                  disabled={loading || form.accountNumber.length < 10 || !form.bankCode || resolved}
-                  className={cn(
-                    "px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all h-[54px] flex items-center gap-2",
-                    resolved 
-                      ? "bg-success/10 text-success cursor-default" 
-                      : "bg-accent/10 text-accent hover:bg-accent hover:text-white disabled:opacity-50"
-                  )}
-                >
-                  {loading && form.accountNumber.length === 10 && form.bankCode ? <RefreshCw size={12} className="animate-spin" /> : null}
-                  {resolved ? 'Verified' : 'Verify'}
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={handleWithdraw}
+              disabled={submitting || form.amount <= 0 || form.amount > balance}
+              className="w-full py-4 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-xl shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {submitting ? <RefreshCw className="animate-spin" size={16} /> : <Check size={16} />}
+              {submitting ? "Processing Request..." : "Initiate Withdrawal"}
+            </button>
 
-            {resolved && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-4 bg-success/5 border border-success/20 rounded-2xl flex items-center justify-between"
-              >
-                <div>
-                  <span className="text-[8px] font-black text-success uppercase tracking-widest leading-none">Authentication Success</span>
-                  <div className="text-sm font-bold text-white uppercase mt-1">{form.accountName}</div>
-                </div>
-                <ShieldCheck className="text-success" size={24} />
-              </motion.div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Amount to Withdraw (₦)</label>
-              <input 
-                type="number" 
-                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none"
-                value={form.amount}
-                onChange={e => setForm({...form, amount: parseFloat(e.target.value)})}
-                max={balance}
-              />
-            </div>
+            <p className="text-[9px] text-center text-text-dim/60 uppercase leading-relaxed font-bold px-4">
+              Requests are manually verified and processed within 24-48 business hours. Ensure account details perfectly match your legal identification.
+            </p>
           </div>
-
-          <button 
-            onClick={handleWithdraw}
-            disabled={submitting || !resolved || form.amount <= 0 || form.amount > balance}
-            className="w-full bg-accent text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
-          >
-            {submitting ? <RefreshCw className="animate-spin" size={16} /> : <Zap size={16} />}
-            {submitting ? 'Processing...' : `Transmit ${formatCurrency(form.amount || 0)}`}
-          </button>
         </div>
       </motion.div>
     </div>
