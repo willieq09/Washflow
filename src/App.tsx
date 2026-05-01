@@ -3017,7 +3017,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
   }, []);
 
   const handleBuy = async (item: MarketplaceItem) => {
-    if (!profile) return;
+    if (!profile || buying) return;
     setBuying(item.id);
     try {
       const response = await fetch('/api/paystack/initialize-order', {
@@ -3025,23 +3025,23 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: profile.email,
-          amount: Math.round(item.price * 100), // Paystack amount in smallest unit
+          amount: Math.round(item.price * 100),
           itemId: item.id,
           itemName: item.name,
           userId: profile.uid
         })
       });
 
-      let responseData;
       const contentType = response.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") !== -1) {
+      let responseData: any;
+      if (contentType && contentType.includes("application/json")) {
         responseData = await response.json();
       } else {
         const text = await response.text();
-        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
       }
 
-      if (!response.ok) throw new Error(responseData.error || "Failed to initialize checkout.");
+      if (!response.ok) throw new Error(responseData.error || responseData.message || "Failed to initialize checkout.");
       if (!responseData.authorization_url) throw new Error("No authorization URL received.");
       
       // Use top.location to escape the AI Studio iframe for payments
@@ -4454,7 +4454,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   }, []);
 
   const handleSubscribe = async (plan: string) => {
-    if (!profile) return;
+    if (!profile || loading) return;
     setLoading(plan);
     setError(null);
     try {
@@ -4478,7 +4478,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       });
 
       const contentType = response.headers.get("content-type");
-      let data;
+      let data: any;
       if (contentType && contentType.includes("application/json")) {
         data = await response.json();
       } else {

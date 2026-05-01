@@ -1,7 +1,5 @@
-import "express-async-errors";
 import express from "express";
 import path from "path";
-import axios from "axios";
 import fs from "fs";
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
@@ -20,13 +18,16 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
+// API Request Logger
+app.use("/api", (req, res, next) => {
+  console.log(`[API] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Paystack Configuration - Clean carefully
 const PAYSTACK_SECRET = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
 
 console.log(`[SERVER] Startup. Paystack Secret configured: ${!!PAYSTACK_SECRET}`);
-if (PAYSTACK_SECRET) {
-  console.log(`[SERVER] Paystack Secret starts with: ${PAYSTACK_SECRET.substring(0, 7)}...`);
-}
 
 // Nodemailer Lazy Initialization
 let transporter: nodemailer.Transporter | null = null;
@@ -56,6 +57,23 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.get("/api/paystack/test-connectivity", async (req, res) => {
+  try {
+    const response = await fetch("https://api.paystack.co/bank", {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    const data: any = await response.json();
+    res.json({ 
+      can_reach_paystack: true, 
+      status: response.status, 
+      paystack_status: data.status,
+      message: data.message
+    });
+  } catch (error: any) {
+    res.status(500).json({ can_reach_paystack: false, error: error.message });
+  }
+});
+
 app.get("/api/paystack/debug", (req, res) => {
   res.json({
     has_secret: !!PAYSTACK_SECRET,
@@ -65,19 +83,24 @@ app.get("/api/paystack/debug", (req, res) => {
 });
 
 app.post("/api/notify", async (req, res) => {
-  const { to, subject, html } = req.body;
-  const mailTransporter = getTransporter();
-  if (!mailTransporter) return res.status(503).json({ error: "Email service not configured" });
+  try {
+    const { to, subject, html } = req.body;
+    const mailTransporter = getTransporter();
+    if (!mailTransporter) return res.status(503).json({ error: "Email service not configured" });
 
-  const info = await mailTransporter.sendMail({
-    from: process.env.SMTP_FROM || `"NearWash System" <${process.env.SMTP_USER}>`,
-    to, subject, html,
-  });
-  res.json({ success: true, messageId: info.messageId });
+    const info = await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM || `"NearWash System" <${process.env.SMTP_USER}>`,
+      to, subject, html,
+    });
+    res.json({ success: true, messageId: info.messageId });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Helper for cleaned origins
 function getOrigin(req: express.Request) {
+  // Try to use X-Forwarded headers (for proxies/Cloud Run)
   const forwardedHost = req.headers['x-forwarded-host'];
   const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
   
@@ -85,123 +108,184 @@ function getOrigin(req: express.Request) {
     return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
   }
 
+  // Fallback to Origin or Referer
   if (req.headers.origin) return req.headers.origin.toString().replace(/\/$/, "");
-  
   if (req.headers.referer) {
     try {
       const url = new URL(req.headers.referer as string);
       return `${url.protocol}//${url.host}`;
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* skip invalid referer */ }
   }
   
+  // Last resort: Host header or localhost
   const host = req.headers.host;
-  return host ? `${forwardedProto}://${host}` : `http://localhost:${PORT}`;
+  return host ? `https://${host}` : `http://localhost:${PORT}`;
 }
 
 app.post("/api/paystack/initialize-order", async (req, res) => {
   const { email, amount, itemId, itemName, userId } = req.body;
   const reference = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   
-  console.log(`[PAYSTACK] Order: ${reference} for ${email}`);
+  console.log(`[PAYSTACK] Order request for ${email}, item: ${itemName}`);
   
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack secret key is missing." });
 
-  const origin = getOrigin(req);
-  const cleanAmount = Math.round(Number(amount));
-    
-  const response = await axios.post("https://api.paystack.co/transaction/initialize", {
-    email, 
-    amount: cleanAmount,
-    reference,
-    callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
-    metadata: { userId, itemId, itemName, type: 'marketplace_item' },
-    channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
-  }, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-    timeout: 20000
-  });
-  
-  res.json(response.data.data);
+  try {
+    const origin = getOrigin(req);
+    const cleanAmount = Math.round(Number(amount));
+      
+    const payload = {
+      email, 
+      amount: cleanAmount,
+      reference,
+      callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
+      metadata: { userId, itemId, itemName, type: 'marketplace_item' },
+      channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
+    };
+
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data: any = await response.json();
+    if (response.ok && data.status) {
+      res.json(data.data);
+    } else {
+      res.status(response.status).json({ error: data.message || "Failed to initialize order." });
+    }
+  } catch (error: any) {
+    console.error("[PAYSTACK ERROR]", error.message);
+    res.status(500).json({ error: "External payment service error: " + error.message });
+  }
 });
 
 app.post("/api/paystack/initialize", async (req, res) => {
-  const { email, amount, plan, userId } = req.body;
-  const reference = `SUB-${plan}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-
-  console.log(`[PAYSTACK] Sub: ${reference} for ${email}`);
-  
-  if (!PAYSTACK_SECRET || PAYSTACK_SECRET.length < 5) {
-    return res.status(500).json({ error: "Paystack secret key is missing on the server." });
-  }
-
-  const origin = getOrigin(req);
-  const cleanAmount = Math.round(Number(amount));
-  
   try {
-    const response = await axios.post("https://api.paystack.co/transaction/initialize", {
+    const { email, amount, plan, userId } = req.body;
+    const reference = `SUB-${plan}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+    console.log(`[PAYSTACK] Sub request for ${email}, plan: ${plan}, amount: ${amount}`);
+    
+    if (!PAYSTACK_SECRET || PAYSTACK_SECRET.length < 5) {
+      return res.status(500).json({ 
+        error: "Paystack secret key is missing. Please set PAYSTACK_SECRET_KEY in environment variables." 
+      });
+    }
+
+    const origin = getOrigin(req);
+    const cleanAmount = Math.round(Number(amount));
+    
+    const payload = {
       email, 
       amount: cleanAmount,
       reference,
       callback_url: `${origin}/?paystack_success=true&plan=${plan}&ref=${reference}`,
       metadata: { userId, plan, type: 'subscription' },
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
-    }, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-      timeout: 20000
+    };
+
+    console.log("[PAYSTACK] Initializing with Paystack...");
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
 
-    if (response.data && response.data.status) {
-      return res.json(response.data.data);
+    const data: any = await response.json();
+
+    if (response.ok && data.status) {
+      console.log(`[PAYSTACK] Success: ${data.data.reference}`);
+      return res.json(data.data);
     } else {
-      return res.status(400).json({ error: response.data?.message || "Failed to init" });
+      console.error("[PAYSTACK] API Error:", data);
+      return res.status(response.status).json({ 
+        error: data.message || "Failed to initialize transaction." 
+      });
     }
   } catch (error: any) {
-    console.error("[PAYSTACK ERROR]", error.response?.data || error.message);
-    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || error.message });
+    console.error("[PAYSTACK CRITICAL ERROR]", error.message);
+    res.status(500).json({ error: "External payment service error: " + error.message });
   }
 });
 
 app.get("/api/paystack/banks", async (req, res) => {
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
-  const response = await axios.get(`https://api.paystack.co/bank?country=nigeria&per_page=100`, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-    timeout: 8000
-  });
-  res.json(response.data.data);
+  try {
+    const response = await fetch("https://api.paystack.co/bank?country=nigeria&per_page=100", {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    const data: any = await response.json();
+    res.json(data.data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/api/paystack/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.query;
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
-  const resPay = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-    timeout: 10000
-  });
-  res.json(resPay.data.data);
+  try {
+    const response = await fetch(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    const data: any = await response.json();
+    if (response.ok && data.status) {
+      res.json(data.data);
+    } else {
+      res.status(response.status).json({ error: data.message || "Failed to resolve account" });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.post("/api/paystack/transfer", async (req, res) => {
   const { amount, account_number, bank_code, account_name, userId } = req.body;
   if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
   
-  const recipientRes = await axios.post("https://api.paystack.co/transferrecipient", {
-    type: "nuban", name: account_name, account_number, bank_code, currency: "NGN"
-  }, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-    timeout: 10000
-  });
-  
-  const transferRes = await axios.post("https://api.paystack.co/transfer", {
-    source: "balance", 
-    amount: Math.round(Number(amount)), 
-    recipient: recipientRes.data.data.recipient_code, 
-    reason: `Withdrawal ${userId}`
-  }, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" },
-    timeout: 10000
-  });
-  
-  res.json(transferRes.data);
+  try {
+    const recipientRes = await fetch("https://api.paystack.co/transferrecipient", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({
+        type: "nuban", name: account_name, account_number, bank_code, currency: "NGN"
+      })
+    });
+    const recipientData: any = await recipientRes.json();
+    
+    if (!recipientRes.ok || !recipientData.status) {
+      return res.status(recipientRes.status).json({ error: recipientData.message || "Failed to create recipient" });
+    }
+
+    const transferRes = await fetch("https://api.paystack.co/transfer", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({
+        source: "balance", 
+        amount: Math.round(Number(amount)), 
+        recipient: recipientData.data.recipient_code, 
+        reason: `Withdrawal ${userId}`
+      })
+    });
+    const transferData = await transferRes.json();
+    res.json(transferData);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Deployment logic
