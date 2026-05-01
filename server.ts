@@ -7,20 +7,10 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import axios from 'axios';
 
-// Global error handlers to prevent silent crashes
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[CRITICAL] Unhandled Rejection:', reason);
-});
-
-process.on('uncaughtException', (err, origin) => {
-  console.error('[CRITICAL] Uncaught Exception:', err);
-});
-
-// Load environment variables
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Load environment variables if not on Vercel
+if (process.env.VERCEL !== '1') {
+  dotenv.config();
+}
 
 const app = express();
 const PORT = 3000;
@@ -28,18 +18,8 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// API Request Logger
-app.use("/api", (req, res, next) => {
-  console.log(`[API] ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// Paystack Configuration
 const PAYSTACK_SECRET = (process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET || "").trim();
 
-console.log(`[SERVER] Startup. Paystack Secret configured: ${!!PAYSTACK_SECRET}`);
-
-// Nodemailer Lazy Initialization
 let transporter: nodemailer.Transporter | null = null;
 function getTransporter() {
   if (!transporter) {
@@ -53,21 +33,15 @@ function getTransporter() {
         auth: { user: SMTP_USER, pass: SMTP_PASS },
       });
     } catch (e) {
-      console.error("[MAIL] Error creating transporter:", e);
+      console.error("[MAIL] Error:", e);
       return null;
     }
   }
   return transporter;
 }
 
-// API Routes
 app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    timestamp: new Date().toISOString(),
-    paystack_configured: !!PAYSTACK_SECRET,
-    node_env: process.env.NODE_ENV || 'development'
-  });
+  res.json({ status: "ok", paystack: !!PAYSTACK_SECRET });
 });
 
 app.get("/api/paystack/test-connectivity", async (req, res) => {
@@ -79,27 +53,22 @@ app.get("/api/paystack/test-connectivity", async (req, res) => {
     res.json({ 
       can_reach_paystack: true, 
       status: response.status, 
-      paystack_status: response.data.status,
-      message: response.data.message
+      data: response.data 
     });
   } catch (error: any) {
     res.status(500).json({ 
-      can_reach_paystack: false, 
       error: error.message,
-      data: error.response?.data
+      data: error.response?.data 
     });
   }
 });
 
 app.get("/api/paystack/debug", (req, res) => {
   res.json({
-    status: "ok",
     has_secret: !!PAYSTACK_SECRET,
-    secret_is_valid: !!(PAYSTACK_SECRET && PAYSTACK_SECRET.length > 10),
-    node_env: process.env.NODE_ENV,
-    node_version: process.version,
-    is_vercel: !!process.env.VERCEL,
-    cwd: process.cwd(),
+    secret_len: PAYSTACK_SECRET.length,
+    env: process.env.NODE_ENV,
+    vercel: !!process.env.VERCEL,
     time: new Date().toISOString()
   });
 });
@@ -111,7 +80,7 @@ app.post("/api/notify", async (req, res) => {
     if (!mailTransporter) return res.status(503).json({ error: "Email service not configured" });
 
     const info = await mailTransporter.sendMail({
-      from: process.env.SMTP_FROM || `"NearWash System" <${process.env.SMTP_USER}>`,
+      from: process.env.SMTP_FROM || `"NearWash" <${process.env.SMTP_USER}>`,
       to, subject, html,
     });
     res.json({ success: true, messageId: info.messageId });
@@ -123,19 +92,8 @@ app.post("/api/notify", async (req, res) => {
 function getOrigin(req: express.Request) {
   const forwardedHost = req.headers['x-forwarded-host'];
   const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
-  
-  if (forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
-  }
-
+  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`.replace(/\/$/, "");
   if (req.headers.origin) return req.headers.origin.toString().replace(/\/$/, "");
-  if (req.headers.referer) {
-    try {
-      const url = new URL(req.headers.referer as string);
-      return `${url.protocol}//${url.host}`;
-    } catch (e) { /* ignore */ }
-  }
-  
   const host = req.headers.host;
   return host ? `https://${host}` : `http://localhost:${PORT}`;
 }
@@ -144,15 +102,12 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
   try {
     const { email, amount, itemId, itemName, userId } = req.body;
     const reference = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    
-    if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Paystack secret key is missing." });
-
+    if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
     const origin = getOrigin(req);
-    const cleanAmount = Math.round(Number(amount));
-      
+    
     const response = await axios.post("https://api.paystack.co/transaction/initialize", {
       email, 
-      amount: cleanAmount,
+      amount: Math.round(Number(amount)), 
       reference,
       callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
       metadata: { userId, itemId, itemName, type: 'marketplace_item' },
@@ -167,10 +122,9 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
     if (response.data && response.data.status) {
       res.json(response.data.data);
     } else {
-      res.status(400).json({ error: response.data?.message || "Failed to initialize order." });
+      res.status(400).json({ error: response.data?.message || "Failed" });
     }
   } catch (error: any) {
-    console.error("[PAYSTACK ERROR]", error.response?.data || error.message);
     res.status(error.response?.status || 500).json({ error: error.response?.data?.message || error.message });
   }
 });
@@ -179,17 +133,12 @@ app.post("/api/paystack/initialize", async (req, res) => {
   try {
     const { email, amount, plan, userId } = req.body;
     const reference = `SUB-${plan}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-
-    if (!PAYSTACK_SECRET) {
-      return res.status(500).json({ error: "Paystack secret key is missing." });
-    }
-
+    if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
     const origin = getOrigin(req);
-    const cleanAmount = Math.round(Number(amount));
-    
+
     const response = await axios.post("https://api.paystack.co/transaction/initialize", {
       email, 
-      amount: cleanAmount,
+      amount: Math.round(Number(amount)), 
       reference,
       callback_url: `${origin}/?paystack_success=true&plan=${plan}&ref=${reference}`,
       metadata: { userId, plan, type: 'subscription' },
@@ -202,12 +151,11 @@ app.post("/api/paystack/initialize", async (req, res) => {
     });
 
     if (response.data && response.data.status) {
-      return res.json(response.data.data);
+      res.json(response.data.data);
     } else {
-      return res.status(400).json({ error: response.data?.message || "Failed to initialize subscription." });
+      res.status(400).json({ error: response.data?.message || "Failed" });
     }
   } catch (error: any) {
-    console.error("[PAYSTACK ERROR]", error.response?.data || error.message);
     res.status(error.response?.status || 500).json({ error: error.response?.data?.message || error.message });
   }
 });
@@ -220,7 +168,7 @@ app.get("/api/paystack/banks", async (req, res) => {
     });
     res.json(response.data.data);
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -228,15 +176,11 @@ app.get("/api/paystack/resolve-account", async (req, res) => {
   try {
     const { account_number, bank_code } = req.query;
     if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
-    
     const response = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`, {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
     });
-    if (response.data && response.data.status) {
-      res.json(response.data.data);
-    } else {
-      res.status(400).json({ error: response.data?.message || "Failed to resolve account" });
-    }
+    if (response.data && response.data.status) res.json(response.data.data);
+    else res.status(400).json({ error: response.data?.message });
   } catch (error: any) {
     res.status(error.response?.status || 500).json({ error: error.message });
   }
@@ -250,15 +194,10 @@ app.post("/api/paystack/transfer", async (req, res) => {
     const recipientRes = await axios.post("https://api.paystack.co/transferrecipient", {
       type: "nuban", name: account_name, account_number, bank_code, currency: "NGN"
     }, {
-      headers: { 
-        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
-        "Content-Type": "application/json" 
-      }
+      headers: { "Authorization": `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
     });
     
-    if (!recipientRes.data.status) {
-      return res.status(400).json({ error: recipientRes.data.message || "Failed to create recipient" });
-    }
+    if (!recipientRes.data.status) return res.status(400).json({ error: recipientRes.data.message });
 
     const transferRes = await axios.post("https://api.paystack.co/transfer", {
       source: "balance", 
@@ -266,10 +205,7 @@ app.post("/api/paystack/transfer", async (req, res) => {
       recipient: recipientRes.data.data.recipient_code, 
       reason: `Withdrawal ${userId}`
     }, {
-      headers: { 
-        "Authorization": `Bearer ${PAYSTACK_SECRET}`, 
-        "Content-Type": "application/json" 
-      }
+      headers: { "Authorization": `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" }
     });
     res.json(transferRes.data);
   } catch (error: any) {
@@ -277,44 +213,37 @@ app.post("/api/paystack/transfer", async (req, res) => {
   }
 });
 
-const distPath = path.join(process.cwd(), 'dist');
 const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === '1';
 
-if (isProd) {
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-  }
-} else {
+if (!isProd) {
   const setupVite = async () => {
     try {
       const { createServer } = await import("vite");
       const v = await createServer({ server: { middlewareMode: true }, appType: "spa" });
       app.use(v.middlewares);
     } catch (e) {
-      console.error("[VITE] Failed to load:", e);
+      console.error("[VITE] Error:", e);
     }
   };
   setupVite();
+} else {
+  const distPath = path.join(process.cwd(), 'dist');
+  app.use(express.static(distPath));
 }
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
-  
   if (isProd) {
+    const distPath = path.join(process.cwd(), 'dist');
     const indexPath = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
-    }
+    if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   }
   next();
 });
 
-// Final Error Handler
 app.use((err: any, req: any, res: any, next: any) => {
-  console.error("[ERROR]", err.message || err);
-  if (!res.headersSent) {
-    res.status(500).json({ error: err.message || "Internal Server Error" });
-  }
+  console.error("[GLOBAL ERROR]", err);
+  if (!res.headersSent) res.status(500).json({ error: err.message || "Internal Error" });
 });
 
 if (process.env.VERCEL !== '1') {
@@ -324,3 +253,6 @@ if (process.env.VERCEL !== '1') {
 }
 
 export default app;
+
+
+
