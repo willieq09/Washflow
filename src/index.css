@@ -108,5 +108,31 @@
     appearance: none;
     background-image: none;
   }
+
+  /* Mobile First Adjustments */
+  .touch-target {
+    @apply min-h-[48px] min-w-[48px] flex items-center justify-center;
+  }
+
+  .mobile-nav-item {
+    @apply pt-2 pb-3 flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-wider;
+  }
+
+  .scrollable-dropdown {
+    @apply max-h-[300px] overflow-y-auto overscroll-contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Custom Scrollbar for better visibility */
+  .scrollable-dropdown::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollable-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollable-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
 }
 

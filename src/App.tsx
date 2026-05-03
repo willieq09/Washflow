@@ -554,6 +554,23 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Bottom Nav for Mobile */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border flex items-center justify-around px-2 z-40 pb-safe shadow-[0_-8px_20px_-10px_rgba(0,0,0,0.5)]">
+          <MobileNavItem icon={<Gauge size={22} />} label="Dash" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
+          {profile?.role === 'customer' ? (
+            <>
+              <MobileNavItem icon={<Search size={22} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} />
+              <MobileNavItem icon={<CarFront size={22} />} label="Cars" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
+            </>
+          ) : (
+            <>
+              <MobileNavItem icon={<Plus size={22} />} label="Log" active={view === 'log'} onClick={() => navigate('log')} />
+              <MobileNavItem icon={<Briefcase size={22} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
+            </>
+          )}
+          <MobileNavItem icon={<Menu size={22} />} label="Menu" active={view === 'settings' || view === 'business' || view === 'admin'} onClick={() => setIsSidebarOpen(true)} />
+        </div>
+
         {/* Sidebar */}
         <nav className={cn(
           "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:relative md:translate-x-0 md:w-64 md:z-auto md:transition-none",
@@ -674,7 +691,7 @@ export default function App() {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
           <AnimatePresence mode="wait">
             {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
@@ -732,12 +749,38 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
     <button 
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition duration-200 group text-sm font-medium",
+        "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition duration-200 group text-sm font-semibold touch-target",
         active ? "bg-accent/10 text-accent shadow-sm" : "text-text-dim hover:bg-white/5 hover:text-white"
       )}
     >
       <span className={cn("transition", active ? "text-accent" : "text-text-dim group-hover:text-white")}>{icon}</span>
       {label}
+    </button>
+  );
+}
+
+function MobileNavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "mobile-nav-item transition-all duration-300",
+        active ? "text-accent" : "text-text-dim"
+      )}
+    >
+      <motion.div
+        animate={active ? { scale: 1.1, y: -2 } : { scale: 1, y: 0 }}
+        className="flex flex-col items-center gap-0.5"
+      >
+        {icon}
+        <span className="text-[9px] font-bold tracking-tight">{label}</span>
+      </motion.div>
+      {active && (
+        <motion.div 
+          layoutId="mobileNavUnderline"
+          className="absolute bottom-1 w-1 h-1 rounded-full bg-accent"
+        />
+      )}
     </button>
   );
 }
@@ -795,26 +838,26 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 
 function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoading: boolean }) {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-white text-center">
+    <div className="min-h-screen bg-bg flex items-center justify-center p-4 md:p-6 text-white text-center pb-12">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-4xl w-full"
       >
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-accent rounded-3xl mb-10 shadow-2xl shadow-accent/20 rotate-3">
-          <AnimatedVehicleIcon size={40} className="text-white" />
+        <div className="inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-accent rounded-3xl mb-8 md:mb-10 shadow-2xl shadow-accent/20 rotate-3">
+          <AnimatedVehicleIcon size={32} className="text-white" />
         </div>
-        <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter uppercase italic leading-none">
+        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9]">
           AUTOLUX <br />
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
-        <p className="text-xl text-text-dim mb-12 max-w-xl mx-auto font-medium">
+        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-medium leading-relaxed uppercase tracking-tight">
           The car wash owner operating system. Manage operations locally, scale subscriptions globally.
         </p>
         <button 
           onClick={onLogin}
           disabled={authLoading}
-          className="bg-white text-bg px-10 py-5 rounded-2xl font-black flex items-center gap-4 mx-auto hover:bg-accent hover:text-white transition-all shadow-xl active:scale-95 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full md:w-auto bg-white text-bg px-10 py-5 rounded-2xl font-black flex items-center justify-center gap-4 mx-auto hover:bg-accent hover:text-white transition-all shadow-xl active:scale-95 text-xl disabled:opacity-50 disabled:cursor-not-allowed touch-target"
         >
           {authLoading ? (
             <div className="flex items-center gap-3">
@@ -934,61 +977,61 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-md rounded-[2.5rem] border border-border p-8 shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-black text-white uppercase italic">Withdrawal Console</h3>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-text-dim hover:text-white">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-md rounded-[2.5rem] border border-border p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="flex justify-between items-center mb-8 md:mb-10">
+          <h3 className="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tighter leading-none">Withdrawal Console</h3>
+          <button onClick={onClose} className="p-3 bg-white/5 rounded-full hover:bg-white/10 transition-colors text-text-dim hover:text-white touch-target">
             <X size={20} />
           </button>
         </div>
 
-        <div className="space-y-6">
-          <div className="p-4 bg-accent/5 border border-accent/20 rounded-2xl">
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Available to Clear</span>
-            <div className="text-2xl font-black text-white">{formatCurrency(balance)}</div>
+        <div className="space-y-6 md:space-y-10">
+          <div className="p-6 bg-accent/5 border border-accent/20 rounded-3xl">
+            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Available to Clear</span>
+            <div className="text-3xl md:text-4xl font-black text-white italic tracking-tighter">{formatCurrency(balance)}</div>
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
+          <div className="space-y-6 md:space-y-8">
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Bank Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Zenith Bank"
-                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-base font-bold text-white focus:border-accent outline-none placeholder:text-text-dim/20"
                   value={form.bankName}
                   onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))}
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
                 <input
                   type="text"
                   placeholder="10 Digits"
                   maxLength={10}
-                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-base font-bold text-white focus:border-accent outline-none placeholder:text-text-dim/20 font-mono tracking-widest"
                   value={form.accountNumber}
                   onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '') }))}
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Name</label>
                 <input
                   type="text"
                   placeholder="Full Legal Name"
-                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-xs text-text-main focus:border-accent outline-none uppercase"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-base font-bold text-white focus:border-accent outline-none uppercase placeholder:text-text-dim/20"
                   value={form.accountName}
                   onChange={e => setForm(f => ({ ...f, accountName: e.target.value }))}
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Amount to Withdraw</label>
                 <input
                   type="number"
-                  className="w-full bg-bg border border-border rounded-2xl px-5 py-3 text-sm font-bold text-white focus:border-accent outline-none"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-3xl font-black text-white focus:border-accent outline-none tracking-tighter"
                   value={form.amount}
                   onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                 />
@@ -998,10 +1041,9 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
             <button
               onClick={handleWithdraw}
               disabled={submitting || !form.amount || parseFloat(form.amount) <= 0 || parseFloat(form.amount) > balance}
-              className="w-full py-4 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-xl shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-5 bg-white text-bg rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target mt-4 italic"
             >
-              {submitting ? <RefreshCw className="animate-spin" size={16} /> : <Check size={16} />}
-              {submitting ? "Processing Request..." : "Initiate Withdrawal"}
+              {submitting ? <RefreshCw className="animate-spin mx-auto" size={20} /> : "Finalize Withdrawal Flow"}
             </button>
 
             <p className="text-[9px] text-center text-text-dim/60 uppercase leading-relaxed font-bold px-4">
@@ -1364,63 +1406,63 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
   }, [profile, location]);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-12 pb-12">
-      <header className="flex justify-between items-end">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-8 md:space-y-12 pb-12">
+      <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
-          <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Hub.</h2>
-          <p className="text-text-dim text-lg lowercase mt-2">Manage your fleet and upcoming sessions.</p>
+          <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Hub.</h2>
+          <p className="text-text-dim text-base md:text-lg lowercase mt-2">Manage your fleet and upcoming sessions.</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="bg-card px-6 py-3 rounded-xl border border-border flex flex-col items-center justify-center min-w-[120px]">
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Wash Credits</span>
-            <span className="text-2xl font-black text-accent">{profile.credits || 0}</span>
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="flex-1 md:flex-none bg-card px-4 md:px-6 py-3 rounded-2xl border border-border flex flex-col items-center justify-center min-w-[100px] md:min-w-[120px]">
+            <span className="text-[9px] md:text-[10px] font-black text-text-dim uppercase tracking-widest">Credits</span>
+            <span className="text-xl md:text-2xl font-black text-accent">{profile.credits || 0}</span>
           </div>
           <button 
             onClick={() => setView('marketplace')}
-            className="bg-accent text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition h-full"
+            className="flex-1 md:flex-none bg-accent text-white px-6 md:px-8 py-3.5 rounded-2xl font-black text-[10px] md:text-[11px] uppercase tracking-widest hover:bg-white hover:text-bg transition h-full touch-target"
           >
-            Book New Wash
+            Book Wash
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Next Session */}
-        <div className="lg:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-10 min-h-[300px]">
+        <div className="lg:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-6 md:p-10 min-h-[250px] md:min-h-[300px]">
           {upcoming.length > 0 ? (
             <>
               <div>
                 <span className="text-[10px] font-black text-white/60 uppercase tracking-[0.2em] mb-4 block">Up Next</span>
-                <div className="text-5xl font-black text-white tracking-tighter uppercase mb-4 leading-tight">
+                <div className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4 leading-tight">
                   {upcoming[0].businessName} <br />
-                  <span className="opacity-40 text-3xl">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="opacity-40 text-xl md:text-3xl">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div className="inline-flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white">
                   {upcoming[0].status} • {upcoming[0].vehicleInfo || 'Vehicle Selected'}
                 </div>
               </div>
-              <div className="flex gap-4 mt-10">
+              <div className="flex gap-4 mt-8 md:mt-10">
                 <button 
                   onClick={() => {
                     alert("Rescheduling requested. Our system will contact you with available alternatives.");
                   }}
-                  className="flex-1 bg-white text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition"
+                  className="flex-1 bg-white text-bg py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition touch-target"
                 >
                   Reschedule
                 </button>
-                <div className="px-6 py-4 rounded-xl border border-white/20 text-white font-black text-[10px] uppercase tracking-widest">
+                <div className="hidden md:flex flex-1 items-center justify-center px-6 py-4 rounded-2xl border border-white/20 text-white font-black text-[10px] uppercase tracking-widest">
                   ETA 45m
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                <Calendar size={32} className="text-white/40" />
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 md:space-y-6">
+              <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/10 flex items-center justify-center">
+                <Calendar size={28} className="text-white/40" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white uppercase italic">No Active Bookings</h3>
-                <p className="text-sm text-white/60 mt-2">Your garage is resting. Schedule a session to keep it pristine.</p>
+                <h3 className="text-xl md:text-2xl font-black text-white uppercase italic">No Active Bookings</h3>
+                <p className="text-xs md:text-sm text-white/60 mt-1 md:mt-2">Your garage is resting. Schedule a session to keep it pristine.</p>
               </div>
             </div>
           )}
@@ -1775,33 +1817,33 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
         balance={availableBalance} 
         userId={profile.uid} 
       />
-      <header className="mb-10 flex justify-between items-end">
+      <header className="mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
         <div>
-          <h2 className="text-4xl font-black text-white tracking-tight">AutoLux Dashboard</h2>
-          <p className="text-text-dim mt-1">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
+          <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic leading-none">AutoLux Dashboard</h2>
+          <p className="text-text-dim mt-1 lowercase font-medium">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
-        <div className="hidden md:flex items-center gap-2 bg-success/10 text-success border border-success/20 px-3 py-1.5 rounded-full text-xs font-bold">
+        <div className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-success/10 text-success border border-success/20 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
           <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-          System Active
+          System Active Shard
         </div>
       </header>
 
       {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-4 auto-rows-fr">
+      <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 auto-rows-fr">
         {/* Main Stat: Today's Revenue */}
-        <div className="md:col-span-2 md:row-span-1 bento-card flex flex-col justify-between border-t-4 border-t-accent">
+        <div className="md:col-span-2 md:row-span-1 bento-card flex flex-col justify-between border-t-4 border-t-accent p-6 md:p-8">
           <div>
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">
+            <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em]">
               {profile.role === 'worker' ? "Personal Unit Output" : "Live: Today's Revenue"}
             </span>
-            <div className="text-6xl font-black mt-2 tracking-tighter">{formatCurrency(stats.todayRevenue)}</div>
-            <p className="text-xs text-text-dim mt-2 font-medium">Synced from {stats.todayCount} service units completed today.</p>
+            <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter">{formatCurrency(stats.todayRevenue)}</div>
+            <p className="text-[10px] md:text-xs text-text-dim mt-2 font-medium">Synced from {stats.todayCount} service units completed today.</p>
           </div>
-          <div className="mt-6 flex items-end gap-1.5 h-16">
+          <div className="mt-8 flex items-end gap-1.5 h-16">
             {[30, 45, 20, 60, 40, 75, 95].map((h, i) => (
               <div 
                 key={i} 
-                className={cn("flex-1 rounded-t-lg transition-all duration-700", i === 6 ? "bg-accent shadow-[0_0_15px_rgba(62,99,221,0.5)]" : "bg-accent/20")} 
+                className={cn("flex-1 rounded-t-xl transition-all duration-700", i === 6 ? "bg-accent shadow-[0_0_15px_rgba(62,99,221,0.5)]" : "bg-accent/20")} 
                 style={{ height: `${h}%` }} 
               />
             ))}
@@ -2325,177 +2367,196 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
         animate={{ opacity: 1 }} 
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-bg/80 backdrop-blur-xl"
+        className="absolute inset-0 bg-bg/90 backdrop-blur-2xl"
       />
       
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-lg bg-card border border-border rounded-[2.5rem] shadow-2xl overflow-hidden"
+        className="relative w-full max-w-xl bg-card border border-border rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto scrollable-dropdown"
       >
-        <div className="p-10">
-          <header className="mb-8">
-            <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">Book at {business.name}</h3>
-            <p className="text-text-dim text-sm mt-1">Step {step} of 4 — {
-              step === 1 ? 'Choose Vehicle' : 
-              step === 2 ? 'Select Tier' : 
-              step === 3 ? 'Service Mode' : 
-              'Finalize Slot'
-            }</p>
+        <div className="p-8 md:p-12">
+          <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div>
+              <h3 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter italic leading-none">Book at {business.name}</h3>
+              <p className="text-text-dim text-sm mt-3 font-bold uppercase tracking-wider">Step {step} of 4 — {
+                step === 1 ? 'Choose Vehicle' : 
+                step === 2 ? 'Select Tier' : 
+                step === 3 ? 'Service Mode' : 
+                'Finalize Slot'
+              }</p>
+            </div>
+            <button onClick={onClose} className="hidden md:flex p-3 bg-white/5 rounded-full hover:bg-white/10 transition text-text-dim hover:text-white">
+              <X size={20} />
+            </button>
           </header>
 
           {step === 1 && (
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Select your vehicle</label>
+            <div className="space-y-6">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block ml-1 text-center md:text-left">Select your vehicle</label>
               {vehicles.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-4">
                   {vehicles.map((v, idx) => (
                     <button 
                       key={idx}
                       onClick={() => setSelectedVehicle(`${v.make} ${v.model} (${v.plate})`)}
                       className={cn(
-                        "flex items-center justify-between p-5 rounded-3xl border transition-all duration-300 group",
+                        "flex items-center justify-between p-6 rounded-[2rem] border transition-all duration-300 group touch-target",
                         selectedVehicle?.includes(v.plate) 
-                          ? "bg-accent/10 border-accent text-white shadow-lg shadow-accent/10" 
+                          ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20 scale-[1.02]" 
                           : "bg-white/5 border-border text-text-dim hover:border-white/20 hover:bg-white/[0.07]"
                       )}
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-5">
                         <div className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
-                          selectedVehicle?.includes(v.plate) ? "bg-accent/20 text-accent" : "bg-white/5 text-text-dim group-hover:text-white"
+                          "w-14 h-14 rounded-2xl flex items-center justify-center transition-colors",
+                          selectedVehicle?.includes(v.plate) ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white"
                         )}>
-                          <CarFront size={24} strokeWidth={1.5} />
+                          <CarFront size={28} strokeWidth={1.5} />
                         </div>
-                        <div>
-                          <p className="font-black text-base tracking-tighter uppercase italic">{v.make} {v.model}</p>
-                          <p className="text-[10px] opacity-60 uppercase font-black tracking-widest font-mono">{v.plate}</p>
+                        <div className="text-left">
+                          <p className="font-black text-xl tracking-tighter uppercase italic leading-none mb-1">{v.make} {v.model}</p>
+                          <p className={cn("text-xs font-black tracking-widest font-mono", selectedVehicle?.includes(v.plate) ? "text-white/70" : "text-text-dim/60")}>{v.plate}</p>
                         </div>
                       </div>
                       {selectedVehicle?.includes(v.plate) && (
-                        <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-white scale-110 shadow-lg">
-                          <Check size={14} strokeWidth={3} />
+                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-accent shadow-lg">
+                          <Check size={18} strokeWidth={3} />
                         </div>
                       )}
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="p-10 border-2 border-dashed border-border rounded-3xl text-center space-y-4">
-          <CarFront className="mx-auto opacity-20" size={40} />
-                  <p className="text-sm text-text-dim">No vehicles in your garage. Add one first to book a wash.</p>
+                <div className="p-16 border-2 border-dashed border-border rounded-[2.5rem] text-center space-y-6">
+                  <CarFront className="mx-auto opacity-20" size={56} />
+                  <div>
+                    <h4 className="text-white font-black uppercase italic tracking-tighter text-xl">Garage Vacant</h4>
+                    <p className="text-sm text-text-dim mt-2 lowercase max-w-xs mx-auto">Initialize a vehicle unit in your garage first to begin the booking flow.</p>
+                  </div>
+                  <button onClick={onClose} className="text-accent text-[10px] font-black uppercase tracking-widest border-b border-accent/20 pb-1">Assemble Unit Now →</button>
                 </div>
               )}
             </div>
           )}
-
+          
           {step === 2 && (
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Service Tier</label>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Service Tier Selection</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button 
                   onClick={() => setSelectedPlan('basic')}
                   className={cn(
-                    "p-5 rounded-3xl border transition text-left",
-                    selectedPlan === 'basic' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                    "p-6 rounded-[2rem] border transition text-left touch-target relative overflow-hidden group",
+                    selectedPlan === 'basic' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
                   )}
                 >
-                  <Zap size={20} className={selectedPlan === 'basic' ? "text-accent mb-3" : "text-text-dim mb-3"} />
-                  <p className="font-black text-sm uppercase tracking-tighter">Basic Wash</p>
-                  <p className="text-xl font-black mt-1">$15</p>
+                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'basic' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
+                    <Zap size={24} />
+                  </div>
+                  <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Basic Wash</p>
+                  <p className={cn("text-3xl font-black italic tracking-tighter", selectedPlan === 'basic' ? "text-white" : "text-white/80")}>$15</p>
                 </button>
                 <button 
                   onClick={() => setSelectedPlan('premium')}
                   className={cn(
-                    "p-5 rounded-3xl border transition text-left relative overflow-hidden",
-                    selectedPlan === 'premium' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                    "p-6 rounded-[2rem] border transition text-left touch-target relative overflow-hidden group",
+                    selectedPlan === 'premium' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
                   )}
                 >
-                  <Sparkles size={20} className={selectedPlan === 'premium' ? "text-accent mb-3" : "text-text-dim mb-3"} />
-                  <p className="font-black text-sm uppercase tracking-tighter">Premium Care</p>
-                  <p className="text-xl font-black mt-1">$25</p>
-                  <div className="absolute top-2 right-2 bg-accent px-1.5 py-0.5 rounded text-[8px] font-black text-white uppercase tracking-widest">Best</div>
+                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'premium' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
+                    <Sparkles size={24} />
+                  </div>
+                  <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Premium Care</p>
+                  <p className={cn("text-3xl font-black italic tracking-tighter", selectedPlan === 'premium' ? "text-white" : "text-white/80")}>$25</p>
+                  <div className="absolute top-4 right-4 bg-white text-accent px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest shadow-lg">Elite</div>
                 </button>
               </div>
             </div>
           )}
 
           {step === 3 && (
-            <div className="space-y-4">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Delivery Method</label>
+            <div className="space-y-6">
+              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Delivery Method</label>
               <div className="grid grid-cols-1 gap-4">
                 <button 
                   onClick={() => setServiceType('in-station')}
                   className={cn(
-                    "p-6 rounded-3xl border transition flex items-center gap-4",
-                    serviceType === 'in-station' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                    "p-8 rounded-[2rem] border transition flex items-center gap-5 touch-target group",
+                    serviceType === 'in-station' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
                   )}
                 >
-                   <Store size={24} className={serviceType === 'in-station' ? "text-accent" : "text-text-dim"} />
-                   <div className="text-left">
-                     <p className="font-black text-sm uppercase tracking-tighter">In-Station</p>
-                     <p className="text-[10px] text-text-dim">Visit {business.name} and get served instantly.</p>
+                   <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-colors", serviceType === 'in-station' ? "bg-white/20 text-white" : "bg-bg text-text-dim font-bold")}>
+                    <Store size={28} />
                    </div>
-                   <div className="ml-auto text-xs font-black text-accent">+$0</div>
+                   <div className="text-left flex-1">
+                     <p className="font-black text-lg uppercase tracking-tighter italic leading-none mb-1">In-Station</p>
+                     <p className={cn("text-xs lowercase", serviceType === 'in-station' ? "text-white/70" : "text-text-dim")}>Visit {business.name} and get served instantly.</p>
+                   </div>
+                   <div className={cn("text-sm font-black", serviceType === 'in-station' ? "text-white" : "text-accent")}>FREE</div>
                 </button>
                 <button 
                   onClick={() => setServiceType('home-service')}
                   className={cn(
-                    "p-6 rounded-3xl border transition flex items-center gap-4",
-                    serviceType === 'home-service' ? "bg-accent/10 border-accent" : "bg-white/5 border-border"
+                    "p-8 rounded-[2rem] border transition flex items-center gap-5 touch-target group",
+                    serviceType === 'home-service' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
                   )}
                 >
-                   <MapPin size={24} className={serviceType === 'home-service' ? "text-accent" : "text-text-dim"} />
-                   <div className="text-left">
-                     <p className="font-black text-sm uppercase tracking-tighter">Home Service</p>
-                     <p className="text-[10px] text-text-dim">Our professional comes to your specific location.</p>
+                   <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-colors", serviceType === 'home-service' ? "bg-white/20 text-white" : "bg-bg text-text-dim")}>
+                    <MapPin size={28} />
                    </div>
-                   <div className="ml-auto text-xs font-black text-accent">+$10</div>
+                   <div className="text-left flex-1">
+                     <p className="font-black text-lg uppercase tracking-tighter italic leading-none mb-1">Mobile Service</p>
+                     <p className={cn("text-xs lowercase", serviceType === 'home-service' ? "text-white/70" : "text-text-dim")}>Our professional comes to your specific location.</p>
+                   </div>
+                   <div className={cn("text-sm font-black", serviceType === 'home-service' ? "text-white" : "text-accent")}>+$10</div>
                 </button>
               </div>
             </div>
           )}
 
           {step === 4 && (
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1">Pick a Slot</label>
-                <div className="flex gap-4">
-                   <div className="flex-1">
+            <div className="space-y-8">
+              <div className="space-y-6">
+                <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Temporal Shard Selection</label>
+                <div className="flex flex-col md:flex-row gap-4">
+                   <div className="flex-1 space-y-2">
+                      <label className="text-[9px] font-black text-text-dim uppercase tracking-[0.2em] ml-1">Calendar Date</label>
                       <input 
                         type="date" 
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full bg-white/5 border border-border rounded-xl p-3 text-white text-sm focus:ring-1 focus:ring-accent outline-none" 
+                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-white text-base font-bold focus:border-accent outline-none transition-all touch-target" 
                       />
                    </div>
-                   <div className="flex-1">
+                   <div className="flex-1 space-y-2">
+                      <label className="text-[9px] font-black text-text-dim uppercase tracking-[0.2em] ml-1">Arrival Time</label>
                       <input 
                         type="time" 
                         value={selectedTime}
                         onChange={(e) => setSelectedTime(e.target.value)}
-                        className="w-full bg-white/5 border border-border rounded-xl p-3 text-white text-sm focus:ring-1 focus:ring-accent outline-none" 
+                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-white text-base font-bold focus:border-accent outline-none transition-all touch-target" 
                       />
                    </div>
                 </div>
               </div>
-              <div className="p-6 bg-accent/5 rounded-2xl border border-accent/10">
-                <p className="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4">Reservation Summary</p>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-xs font-bold text-white/60">
-                      <span>Vehicle</span>
-                      <span className="text-white truncate max-w-[150px]">{selectedVehicle}</span>
+              <div className="p-8 bg-accent/10 border border-accent/20 rounded-[2rem] shadow-inner">
+                <p className="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-6 text-center md:text-left">Operation Summary</p>
+                <div className="space-y-4">
+                   <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold text-white/50 lowercase">Unit ID</span>
+                      <span className="text-white font-black italic uppercase tracking-tighter truncate max-w-[150px]">{selectedVehicle}</span>
                    </div>
-                   <div className="flex justify-between text-xs font-bold text-white/60">
-                      <span>Service Mode</span>
-                      <span className="text-white uppercase tracking-widest">{serviceType.replace('-', ' ')}</span>
+                   <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold text-white/50 lowercase">Engagement</span>
+                      <span className="text-white font-black italic uppercase tracking-tighter">{serviceType.replace('-', ' ')}</span>
                    </div>
-                   <div className="flex justify-between text-xs font-bold text-white/60">
-                      <span>Care Tier</span>
-                      <span className="text-white uppercase tracking-widest">{selectedPlan}</span>
+                   <div className="flex justify-between items-center text-sm">
+                      <span className="font-bold text-white/50 lowercase">Service Tier</span>
+                      <span className="text-white font-black italic uppercase tracking-tighter">{selectedPlan}</span>
                    </div>
-                   <div className="border-t border-accent/10 my-2 pt-2 flex justify-between">
+                   <div className="border-t border-accent/20 my-4 pt-4 flex justify-between items-end">
                       <span className="text-sm font-black text-white uppercase italic tracking-tighter">Total Due</span>
                       <span className="text-xl font-black text-accent italic">
                         {formatCurrency((selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0))}
@@ -2865,18 +2926,18 @@ function BusinessInventoryManagement({ business, profile }: { business: Business
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-2xl font-black text-white uppercase tracking-tight">Inventory & Services</h3>
-          <p className="text-text-dim text-sm mt-1">Manage products and specialized services you offer.</p>
+    <div className="space-y-10 md:space-y-12">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-4 md:px-0">
+        <div className="text-center md:text-left">
+          <h3 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tighter">Inventory & Services</h3>
+          <p className="text-text-dim text-sm md:text-base mt-2 lowercase font-medium">Manage products and specialized services you offer.</p>
         </div>
         <button 
           onClick={() => setShowAdd(!showAdd)}
-          className="px-6 py-3 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-accent-light transition"
+          className="w-full md:w-auto px-10 py-5 bg-accent text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 transition shadow-xl shadow-accent/20 touch-target"
         >
-          {showAdd ? <X size={14} /> : <Plus size={14} />}
-          {showAdd ? 'Cancel' : 'Add New Item'}
+          {showAdd ? <X size={18} /> : <Plus size={18} />}
+          {showAdd ? 'CANCEL ENTRY' : 'ADD NEW UNIT'}
         </button>
       </div>
 
@@ -2887,48 +2948,51 @@ function BusinessInventoryManagement({ business, profile }: { business: Business
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             onSubmit={handleAddItem}
-            className="bg-card border border-border rounded-3xl p-8 overflow-hidden space-y-6"
+            className="bg-card border border-border rounded-[2.5rem] p-6 md:p-12 overflow-hidden space-y-8 md:space-y-10 shadow-2xl mx-4 md:mx-0"
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Item name</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Item Name</label>
                 <input 
                   type="text"
                   value={newItem.name}
                   onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-lg font-bold text-white focus:border-accent outline-none placeholder:text-text-dim/20"
+                  placeholder="e.g. Nano Detailer"
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Price (USD)</label>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Market Price (₦)</label>
                 <input 
                   type="number"
                   value={newItem.price}
                   onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
-                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-lg font-bold text-white focus:border-accent outline-none placeholder:text-text-dim/20"
+                  placeholder="0.00"
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Category</label>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Classification</label>
                 <select 
                   value={newItem.category}
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
-                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-base font-bold text-white focus:border-accent outline-none scrollable-dropdown touch-target"
                 >
-                  <option value="accessory" className="bg-card text-white">Accessory</option>
-                  <option value="part" className="bg-card text-white">Spare Part</option>
-                  <option value="service" className="bg-card text-white">Specialized Service</option>
+                  <option value="accessory" className="bg-card text-white">Accessory / Product</option>
+                  <option value="part" className="bg-card text-white">Physical Component</option>
+                  <option value="service" className="bg-card text-white">Specialized Operation</option>
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Image URL</label>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Asset URL (Image)</label>
                 <input 
                   type="text"
                   value={newItem.image}
                   onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
-                  className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-sm font-bold text-white focus:border-accent outline-none placeholder:text-text-dim/20"
+                  placeholder="https://..."
                   required
                 />
               </div>
@@ -2936,31 +3000,33 @@ function BusinessInventoryManagement({ business, profile }: { business: Business
             <button 
               type="submit" 
               disabled={saving}
-              className="w-full py-4 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent-light transition"
+              className="w-full py-6 bg-white text-bg rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target italic"
             >
-              {saving ? 'Processing...' : 'Publish to Marketplace'}
+              {saving ? 'SYNCHRONIZING...' : 'BROADCAST TO INDICES'}
             </button>
           </motion.form>
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 px-4 md:px-0">
         {loading ? (
-          [1, 2, 3].map(i => <div key={i} className="h-40 bg-card rounded-2xl border border-border animate-pulse" />)
+          [1, 2, 3].map(i => <div key={i} className="h-64 bg-card rounded-[2rem] border border-border animate-pulse" />)
         ) : items.map(item => (
-          <div key={item.id} className="bg-card border border-border rounded-3xl p-6 group relative">
+          <div key={item.id} className="bg-card border border-border rounded-[2.5rem] p-6 md:p-8 group relative transition-all hover:scale-[1.02] duration-300">
             <button 
               onClick={() => handleDeleteItem(item.id)}
-              className="absolute top-4 right-4 p-2 bg-red-500/10 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition"
+              className="absolute top-6 right-6 p-2 bg-red-500/10 text-red-400 rounded-xl opacity-0 group-hover:opacity-100 transition shadow-lg touch-target"
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
             </button>
-            <div className="flex gap-4">
-              <img src={item.image} className="w-20 h-20 rounded-xl object-cover border border-border" referrerPolicy="no-referrer" />
-              <div>
-                <h4 className="font-bold text-white mb-1">{item.name}</h4>
-                <p className="text-accent font-black text-xs uppercase tracking-widest">{formatCurrency(item.price)}</p>
-                <p className="text-[10px] text-text-dim uppercase tracking-widest mt-2">{item.category}</p>
+            <div className="flex flex-col gap-6">
+              <img src={item.image} className="w-full aspect-square rounded-2xl object-cover border border-border shadow-xl" referrerPolicy="no-referrer" />
+              <div className="text-center md:text-left">
+                <h4 className="text-xl font-black text-white italic uppercase tracking-tighter mb-2">{item.name}</h4>
+                <div className="flex items-center justify-between">
+                  <p className="text-accent font-black text-lg tracking-tighter italic">{formatCurrency(item.price)}</p>
+                  <p className="text-[9px] font-black text-text-dim uppercase tracking-[0.15em] bg-white/5 px-3 py-1.5 rounded-full">{item.category}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -3062,17 +3128,16 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className ="space-y-12 pb-20">
       {/* Search Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-10 rounded-[3rem] border border-border overflow-hidden relative">
-        <div className="relative z-10">
-          <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2">Explore the Ecosystem.</h2>
-          <p className="text-text-dim text-lg lowercase leading-relaxed max-w-xl">Find top-rated wash stations, professional auto products, and specialized services near you.</p>
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-border overflow-hidden relative">
+        <div className="relative z-10 p-2 md:p-0">
+          <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-3 italic leading-none">Explore Ecosystem.</h2>
+          <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl font-medium">Find premium wash labs, professional components, and mobile experts in your sector.</p>
         </div>
-        <div className="flex bg-bg rounded-2xl border border-border p-2 min-w-[300px] relative z-10">
-          <Search className="text-text-dim mx-3 self-center" size={20} />
-          <input type="text" placeholder="Search washes, parts, accessories..." className="bg-transparent border-none text-white focus:ring-0 placeholder:text-text-dim/50 text-sm py-3 w-full" />
+        <div className="flex bg-bg rounded-[1.5rem] border border-border p-3 md:min-w-[400px] relative z-10 mx-2 md:mx-0 shadow-inner group focus-within:border-accent/40 transition-colors">
+          <Search className="text-text-dim mx-4 self-center group-focus-within:text-accent transition-colors" size={24} />
+          <input type="text" placeholder="Search washes, parts, labs..." className="bg-transparent border-none text-white focus:ring-0 placeholder:text-text-dim/40 text-base py-4 w-full font-bold" />
         </div>
-        {/* Decorative background accent */}
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
+        <div className="absolute -top-32 -right-32 w-96 h-96 bg-accent/20 rounded-full blur-[100px]" />
       </header>
 
       {/* Ecosystem Categories Grid */}
@@ -3125,38 +3190,45 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
           </div>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-10">
           {loading ? (
-            [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64" />)
+            [1, 2, 3, 4].map(i => <div key={i} className="h-80 bg-card rounded-[3rem] border border-border animate-pulse shadow-2xl" />)
           ) : items.filter(item => filter === 'all' || item.category === filter).length > 0 ? (
             items.filter(item => filter === 'all' || item.category === filter).map(item => (
-              <motion.div key={item.id} whileHover={{ y: -5 }} className="bg-card rounded-[2rem] border border-border overflow-hidden group">
-                <div className="h-40 overflow-hidden relative">
-                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                  <div className="absolute top-4 left-4 bg-accent text-white px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
-                    {item.category}
+              <motion.div key={item.id} whileHover={{ y: -8 }} className="bg-card rounded-[3rem] border border-border overflow-hidden group shadow-2xl relative transition-all duration-500 hover:border-accent/40 flex flex-col h-full">
+                <div className="h-64 md:h-48 overflow-hidden relative">
+                  <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[1200ms]" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-transparent opacity-60" />
+                  <div className="absolute top-6 right-6">
+                    <span className="bg-bg/90 backdrop-blur-xl px-5 py-2.5 rounded-full text-[9px] font-black text-white uppercase tracking-[0.2em] border border-white/10 shadow-2xl">{item.category}</span>
                   </div>
                 </div>
-                <div className="p-5">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-sm font-black text-white uppercase line-clamp-1">{item.name}</h4>
-                    <span className="text-accent font-black text-sm">${item.price}</span>
+                <div className="p-8 md:p-10 flex flex-col flex-1">
+                  <div className="mb-10">
+                    <div className="flex items-center gap-2 mb-3">
+                       <ShieldCheck className="text-accent" size={14} />
+                       <p className="text-accent text-[9px] font-black uppercase tracking-[0.25em]">{item.vendor || 'Authorized Lab'}</p>
+                    </div>
+                    <h4 className="font-black text-3xl md:text-2xl text-white uppercase italic tracking-tighter leading-none mb-3">{item.name}</h4>
                   </div>
-                  <p className="text-[10px] text-text-dim uppercase tracking-widest mb-4">Vendor: {item.vendor}</p>
-                  <button 
-                    onClick={() => handleBuy(item)}
-                    disabled={buying === item.id}
-                    className="w-full bg-white/5 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition flex items-center justify-center gap-2 border border-white/10"
-                  >
-                    {buying === item.id ? <RefreshCw className="animate-spin" size={14} /> : <ShoppingBag size={14} />} Buy Now
-                  </button>
+                  <div className="flex flex-col gap-6 mt-auto">
+                    <p className="text-4xl md:text-3xl font-black text-white italic tracking-tighter leading-none">{formatCurrency(item.price)}</p>
+                    <button 
+                      onClick={() => handleBuy(item)}
+                      disabled={buying === item.id}
+                      className="w-full bg-white text-bg py-6 md:py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target italic"
+                    >
+                      {buying === item.id ? <RefreshCw className="animate-spin mx-auto" size={18} /> : "Initialize Order →"}
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             ))
           ) : (
-            <div className="col-span-full py-20 text-center bg-card rounded-[3rem] border border-dashed border-border group">
-               <ShoppingBag className="mx-auto text-text-dim/20 mb-4 group-hover:text-accent/20 transition-colors" size={64} />
-               <p className="text-sm font-black text-text-dim uppercase tracking-widest">No products found in this category.</p>
+            <div className="col-span-full py-32 text-center bg-card/50 rounded-[4rem] border border-dashed border-border/60 mx-4 md:mx-0">
+               <ShoppingBag className="mx-auto text-text-dim opacity-10 mb-10" size={120} />
+               <h4 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Inventory Cycle Empty</h4>
+               <p className="text-sm text-text-dim lowercase max-w-xs mx-auto font-medium">Re-sync in progress. New units will be broadcasted to this classification shortly.</p>
             </div>
           )}
         </div>
@@ -3672,26 +3744,19 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-10 pb-20">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-24 px-4 md:px-0">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
-          <h2 className="text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Your Garage.</h2>
-          <p className="text-text-dim text-lg lowercase mt-2">Precision management for your elite fleet.</p>
+          <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Vehicle Garage.</h2>
+          <p className="text-text-dim text-base md:text-lg lowercase mt-2">Verified records for all units in your fleet.</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <button 
-            onClick={() => setView('marketplace')}
-            className="flex-1 md:flex-none px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition flex items-center justify-center gap-2"
-          >
-            <Search size={14} /> Explore Services
-          </button>
-          <button 
-            onClick={() => setShowAdd(true)}
-            className="flex-1 md:flex-none px-8 py-4 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2"
-          >
-            <Plus size={14} strokeWidth={3} /> Register New Car
-          </button>
-        </div>
+        <button 
+          onClick={() => setShowAdd(!showAdd)}
+          className="w-full md:w-auto bg-accent text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-xl shadow-accent/20 flex items-center justify-center gap-3 touch-target"
+        >
+          {showAdd ? <X size={18} /> : <Plus size={18} />}
+          {showAdd ? "Close Uplink" : "Add New Unit"}
+        </button>
       </header>
 
       {/* Stats Grid */}
@@ -4576,12 +4641,12 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   const tiers = isCustomer ? customerTiers : ownerTiers;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto pb-20">
-      <header className="text-center mb-16">
-        <h2 className="text-5xl font-black text-white tracking-tighter uppercase mb-4">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto pb-24 px-4 md:px-0">
+      <header className="text-center mb-10 md:mb-16">
+        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4 italic leading-none">
           {isCustomer ? 'Subscription Joy.' : 'Scale Your Flow.'}
         </h2>
-        <p className="text-text-dim text-lg">
+        <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl mx-auto">
           {isCustomer ? 'Premium vehicle care, automated for your peace of mind.' : 'Choose a plan that matches your business velocity.'}
         </p>
 
@@ -4639,42 +4704,42 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
         {tiers.map((tier) => (
           <div 
             key={tier.id} 
             className={cn(
-              "p-8 rounded-[2rem] border relative flex flex-col",
+              "p-8 md:p-10 rounded-[2.5rem] border relative flex flex-col transition-transform hover:scale-[1.02] duration-500",
               tier.color,
-              tier.id !== 'elite' ? "border-border" : "border-transparent"
+              tier.id !== 'elite' && tier.id !== 'unlimited_wash' ? "border-border" : "border-transparent"
             )}
           >
             {tier.popular && (
-              <div className="absolute top-0 right-8 -translate-y-1/2 bg-accent text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+              <div className="absolute top-0 right-10 -translate-y-1/2 bg-accent text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl">
                 Most Popular
               </div>
             )}
             
             <div className="mb-8">
               <div className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center mb-6",
-                tier.id === 'elite' ? "bg-bg" : "bg-bg/50"
+                "w-14 h-14 rounded-2xl flex items-center justify-center mb-8",
+                (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "bg-bg" : "bg-bg/50"
               )}>
                 {tier.icon}
               </div>
-              <h3 className={cn("text-2xl font-black mb-2 uppercase", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.name}</h3>
+              <h3 className={cn("text-2xl md:text-3xl font-black mb-3 uppercase italic tracking-tight", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.name}</h3>
               <div className="flex items-baseline gap-1">
-                <span className={cn("text-4xl font-black", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.price}</span>
+                <span className={cn("text-4xl md:text-5xl font-black tracking-tighter", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>{tier.price}</span>
                 <span className={cn("text-sm font-bold opacity-60", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white")}>/MO</span>
               </div>
-              <p className={cn("mt-4 text-sm leading-relaxed", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg/70" : "text-text-dim lowercase")}>{tier.description}</p>
+              <p className={cn("mt-4 text-sm md:text-base leading-relaxed", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg/70" : "text-text-dim lowercase")}>{tier.description}</p>
             </div>
 
-            <ul className="space-y-4 mb-10 flex-1">
+            <ul className="space-y-4 mb-12 flex-1">
               {tier.features.map((feature, i) => (
-                <li key={i} className="flex items-center gap-3">
-                  <Check size={16} className={cn((tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-accent")} />
-                  <span className={cn("text-sm font-medium", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white/80")}>{feature}</span>
+                <li key={i} className="flex items-center gap-4">
+                  <Check size={18} className={cn((tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-accent")} />
+                  <span className={cn("text-sm md:text-base font-medium", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-white/80")}>{feature}</span>
                 </li>
               ))}
             </ul>
@@ -4683,13 +4748,13 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
               onClick={() => handleSubscribe(tier.id as any)}
               disabled={loading !== null || profile.plan === tier.id}
               className={cn(
-                "w-full py-4 rounded-2xl font-black uppercase tracking-widest transition active:scale-95 disabled:opacity-50 disabled:active:scale-100",
+                "w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 touch-target shadow-2xl",
                 (tier.id === 'elite' || tier.id === 'unlimited_wash') 
                   ? "bg-bg text-white hover:bg-accent" 
                   : "bg-white text-bg hover:bg-accent hover:text-white"
               )}
             >
-              {loading === tier.id ? "Initialising..." : profile.plan === tier.id ? "Current Plan" : `Select ${tier.name}`}
+              {loading === tier.id ? "Initialising..." : profile.plan === tier.id ? "Active Infrastructure" : `Deploy ${tier.name}`}
             </button>
           </div>
         ))}
@@ -5016,25 +5081,25 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   }
 
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="max-w-xl mx-auto">
-      <header className="mb-10 text-center">
-        <h2 className="text-4xl font-black text-white tracking-tight">Log Job</h2>
-        <p className="text-text-dim mt-2">Capture current vehicle details instantly.</p>
+    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="max-w-xl mx-auto pb-24">
+      <header className="mb-8 md:mb-10 text-center">
+        <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase italic leading-none">Log Job</h2>
+        <p className="text-text-dim mt-2 lowercase font-medium">Capture current vehicle details instantly.</p>
       </header>
 
-      <form onSubmit={handleSubmit} className="bento-card space-y-6">
+      <form onSubmit={handleSubmit} className="bento-card space-y-6 md:space-y-8 p-6 md:p-10">
         {(profile.role === 'owner' || profile.permissions?.canManageTeam) && (
-          <div className="bg-bg/50 p-4 rounded-2xl border border-border space-y-4">
+          <div className="bg-bg/50 p-6 rounded-3xl border border-border space-y-5">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Assign Operative</label>
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Assign Operative</label>
               {loadingWorkers && <RefreshCw size={12} className="animate-spin text-accent" />}
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-4">
               <select 
                 value={selectedWorkerId}
                 onChange={(e) => setSelectedWorkerId(e.target.value)}
-                className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-accent"
+                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-accent scrollable-dropdown"
               >
                 <option value={profile.uid} className="bg-card text-white">Myself ({profile.name})</option>
                 {workers.map(w => (
@@ -5045,12 +5110,12 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
               </select>
               
               {workers.length > 0 && (
-                <div className="flex items-center gap-2 bg-accent/10 border border-accent/20 p-3 rounded-xl">
-                  <Award size={16} className="text-accent" />
-                  <p className="text-[10px] text-accent font-bold uppercase tracking-tight">
-                    Power Suggestion: <span className="text-white">
+                <div className="flex items-center gap-3 bg-accent/10 border border-accent/20 p-4 rounded-2xl">
+                  <Award size={18} className="text-accent flex-shrink-0" />
+                  <p className="text-[9px] text-accent font-black uppercase tracking-tight leading-relaxed">
+                    Power Suggestion: <span className="text-white/80">
                       AI recommended {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} 
-                      {selectedWorkerId === [...workers].sort((a, b) => b.efficiency - a.efficiency)[0]?.uid ? " (Highest Efficiency)" : ""} to maximize station throughput.
+                      {selectedWorkerId === [...workers].sort((a, b) => b.efficiency - a.efficiency)[0]?.uid ? " (Highest Efficiency)" : ""} to maximize throughput.
                     </span>
                   </p>
                 </div>
@@ -5064,17 +5129,17 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
             type="button"
             onClick={cameraActive ? stopCamera : startCamera}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition",
-              cameraActive ? "bg-red-500/10 text-red-500" : "bg-accent/10 text-accent"
+              "flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition shadow-lg touch-target",
+              cameraActive ? "bg-red-500 text-white" : "bg-accent text-white"
             )}
           >
-            {cameraActive ? <X size={14} /> : <Camera size={14} />}
+            {cameraActive ? <X size={16} /> : <Camera size={16} />}
             {cameraActive ? "Cancel Scan" : "Scan Plate (AI)"}
           </button>
         </div>
 
         {cameraActive && (
-          <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border-2 border-accent/20">
+          <div className="relative rounded-[2.5rem] overflow-hidden bg-black aspect-video border-2 border-accent/20">
             <video 
               ref={videoRef} 
               autoPlay 
@@ -5083,28 +5148,28 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
             />
             <canvas ref={canvasRef} className="hidden" />
             
-            <div className="absolute inset-0 border-2 border-accent/40 rounded-2xl m-8 pointer-events-none">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-accent rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-accent rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-accent rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-accent rounded-br-lg" />
+            <div className="absolute inset-0 border-2 border-accent/40 rounded-[2rem] m-6 md:m-8 pointer-events-none">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-accent rounded-tl-xl" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-accent rounded-tr-xl" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-accent rounded-bl-xl" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-accent rounded-br-xl" />
             </div>
 
-            <div className="absolute bottom-4 left-0 right-0 px-4">
+            <div className="absolute bottom-6 left-0 right-0 px-6">
               <button
                 type="button"
                 disabled={isScanning}
                 onClick={captureAndScan}
-                className="w-full bg-accent text-white font-black py-3 rounded-xl shadow-2xl flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-accent text-white font-black py-4 rounded-2xl shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50 touch-target"
               >
                 {isScanning ? (
                   <>
-                    <RefreshCw className="animate-spin" size={18} />
+                    <RefreshCw className="animate-spin" size={20} />
                     Analyzing Image...
                   </>
                 ) : (
                   <>
-                    <Camera size={18} />
+                    <Camera size={20} />
                     Capture & Identify
                   </>
                 )}
@@ -5113,36 +5178,38 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
           </div>
         )}
 
-        <div>
-          <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-2">Car Model</label>
-          <input 
-            required
-            placeholder="e.g. Toyota Hilux"
-            value={form.carModel}
-            onChange={e => setForm({...form, carModel: e.target.value})}
-            className="w-full bg-bg px-5 py-4 rounded-xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-white"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-2">Plate Number</label>
-          <input 
-            required
-            placeholder="ABC-123-XY"
-            value={form.plateNumber}
-            onChange={e => setForm({...form, plateNumber: e.target.value})}
-            className="w-full bg-bg px-5 py-4 rounded-xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-white font-mono"
-          />
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-bold text-text-dim uppercase tracking-wider">Service Tier (₦)</label>
-            <div className="flex gap-1.5">
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Car Model</label>
+            <input 
+              required
+              placeholder="e.g. Toyota Hilux"
+              value={form.carModel}
+              onChange={e => setForm({...form, carModel: e.target.value})}
+              className="w-full bg-bg px-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-white font-bold"
+            />
+          </div>
+          <div className="space-y-3">
+            <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Plate Number</label>
+            <input 
+              required
+              placeholder="ABC-123-XY"
+              value={form.plateNumber}
+              onChange={e => setForm({...form, plateNumber: e.target.value})}
+              className="w-full bg-bg px-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-white font-mono font-black placeholder:text-text-dim/20"
+            />
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Service Tier (₦)</label>
+            </div>
+            <div className="flex bg-bg rounded-2xl p-1.5 border border-border gap-1">
               <button 
                 type="button" 
                 onClick={() => setForm({...form, price: String(profile.pricing?.sedan || 2000)})} 
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.sedan || 2000) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                  "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.sedan || 2000) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
                 )}
               >
                 Sedan
@@ -5151,8 +5218,8 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 type="button" 
                 onClick={() => setForm({...form, price: String(profile.pricing?.suv || 3500)})} 
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.suv || 3500) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                  "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.suv || 3500) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
                 )}
               >
                 SUV
@@ -5161,40 +5228,42 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 type="button" 
                 onClick={() => setForm({...form, price: String(profile.pricing?.truck || 5000)})} 
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.truck || 5000) ? "bg-accent/20 border-accent text-accent" : "bg-white/5 border-white/10 text-text-dim hover:bg-white/10"
+                  "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
+                  form.price === String(profile.pricing?.truck || 5000) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
                 )}
               >
-                Truck
+                Heavy
               </button>
             </div>
           </div>
+          
           <div className="relative group">
-            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent transition-colors font-bold">₦</div>
+            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent transition-colors font-black text-lg">₦</div>
             <input 
               required
               type="number"
               value={form.price}
               onChange={e => setForm({...form, price: e.target.value})}
-              className="w-full bg-bg pl-12 pr-5 py-5 rounded-[2rem] border border-border focus:border-accent outline-none transition text-white text-2xl font-black tracking-tighter"
+              className="w-full bg-bg pl-12 pr-6 py-5 rounded-2xl border border-border focus:border-accent outline-none transition text-white text-3xl font-black tracking-tighter"
             />
           </div>
         </div>
-        
+
         <button 
+          type="submit" 
           disabled={submitting || !form.carModel || !form.plateNumber}
-          className="w-full bg-accent text-white font-black py-5 rounded-[2rem] hover:bg-accent/90 transition shadow-[0_20px_50px_rgba(62,99,221,0.3)] flex items-center justify-center gap-3 group disabled:opacity-50 mt-4 active:scale-95 italic uppercase tracking-[0.1em]"
+          className="w-full py-6 bg-white text-bg rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target mt-4 italic"
         >
           {submitting ? (
-            <>
+            <div className="flex items-center justify-center gap-3">
               <RefreshCw className="animate-spin" size={20} />
               Encrypting Service Log...
-            </>
+            </div>
           ) : (
-            <>
+            <div className="flex items-center justify-center gap-3">
               Broadcast Service Log
-              <Zap size={20} className="group-hover:scale-125 transition fill-white" />
-            </>
+              <Zap size={20} className="fill-current" />
+            </div>
           )}
         </button>
       </form>
@@ -5716,21 +5785,21 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto pb-20">
-      <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-4xl font-black text-white tracking-tight">Operational History</h2>
-          <p className="text-text-dim mt-2">Full ledger of service transactions.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto pb-24 md:pb-20 px-4 md:px-0">
+      <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-8 md:p-0 md:bg-transparent rounded-3xl md:rounded-none border border-border md:border-none">
+        <div className="text-center md:text-left">
+          <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Operational Ledger</h2>
+          <p className="text-text-dim mt-3 font-medium lowercase">Full cryptographic history of service transactions.</p>
         </div>
         <button 
           onClick={() => setIsFilterOpen(!isFilterOpen)}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl transition font-bold text-sm",
-            isFilterOpen ? "bg-accent text-white shadow-lg shadow-accent/20" : "bg-card text-text-dim border border-border hover:text-white"
+            "flex items-center justify-center gap-3 px-8 py-5 rounded-2xl transition font-black text-xs uppercase tracking-widest shadow-xl touch-target",
+            isFilterOpen ? "bg-accent text-white shadow-accent/20" : "bg-white/5 text-text-dim border border-border hover:text-white"
           )}
         >
-          {isFilterOpen ? <X size={18} /> : <Filter size={18} />}
-          {isFilterOpen ? 'Close Controls' : 'Filter & Sort'}
+          {isFilterOpen ? <X size={20} /> : <Filter size={20} />}
+          {isFilterOpen ? 'CONCEAL CONTROLS' : 'INITIALIZE FILTERS'}
         </button>
       </header>
 
@@ -5742,39 +5811,39 @@ function HistoryView({ profile }: { profile: UserProfile }) {
             exit={{ height: 0, opacity: 0, marginBottom: 0 }}
             className="overflow-hidden"
           >
-            <div className="bento-card bg-card/50 backdrop-blur-sm border-accent/20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
-                  <Calendar size={12} /> Date Range
+            <div className="bento-card bg-card/50 backdrop-blur-xl border-accent/20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-8 md:p-10 mb-8 rounded-[2.5rem]">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-accent uppercase tracking-widest flex items-center gap-2 ml-1">
+                  <Calendar size={14} /> Chronological Range
                 </label>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   <input 
                     type="date" 
                     value={filters.startDate}
                     onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                    className="bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+                    className="bg-bg border border-border rounded-xl px-5 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-accent touch-target" 
                   />
                   <input 
                     type="date" 
                     value={filters.endDate}
                     onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent" 
+                    className="bg-bg border border-border rounded-xl px-5 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-accent touch-target" 
                   />
                 </div>
               </div>
 
               {profile.role !== 'worker' && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest flex items-center gap-1.5">
-                    <Users size={12} /> Filter by Worker
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-accent uppercase tracking-widest flex items-center gap-2 ml-1">
+                    <Users size={14} /> Personnel Filter
                   </label>
                   <select 
                     value={filters.workerId}
                     onChange={e => setFilters(prev => ({ ...prev, workerId: e.target.value }))}
-                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent appearance-none"
+                    className="w-full bg-bg border border-border rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-accent appearance-none scrollable-dropdown touch-target"
                   >
-                    <option value="all" className="bg-card text-white">All Workers</option>
-                    {workers.map(w => <option key={w.uid} value={w.uid} className="bg-card text-white">{w.name}</option>)}
+                    <option value="all" className="bg-card text-white italic">ALL OPERATIVES</option>
+                    {workers.map(w => <option key={w.uid} value={w.uid} className="bg-card text-white font-bold">{w.name.toUpperCase()}</option>)}
                   </select>
                 </div>
               )}
@@ -5866,43 +5935,49 @@ function HistoryView({ profile }: { profile: UserProfile }) {
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {filteredAndSortedWashes.map(wash => (
           <motion.div 
             layout
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             key={wash.id} 
-            className="bento-card"
+            className="bg-card border border-border rounded-[2.5rem] p-8 md:p-10 shadow-xl transition-all hover:border-accent/30 group"
           >
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent">
-              <CarFront size={28} />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-10">
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-accent/10 flex items-center justify-center text-accent shadow-inner">
+                  <CarFront size={32} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-xl text-white">{wash.carModel}</h4>
-                  <p className="text-sm text-text-dim font-mono tracking-tight">{wash.plateNumber}</p>
-                  <p className="text-[10px] uppercase font-bold text-text-dim mt-2 tracking-widest">{wash.timestamp?.toDate().toLocaleString()}</p>
+                  <h4 className="font-black text-2xl text-white uppercase italic tracking-tighter leading-none mb-1">{wash.carModel}</h4>
+                  <p className="text-xs text-text-dim font-black tracking-widest uppercase opacity-60 mb-3">{wash.plateNumber}</p>
+                  <div className="flex items-center gap-2 text-[10px] uppercase font-black text-accent tracking-wider">
+                    <Calendar size={12} />
+                    <span>{wash.timestamp?.toDate().toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-black text-white tracking-tighter">{formatCurrency(wash.price)}</p>
-                <div className="flex flex-col items-end gap-2 mt-2">
+              <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4">
+                <p className="text-4xl font-black text-white italic tracking-tighter leading-none">{formatCurrency(wash.price)}</p>
+                <div className="flex flex-col items-end gap-3">
                   {wash.isPending ? (
-                    <div className="flex items-center gap-1.5 text-accent animate-pulse font-black text-[8px] uppercase tracking-widest bg-accent/5 px-2 py-1 rounded border border-accent/20">
-                      <RefreshCw size={8} className="animate-spin" /> 
-                      Queued for Sync
+                    <div className="flex items-center gap-2 text-accent animate-pulse font-black text-[9px] uppercase tracking-widest bg-accent/5 px-4 py-2 rounded-full border border-accent/20">
+                      <RefreshCw size={10} className="animate-spin" /> 
+                      INITIALIZING SYNC
                     </div>
                   ) : (
-                    <span className="inline-block px-3 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-md tracking-widest border border-success/20">
+                    <span className={cn(
+                      "inline-flex px-5 py-2 text-[10px] font-black uppercase rounded-full tracking-[0.2em] border shadow-lg",
+                      wash.status === 'completed' ? "bg-success/10 text-success border-success/20 shadow-success/10" : "bg-accent/10 text-accent border-accent/20 shadow-accent/10"
+                    )}>
                       {wash.status}
                     </span>
                   )}
                   {wash.businessRating && (
-                    <div className="flex items-center gap-1 text-yellow-400">
+                    <div className="flex items-center gap-1.5 text-yellow-400">
                       {[...Array(5)].map((_, i) => (
-                        <Star key={i} size={10} fill={i < wash.businessRating! ? "currentColor" : "none"} strokeWidth={3} />
+                        <Star key={i} size={12} fill={i < wash.businessRating! ? "currentColor" : "none"} strokeWidth={3} />
                       ))}
                     </div>
                   )}
@@ -5911,33 +5986,38 @@ function HistoryView({ profile }: { profile: UserProfile }) {
             </div>
             
             {wash.maintenanceTip && (
-              <div className="bg-accent/5 p-5 rounded-2xl border border-accent/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-5 h-5 bg-accent/20 rounded-md flex items-center justify-center">
-                    <Award size={12} className="text-accent" />
+              <div className="bg-accent/5 p-6 md:p-8 rounded-[2rem] border border-accent/20 relative overflow-hidden group-hover:bg-accent/10 transition-colors">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-6 h-6 bg-accent rounded-md flex items-center justify-center shadow-lg">
+                    <Award size={14} className="text-white" />
                   </div>
-                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">Maintenance Intelligence</span>
+                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">PROACTIVE MAINTENANCE CORE</span>
                 </div>
-                <p className="text-sm text-blue-100/90 leading-relaxed font-medium italic">"{wash.maintenanceTip}"</p>
+                <p className="text-base text-white/90 leading-relaxed font-bold italic lowercase italic">"{wash.maintenanceTip}"</p>
+                <div className="absolute -right-4 -bottom-4 opacity-5 text-accent group-hover:opacity-10 transition-opacity">
+                  <Zap size={80} />
+                </div>
               </div>
             )}
 
-            {profile.role === 'owner' && (
-              <div className="mt-6 pt-5 border-t border-border flex items-center justify-between text-[10px] font-bold text-text-dim uppercase tracking-widest">
-                <div className="flex items-center gap-3">
-                   <div className="flex items-center gap-2">
-                     <Users size={12} />
-                     <span>Authorized Worker: {wash.workerName}</span>
+            {(profile.role === 'owner' || profile.role === 'admin') && (
+              <div className="mt-10 pt-8 border-t border-border flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-dim">
+                       <Users size={16} />
+                     </div>
+                     <span className="text-[10px] font-black text-text-dim uppercase tracking-widest italic">{wash.workerName}</span>
                    </div>
-                   <div className="flex gap-1.5">
+                   <div className="flex gap-2">
                      {workers.find(w => w.uid === wash.workerId)?.badges?.map((badge: any) => (
-                       <div key={badge.id} title={badge.name} className={cn("p-1 rounded-full border border-current", badge.color, badge.bg)}>
+                       <div key={badge.id} title={badge.name} className={cn("p-2 rounded-full border border-current shadow-lg transform hover:scale-110 transition-transform", badge.color, badge.bg)}>
                          {badge.icon}
                        </div>
                      ))}
                    </div>
                 </div>
-                <span className="bg-white/5 px-2 py-0.5 rounded">ID: {wash.id.slice(0, 8)}</span>
+                <span className="bg-white/5 px-4 py-2 rounded-full text-[10px] font-black text-text-dim uppercase tracking-widest border border-white/5 self-end md:self-auto">NODE: {wash.id.slice(0, 8)}</span>
               </div>
             )}
           </motion.div>
@@ -6043,78 +6123,78 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-20">
-      <header className="mb-10 text-center">
-        <h2 className="text-4xl font-black text-white tracking-tight uppercase px-4">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-24 md:pb-20 px-4 md:px-0">
+      <header className="mb-10 text-center md:text-left md:mb-12">
+        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none mb-4">
           {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
         </h2>
-        <p className="text-text-dim mt-2 lowercase">
+        <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed font-medium">
           {profile.role === 'owner' ? "Configure your business identity and boundaries." : "Customize your interface and profile preferences."}
         </p>
       </header>
 
-      <div className="space-y-6">
+      <div className="space-y-8">
         <AddWorkerModal 
           isOpen={isAddModalOpen} 
           onClose={() => setIsAddModalOpen(false)} 
           stationId={profile.uid} 
         />
-        <div className="bento-card space-y-10">
+        <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl">
           {profile.role === 'owner' && (
             <>
-              <div className="space-y-6">
-                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-                  <Store size={14} className="text-accent" />
+              <div className="space-y-8">
+                <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+                  <Store size={20} className="text-accent" />
                   Station Identity
                 </label>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Business Name</label>
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Business Designation</label>
                     <input 
                       value={settings.businessName}
                       onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
-                      placeholder="e.g. Lagos Premium Wash"
-                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      placeholder="e.g. LAGOS PREMIUM WASH"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Physical Address</label>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Physical Sector Address</label>
                     <input 
                       value={settings.businessAddress}
                       onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
-                      placeholder="123 Lekki Phase 1, Lagos"
-                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      placeholder="e.g. 123 LEKKI PHASE 1, LAGOS"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-6 pt-6 border-t border-border">
-                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-                  <MapPin size={14} className="text-accent" />
+              <div className="space-y-8 pt-10 border-t border-border/40">
+                <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+                  <MapPin size={20} className="text-accent" />
                   Operational Geofence
                 </label>
-                <p className="text-xs text-text-dim leading-relaxed">
+                <p className="text-sm text-text-dim leading-relaxed font-medium">
                   Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
                 </p>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Latitude</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Coordinate Latitude</label>
                     <input 
                       type="number"
                       value={settings.businessLat}
                       onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Longitude</label>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Coordinate Longitude</label>
                     <input 
                       type="number"
                       value={settings.businessLng}
                       onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
                     />
                   </div>
                 </div>
@@ -6122,10 +6202,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 <button 
                   onClick={handleGetCurrentLocation}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 bg-accent/10 text-accent font-bold py-3 rounded-xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-3 bg-accent/10 text-accent font-black py-5 rounded-2xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50 touch-target uppercase text-xs tracking-widest shadow-xl"
                 >
-                  <MapPin size={16} className="group-hover:animate-bounce" />
-                  {loading ? "Detecting..." : "Pin Current GPS Data"}
+                  <MapPin size={24} className="group-hover:animate-bounce" />
+                  {loading ? "DETECTING COORDINATES..." : "PIN CURRENT GPS DATA"}
                 </button>
               </div>
             </>
@@ -6197,66 +6277,66 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         </div>
 
         {/* Team Delegation - Only for Owners */}
-        <div className="bento-card space-y-8">
-          <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2 mb-2">
-                <Users size={14} className="text-accent" />
+        <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl overflow-hidden relative">
+          <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
+            <div className="space-y-4">
+              <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+                <Users size={20} className="text-accent" />
                 Staff Registry
               </label>
-              <p className="text-xs text-text-dim leading-relaxed">
+              <p className="text-sm text-text-dim leading-relaxed font-medium max-w-md">
                 Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
               </p>
             </div>
             <button 
               onClick={() => setIsAddModalOpen(true)}
-              className="px-6 py-3 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-lg shadow-accent/20 flex items-center gap-2"
+              className="px-10 py-5 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-accent/20 flex items-center justify-center gap-3 transition-transform hover:scale-105 active:scale-95 touch-target"
             >
-              <Plus size={16} /> Provision Worker
+              <Plus size={20} /> PROVISION UNIT
             </button>
           </header>
 
-          <div className="space-y-4">
+          <div className="space-y-4 relative z-10">
             {/* Active Workers */}
             {workers.map(worker => (
-              <div key={worker.uid} className="flex items-center justify-between p-4 bg-bg/50 border border-border rounded-2xl hover:border-accent/40 transition-colors group">
-                <div className="flex items-center gap-4">
+              <div key={worker.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-bg/40 backdrop-blur-md border border-border rounded-[2rem] hover:border-accent/40 transition-all group shadow-lg gap-6">
+                <div className="flex items-center gap-5">
                   <div className="relative">
                     {worker.photoUrl ? (
-                      <img src={worker.photoUrl} alt={worker.name} className="w-10 h-10 rounded-xl border border-border group-hover:scale-105 transition-transform" />
+                      <img src={worker.photoUrl} alt={worker.name} className="w-14 h-14 rounded-2xl border border-border group-hover:scale-105 transition-transform object-cover" />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20">
-                        <Users size={20} />
+                      <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20 shadow-inner">
+                        <Users size={28} />
                       </div>
                     )}
                     {worker.permissions?.canManageTeam && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full flex items-center justify-center text-white border-2 border-card">
-                        <Zap size={8} fill="currentColor" />
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent rounded-full flex items-center justify-center text-white border-2 border-bg shadow-lg">
+                        <Zap size={12} fill="currentColor" />
                       </div>
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-white">{worker.name}</p>
-                      <span className="px-1.5 py-0.5 bg-success/10 text-success text-[8px] font-black uppercase rounded">Active</span>
+                    <div className="flex items-center gap-3 mb-1">
+                      <p className="text-lg font-black text-white uppercase italic tracking-tighter leading-none">{worker.name}</p>
+                      <span className="px-3 py-1 bg-success/10 text-success text-[8px] font-black uppercase rounded-full border border-success/20 tracking-widest">ACTIVE</span>
                     </div>
-                    <p className="text-[10px] text-text-dim uppercase tracking-widest font-black">
-                      {worker.permissions?.canManageTeam ? "Team Lead" : "Professional Staff"}
+                    <p className="text-[10px] text-accent/60 uppercase tracking-widest font-black italic">
+                      {worker.permissions?.canManageTeam ? "UNIT COMMANDER" : "OPERATIONAL SPECIALIST"}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                    <button 
                     onClick={() => togglePermission(worker.uid, 'canManageTeam')}
                     className={cn(
-                      "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      "w-full sm:w-auto px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md touch-target italic",
                       worker.permissions?.canManageTeam 
                         ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white" 
-                        : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white"
+                        : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white shadow-accent/10"
                     )}
                    >
-                     {worker.permissions?.canManageTeam ? "Revoke Lead" : "Promote to Lead"}
+                     {worker.permissions?.canManageTeam ? "REVOKE LEAD" : "PROMOTE LEAD"}
                    </button>
                 </div>
               </div>
@@ -6264,17 +6344,17 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
             {/* Invited but not yet joined */}
             {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
-              <div key={auth.id} className="flex items-center justify-between p-4 bg-white/5 border border-dashed border-border rounded-2xl opacity-70 group">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-text-dim border border-white/10 italic font-black text-xs">
+              <div key={auth.id} className="flex items-center justify-between p-6 bg-white/5 border border-dashed border-border/40 rounded-[1.5rem] opacity-70 group hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-text-dim border border-white/10 italic font-black text-sm">
                     ?
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-text-dim">{auth.name}</p>
-                      <span className="px-1.5 py-0.5 bg-white/10 text-text-dim text-[8px] font-black uppercase rounded">Pending Invite</span>
+                    <div className="flex items-center gap-3 mb-1">
+                      <p className="font-black text-white uppercase italic tracking-tighter">{auth.name}</p>
+                      <span className="px-2 py-0.5 bg-white/10 text-text-dim text-[8px] font-black uppercase rounded tracking-widest border border-white/5">PENDING INFILTRATION</span>
                     </div>
-                    <p className="text-[10px] text-text-dim/60 font-mono tracking-tighter truncate max-w-[150px]">
+                    <p className="text-[10px] text-text-dim/60 font-mono tracking-tighter truncate max-w-[200px]">
                       {auth.email}
                     </p>
                   </div>
@@ -6282,20 +6362,15 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
                 <button 
                   onClick={() => handleDeleteInvitation(auth.id)}
-                  className="p-2 text-text-dim hover:text-red-500 transition-colors"
+                  className="p-3 text-text-dim hover:text-red-500 transition-colors touch-target bg-white/5 rounded-full"
                   title="Revoke Invitation"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={18} />
                 </button>
               </div>
             ))}
-
-            {workers.length === 0 && authorizedEmails.length === 0 && (
-              <div className="py-10 text-center opacity-50 border-2 border-dashed border-border rounded-3xl">
-                <p className="text-xs text-text-dim italic">No staff members identified in your registry.</p>
-              </div>
-            )}
           </div>
+          <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-accent/5 rounded-full blur-[100px]" />
         </div>
       </div>
     </motion.div>
@@ -6350,33 +6425,33 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           </button>
         </div>
 
-        <form onSubmit={handleAdd} className="p-8 space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Full Name</label>
+        <form onSubmit={handleAdd} className="p-8 space-y-8">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-accent uppercase tracking-[0.2em] ml-1 italic">Operative Full Name</label>
               <input 
                 required
                 value={form.name}
                 onChange={e => setForm({...form, name: e.target.value})}
-                placeholder="e.g. John Doe"
-                className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                placeholder="e.g. JOHN DOE"
+                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase italic"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Email Address</label>
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-accent uppercase tracking-[0.2em] ml-1 italic">Protocol Email Address</label>
               <div className="relative">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim" size={16} />
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" size={20} />
                 <input 
                   required
                   type="email"
                   value={form.email}
                   onChange={e => setForm({...form, email: e.target.value})}
-                  placeholder="worker@gmail.com"
-                  className="w-full bg-bg pl-12 pr-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-white text-sm"
+                  placeholder="operative@washflow.systems"
+                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-white text-base font-bold touch-target"
                 />
               </div>
-              <p className="text-[9px] text-text-dim/60 italic lowercase mt-2 px-1">
-                Note: Worker must use this exact Google Email to authenticate.
+              <p className="text-[9px] text-text-dim/60 font-black uppercase tracking-widest mt-2 px-2 italic">
+                Note: Operative must use this exact Google Email to authenticate.
               </p>
             </div>
           </div>
@@ -6384,12 +6459,12 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           <button 
             type="submit"
             disabled={loading}
-            className="w-full py-5 bg-white text-bg rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2 group disabled:opacity-50"
+            className="w-full bg-white text-bg py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target italic"
           >
-            {loading ? <RefreshCw className="animate-spin text-bg group-hover:text-white" size={18} /> : (
+            {loading ? <RefreshCw className="animate-spin" size={18} /> : (
               <>
-                <ShieldCheck size={18} />
-                Authorize Registry Access
+                <ShieldCheck size={20} />
+                CONFIRM REGISTRY DATA →
               </>
             )}
           </button>
