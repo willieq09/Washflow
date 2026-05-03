@@ -30,6 +30,7 @@ import { sendEmail, generateBookingNotification } from './services/notificationS
 // --- Constants ---
 const COMMISSION_RATE = 0.075; // 7.5% Platform Fee, 92.5% Owner Split
 const MIN_WITHDRAWAL = 1000;
+const ADMIN_EMAILS = ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'];
 
 // --- Types ---
 interface UserProfile {
@@ -309,7 +310,7 @@ export default function App() {
           if (docSnap.exists()) {
             setProfile(docSnap.data() as UserProfile);
           } else {
-            const isOwnerEmail = u.email === 'oumawillis09@gmail.com';
+            const isOwnerEmail = u.email && ADMIN_EMAILS.includes(u.email);
             
             // Check if this email is an authorized worker
             let assignedRole: any = isOwnerEmail ? 'owner' : null;
@@ -517,7 +518,7 @@ export default function App() {
 
   // Determine if user has access to AI Scanner (Elite or Admin or specifically granted)
   const hasScannerAccess = profile.plan === 'elite' || 
-                          profile.email === 'oumawillis09@gmail.com' || 
+                          (profile.email && ADMIN_EMAILS.includes(profile.email)) || 
                           profile.role === 'admin' ||
                           (profile.role === 'worker' && profile.permissions?.canManageTeam);
 
@@ -597,7 +598,7 @@ export default function App() {
                     label="Performance" 
                     active={view === 'performance'} 
                     onClick={() => {
-                      if (profile.plan === 'standard' || profile.plan === 'elite' || profile.email === 'oumawillis09@gmail.com' || profile.permissions?.canManageTeam) {
+                      if (profile.plan === 'standard' || profile.plan === 'elite' || (profile.email && ADMIN_EMAILS.includes(profile.email)) || profile.permissions?.canManageTeam) {
                         navigate('performance');
                       } else {
                         navigate('billing');
@@ -628,7 +629,7 @@ export default function App() {
                       onClick={() => navigate('scanner')} 
                     />
                   )}
-                  {profile.email === 'oumawillis09@gmail.com' && (
+                  {profile.email && ADMIN_EMAILS.includes(profile.email) && (
                     <NavItem 
                       icon={<ShieldCheck size={20} className="text-success" />} 
                       label="Admin Console" 
@@ -4779,7 +4780,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   }, [profile]);
 
   const startCamera = async () => {
-    if (profile.plan !== 'elite' && profile.email !== 'oumawillis09@gmail.com') {
+    if (profile.plan !== 'elite' && (!profile.email || !ADMIN_EMAILS.includes(profile.email))) {
       setView('billing');
       return;
     }
