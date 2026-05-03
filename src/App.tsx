@@ -207,7 +207,7 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
           <p className="text-text-dim text-sm mb-8 leading-relaxed lowercase">We've encountered a critical error. The tracking systems have logged the incident for review.</p>
           <button 
             onClick={() => window.location.reload()}
-            className="w-full bg-text-main text-bg font-black py-4 rounded-2xl hover:bg-red-500 hover:text-text-main transition-all uppercase tracking-widest text-xs"
+            className="w-full bg-accent text-white font-black py-4 rounded-2xl hover:brightness-110 transition-all uppercase tracking-widest text-xs shadow-xl shadow-accent/20"
           >
             Reboot Interface
           </button>
@@ -452,7 +452,7 @@ export default function App() {
         className="flex flex-col items-center gap-4 mb-8"
       >
         <Car className="w-12 h-12 text-accent" />
-        <span className="font-black text-text-dim uppercase tracking-[0.3em] text-xs">Booting OS...</span>
+        <span className="font-black text-text-main uppercase tracking-[0.3em] text-xs">Booting OS...</span>
       </motion.div>
       
       {showForceRefresh && (
@@ -466,7 +466,7 @@ export default function App() {
           </p>
           <button 
             onClick={() => window.location.reload()}
-            className="flex items-center gap-2 mx-auto px-4 py-2 bg-text-main/5 border border-border rounded-xl text-[10px] font-black uppercase tracking-widest text-text-main hover:bg-text-main/10 transition"
+            className="flex items-center gap-2 mx-auto px-4 py-2 bg-accent text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition shadow-lg shadow-accent/20"
           >
             <RefreshCw size={14} />
             Force Refresh
@@ -507,7 +507,7 @@ export default function App() {
           </p>
           <button 
             onClick={logout}
-            className="px-8 py-3 bg-text-main/5 border border-border rounded-xl text-[10px] font-black uppercase tracking-widest text-text-main hover:bg-red-500 hover:text-white transition"
+            className="px-8 py-3 bg-accent text-white border border-accent/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20"
           >
             Switch Account
           </button>
@@ -662,10 +662,10 @@ export default function App() {
           <div className="mt-auto border-t border-border pt-6">
             <div className="flex items-center gap-3 px-2 mb-6">
               <img src={profile?.photoUrl} className="w-10 h-10 rounded-full border border-border" />
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-text-main leading-none">{profile?.name}</span>
-                <span className="text-xs text-text-dim mt-1 capitalize">{profile?.role}</span>
-              </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-text-main leading-none">{profile?.name}</span>
+                  <span className="text-xs text-text-dim mt-1 capitalize font-bold">{profile?.role}</span>
+                </div>
             </div>
             
             <div className="px-2 mb-4">
@@ -682,10 +682,10 @@ export default function App() {
             )}
             <button 
               onClick={logout}
-              className="w-full flex items-center gap-2 px-2 py-2 text-text-dim hover:text-red-500 transition"
+              className="w-full flex items-center gap-2 px-2 py-2 text-text-dim hover:text-accent transition font-bold"
             >
               <LogOut size={18} />
-              <span className="text-sm font-medium">Log out</span>
+              <span className="text-sm">Log out</span>
             </button>
           </div>
         </nav>
@@ -851,13 +851,13 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
           AUTOLUX <br />
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
-        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-medium leading-relaxed uppercase tracking-tight">
+        <p className="text-lg md:text-xl text-text-main mb-10 md:mb-12 max-w-xl mx-auto font-black leading-relaxed uppercase tracking-tight italic">
           The car wash owner operating system. Manage operations locally, scale subscriptions globally.
         </p>
         <button 
           onClick={onLogin}
           disabled={authLoading}
-          className="w-full md:w-auto bg-text-main text-bg px-10 py-5 rounded-2xl font-black flex items-center justify-center gap-4 mx-auto hover:brightness-110 transition-all shadow-xl active:scale-95 text-xl disabled:opacity-50 disabled:cursor-not-allowed touch-target"
+          className="w-full md:w-auto bg-accent text-white px-10 py-5 rounded-2xl font-black flex items-center justify-center gap-4 mx-auto hover:brightness-110 transition-all shadow-xl shadow-accent/20 active:scale-95 text-xl disabled:opacity-50 disabled:cursor-not-allowed touch-target"
         >
           {authLoading ? (
             <div className="flex items-center gap-3">
@@ -877,15 +877,15 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
               Authentication in progress...
             </p>
             <div className="text-left space-y-3">
-              <p className="text-xs text-text-dim leading-relaxed">
-                <span className="text-text-main font-bold">1. Blocked Popup?</span> Check your browser's address bar for a "popup blocked" icon and permit it.
+              <p className="text-xs text-text-main leading-relaxed font-bold">
+                <span className="text-accent font-black">1. Blocked Popup?</span> Check your browser's address bar for a "popup blocked" icon and permit it.
               </p>
-              <p className="text-xs text-text-dim leading-relaxed">
-                <span className="text-text-main font-bold">2. Iframe Restricted?</span> If the popup closes immediately, try opening the app in a 
-                <span className="text-text-main font-bold"> New Tab</span> using the icon in the top right of the preview.
+              <p className="text-xs text-text-main leading-relaxed font-bold">
+                <span className="text-accent font-black">2. Iframe Restricted?</span> If the popup closes immediately, try opening the app in a 
+                <span className="text-accent font-black"> New Tab</span> using the icon in the top right of the preview.
               </p>
-              <p className="text-xs text-text-dim leading-relaxed font-mono">
-                <span className="text-text-main font-bold">3. Authorized Domain?</span> Ensure <code className="bg-text-main/10 px-1 rounded">run.app</code> is added to the 
+              <p className="text-xs text-text-main leading-relaxed font-mono font-bold">
+                <span className="text-accent font-black">3. Authorized Domain?</span> Ensure <code className="bg-text-main/10 px-1 rounded">run.app</code> is added to the 
                 Authorized Domains in your Firebase Auth settings.
               </p>
             </div>
@@ -920,8 +920,8 @@ const VEHICLE_DATA = {
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
   return (
     <div className="bento-card">
-      <h3 className="font-bold text-text-main mb-2">{title}</h3>
-      <p className="text-sm text-text-dim leading-relaxed">{desc}</p>
+      <h3 className="font-black text-text-main mb-2 uppercase italic tracking-tighter">{title}</h3>
+      <p className="text-sm text-text-main leading-relaxed font-bold lowercase">{desc}</p>
     </div>
   );
 }
@@ -980,15 +980,15 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-md rounded-[2.5rem] border border-border p-8 md:p-10 shadow-2xl relative overflow-hidden">
         <div className="flex justify-between items-center mb-8 md:mb-10">
           <h3 className="text-2xl md:text-3xl font-black text-text-main uppercase italic tracking-tighter leading-none">Withdrawal Console</h3>
-          <button onClick={onClose} className="p-3 bg-text-main/5 rounded-full hover:bg-text-main/10 transition-colors text-text-dim hover:text-text-main touch-target">
+          <button onClick={onClose} className="p-3 bg-accent text-white rounded-full hover:brightness-110 transition-all shadow-lg shadow-accent/20 touch-target">
             <X size={20} />
           </button>
         </div>
 
         <div className="space-y-6 md:space-y-10">
-          <div className="p-6 bg-accent/5 border border-accent/20 rounded-3xl">
-            <span className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Available to Clear</span>
-            <div className="text-3xl md:text-4xl font-black text-text-main italic tracking-tighter">{formatCurrency(balance)}</div>
+          <div className="p-6 bg-accent text-white rounded-3xl shadow-xl shadow-accent/10">
+            <span className="text-[10px] font-black opacity-70 uppercase tracking-widest ml-1">Available to Clear</span>
+            <div className="text-3xl md:text-4xl font-black italic tracking-tighter">{formatCurrency(balance)}</div>
           </div>
 
           <div className="space-y-6 md:space-y-8">
@@ -1041,7 +1041,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
             <button
               onClick={handleWithdraw}
               disabled={submitting || !form.amount || parseFloat(form.amount) <= 0 || parseFloat(form.amount) > balance}
-              className="w-full py-5 bg-text-main text-bg rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4 italic"
+              className="w-full py-5 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4 italic"
             >
               {submitting ? <RefreshCw className="animate-spin mx-auto" size={20} /> : "Finalize Withdrawal Flow"}
             </button>
@@ -1233,7 +1233,7 @@ function AdminDashboardView() {
                 <button 
                   onClick={() => handleSettle(w.id)}
                   disabled={settlingId === w.id}
-                  className="mt-6 w-full bg-success/10 text-success border border-success/20 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-success hover:text-white transition flex items-center justify-center gap-2 group"
+                  className="mt-6 w-full bg-accent text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2 group italic"
                 >
                   {settlingId === w.id ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} className="group-hover:scale-125 transition" />}
                   Confirm Manual Payment
@@ -1294,7 +1294,7 @@ function AdminDashboardView() {
            <p className="text-text-dim text-sm max-w-xs lowercase">The system is currently verifying all 7.5% commission payouts across {stats.totalOwners} verified business shards.</p>
            <button 
              onClick={handleDownloadRegistry}
-             className="mt-8 bg-text-main text-bg px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl"
+             className="mt-8 bg-accent text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20"
            >
              Download Full Registry
            </button>
@@ -1446,7 +1446,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                   onClick={() => {
                     alert("Rescheduling requested. Our system will contact you with available alternatives.");
                   }}
-                  className="flex-1 bg-text-main text-bg py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition touch-target"
+                  className="flex-1 bg-white/10 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/20 transition touch-target border border-white/20"
                 >
                   Reschedule
                 </button>
@@ -1485,7 +1485,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                )}
             </div>
           </div>
-          <button className="w-full mt-6 py-3 rounded-xl border border-accent/20 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent hover:text-white transition">
+          <button className="w-full mt-6 py-4 rounded-xl bg-accent text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-lg shadow-accent/20">
             View Analytics
           </button>
         </div>
@@ -2055,9 +2055,9 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                 <div className="p-8 bg-bg/50 border-t border-border flex justify-end">
                   <button 
                     onClick={() => setReport(null)}
-                    className="bg-text-main text-bg px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition"
+                    className="bg-accent text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center gap-2"
                   >
-                    Acknowledge Report
+                    <CheckCircle size={16} /> Acknowledge Report
                   </button>
                 </div>
               </motion.div>
@@ -2105,9 +2105,9 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                       plateNumber: booking.vehicleInfo?.match(/\(([^)]+)\)/)?.[1] || '',
                       bookingId: booking.id 
                     })}
-                    className="bg-text-main text-bg px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl hover:brightness-110"
+                    className="bg-accent text-white px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl shadow-accent/20 hover:brightness-110 flex items-center justify-center gap-2"
                   >
-                    Check-In
+                    <Check size={14} /> Check-In
                   </button>
                 </div>
               </div>
@@ -2284,15 +2284,15 @@ function RoleCard({ icon, title, desc, onClick, highlight, loading, disabled }: 
       
       <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter leading-none">{title}</h3>
       <p className={cn(
-        "text-sm leading-relaxed mb-10 font-medium", 
-        highlight ? "text-bg/60" : "text-text-dim lowercase"
+        "text-sm leading-relaxed mb-10 font-bold", 
+        highlight ? "text-bg/80 italic font-black" : "text-text-main/70 lowercase font-bold italic"
       )}>
         {desc}
       </p>
       
       <div className={cn(
         "mt-auto flex items-center gap-3 text-sm font-black uppercase tracking-widest", 
-        highlight ? "text-accent" : "text-white group-hover:text-accent transition-colors"
+        highlight ? "text-accent" : "bg-accent text-white px-6 py-3 rounded-xl shadow-xl shadow-accent/20 group-hover:scale-105 transition-all"
       )}>
         initialize system <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
       </div>
@@ -2456,7 +2456,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                     <Zap size={24} />
                   </div>
                   <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Basic Wash</p>
-                  <p className={cn("text-3xl font-black italic tracking-tighter", selectedPlan === 'basic' ? "text-white" : "text-white/80")}>$15</p>
+                  <p className="text-3xl font-black italic tracking-tighter text-text-main">$15</p>
                 </button>
                 <button 
                   onClick={() => setSelectedPlan('premium')}
@@ -2469,7 +2469,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                     <Sparkles size={24} />
                   </div>
                   <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Premium Care</p>
-                  <p className={cn("text-3xl font-black italic tracking-tighter", selectedPlan === 'premium' ? "text-white" : "text-white/80")}>$25</p>
+                  <p className="text-3xl font-black italic tracking-tighter text-text-main">$25</p>
                   <div className="absolute top-4 right-4 bg-white text-accent px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest shadow-lg">Elite</div>
                 </button>
               </div>
@@ -2527,7 +2527,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                         type="date" 
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-white text-base font-bold focus:border-accent outline-none transition-all touch-target" 
+                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-text-main text-base font-bold focus:border-accent outline-none transition-all touch-target" 
                       />
                    </div>
                    <div className="flex-1 space-y-2">
@@ -2536,7 +2536,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                         type="time" 
                         value={selectedTime}
                         onChange={(e) => setSelectedTime(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-white text-base font-bold focus:border-accent outline-none transition-all touch-target" 
+                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-text-main text-base font-bold focus:border-accent outline-none transition-all touch-target" 
                       />
                    </div>
                 </div>
@@ -2589,7 +2589,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                 }
               }}
               disabled={loading}
-              className="flex-[2] bg-text-main text-bg py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition disabled:opacity-50"
+              className="flex-[2] bg-accent text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition disabled:opacity-50 shadow-xl shadow-accent/20"
             >
               {loading ? "Processing..." : step === 4 ? "Confirm Reservation" : "Continue"}
             </button>
@@ -3131,7 +3131,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-border overflow-hidden relative">
         <div className="relative z-10 p-2 md:p-0">
           <h2 className="text-3xl md:text-5xl font-black text-text-main uppercase tracking-tighter mb-3 italic leading-none">Explore Ecosystem.</h2>
-          <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl font-medium">Find premium wash labs, professional components, and mobile experts in your sector.</p>
+          <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl font-bold italic">Find premium wash labs, professional components, and mobile experts in your sector.</p>
         </div>
         <div className="flex bg-bg rounded-[1.5rem] border border-border p-3 md:min-w-[400px] relative z-10 mx-2 md:mx-0 shadow-inner group focus-within:border-accent/40 transition-colors">
           <Search className="text-text-dim mx-4 self-center group-focus-within:text-accent transition-colors" size={24} />
@@ -3216,7 +3216,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
                     <button 
                       onClick={() => handleBuy(item)}
                       disabled={buying === item.id}
-                      className="w-full bg-text-main text-bg py-6 md:py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-2xl hover:brightness-110 transition-all disabled:opacity-50 touch-target italic"
+                      className="w-full bg-accent text-white py-6 md:py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target italic"
                     >
                       {buying === item.id ? <RefreshCw className="animate-spin mx-auto" size={18} /> : "Initialize Order →"}
                     </button>
@@ -3227,7 +3227,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
           ) : (
             <div className="col-span-full py-32 text-center bg-card/50 rounded-[4rem] border border-dashed border-border/60 mx-4 md:mx-0">
                <ShoppingBag className="mx-auto text-text-dim opacity-10 mb-10" size={120} />
-               <h4 className="text-3xl font-black text-white italic uppercase tracking-tighter mb-4">Inventory Cycle Empty</h4>
+               <h4 className="text-3xl font-black text-text-main italic uppercase tracking-tighter mb-4">Inventory Cycle Empty</h4>
                <p className="text-sm text-text-dim lowercase max-w-xs mx-auto font-medium">Re-sync in progress. New units will be broadcasted to this classification shortly.</p>
             </div>
           )}
@@ -3242,8 +3242,8 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
                <Store size={32} />
             </div>
             <div>
-              <h4 className="text-xl font-black text-white uppercase tracking-tight">Expand Your Reach</h4>
-              <p className="text-sm text-text-dim max-w-md mt-1 italic">Register your wash station to appear in searches and receive instant bookings from our curated community.</p>
+              <h4 className="text-xl font-black text-text-main uppercase tracking-tight">Expand Your Reach</h4>
+              <p className="text-sm text-text-dim max-w-md mt-1 italic font-bold">Register your wash station to appear in searches and receive instant bookings from our curated community.</p>
             </div>
           </div>
           <button 
@@ -4602,8 +4602,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       price: '₦99,000',
       description: 'Total automation for high-volume enterprises.',
       features: ['Everything in Pro', 'AI License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
-      color: 'bg-white text-bg',
-      icon: <ShieldCheck size={24} className="text-bg" />
+      color: 'bg-accent text-white shadow-2xl shadow-accent/20',
+      icon: <ShieldCheck size={24} className="text-white" />
     }
   ];
 
@@ -4614,8 +4614,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       price: '₦2,500',
       description: '2 Professional station washes per month.',
       features: ['2 Wash Credits', 'Digital Maintenance Log', 'Priority Queue', 'AI Health Alerts'],
-      color: 'bg-white/5',
-      icon: <Check size={24} className="text-white/40" />
+      color: 'bg-card border border-border text-text-main',
+      icon: <Check size={24} className="text-accent" />
     },
     {
       id: 'premium_wash',
@@ -4623,7 +4623,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       price: '₦10,000',
       description: 'High-frequency care for premium vehicles.',
       features: ['5 Wash Credits', '1 Interior Detailing', 'Engine Bay Check', 'Everything in Silver'],
-      color: 'bg-accent/10 border-accent/40',
+      color: 'bg-accent/10 border-accent/40 text-text-main',
       icon: <Sparkles size={24} className="text-accent" />,
       popular: true
     },
@@ -4633,8 +4633,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       price: '₦48,000',
       description: 'The ultimate care package for your vehicle.',
       features: ['16 Wash Credits (4x/Week)', 'Full Detailing', 'Ceramic Waxing', 'Gemini AI Diagnostics'],
-      color: 'bg-white text-bg',
-      icon: <ShieldCheck size={24} className="text-bg" />
+      color: 'bg-accent text-white shadow-2xl shadow-accent/20',
+      icon: <ShieldCheck size={24} className="text-white" />
     }
   ];
 
@@ -4663,20 +4663,20 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
                   <X size={20} strokeWidth={3} />
                 </div>
                 <div className="flex-1">
-                   <h4 className="text-white font-black uppercase tracking-widest text-xs mb-1">Transaction Interrupted.</h4>
-                   <p className="text-red-200/80 text-sm leading-relaxed mb-4">
+                   <h4 className="text-text-main font-black uppercase tracking-widest text-xs mb-1">Transaction Interrupted.</h4>
+                   <p className="text-text-main font-medium text-sm leading-relaxed mb-4">
                      {error}
                    </p>
                    <div className="flex flex-wrap gap-2">
                      <button 
                        onClick={() => setError(null)}
-                       className="bg-white text-bg px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition"
+                       className="bg-accent text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition shadow-lg shadow-accent/20"
                      >
                        Retry Selection
                      </button>
                      <button 
                        onClick={() => window.open('https://dashboard.paystack.com/#/login', '_blank')}
-                       className="bg-white/5 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2"
+                       className="bg-card border border-border text-text-main px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-text-main/5 transition flex items-center gap-2"
                      >
                        Payment Help <Info size={12} />
                      </button>
@@ -5063,14 +5063,14 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                  navigator.clipboard.writeText(shareLink);
                  alert('Link copied! Paste it into a message or QR generator.');
                }}
-               className="flex-1 bg-white text-bg font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-accent hover:text-white transition"
+               className="flex-1 bg-accent text-white font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 transition shadow-xl shadow-accent/20"
              >
                <Share2 size={20} />
                Rating Link
              </button>
              <button 
-               onClick={() => { setLastLoggedId(null); setForm({ carModel: '', plateNumber: '', price: '20' }); }}
-               className="flex-1 bg-white/5 text-white font-black py-4 rounded-xl hover:bg-white/10 transition"
+               onClick={() => { setLastLoggedId(null); setForm({ carModel: '', plateNumber: '', price: '2000' }); }}
+               className="flex-1 bg-card border border-border text-text-main font-black py-4 rounded-xl hover:bg-text-main/5 transition"
              >
                Next Wash
              </button>
@@ -5103,7 +5103,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
               >
                 <option value={profile.uid} className="bg-card text-text-main">Myself ({profile.name})</option>
                 {workers.map(w => (
-                  <option key={w.uid} value={w.uid} className="bg-card text-white">
+                  <option key={w.uid} value={w.uid} className="bg-card text-text-main">
                     {w.name} — Eff: {w.efficiency.toFixed(0)}% ({w.totalWashes} jobs)
                   </option>
                 ))}
@@ -5113,7 +5113,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 <div className="flex items-center gap-3 bg-accent/10 border border-accent/20 p-4 rounded-2xl">
                   <Award size={18} className="text-accent flex-shrink-0" />
                   <p className="text-[9px] text-accent font-black uppercase tracking-tight leading-relaxed">
-                    Power Suggestion: <span className="text-white/80">
+                    Power Suggestion: <span className="font-bold">
                       AI recommended {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} 
                       {selectedWorkerId === [...workers].sort((a, b) => b.efficiency - a.efficiency)[0]?.uid ? " (Highest Efficiency)" : ""} to maximize throughput.
                     </span>
@@ -5209,7 +5209,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 onClick={() => setForm({...form, price: String(profile.pricing?.sedan || 2000)})} 
                 className={cn(
                   "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.sedan || 2000) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
+                  form.price === String(profile.pricing?.sedan || 2000) ? "bg-accent/10 border-accent text-accent" : "bg-text-main/5 border-transparent text-text-dim hover:text-text-main font-bold"
                 )}
               >
                 Sedan
@@ -5219,7 +5219,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 onClick={() => setForm({...form, price: String(profile.pricing?.suv || 3500)})} 
                 className={cn(
                   "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.suv || 3500) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
+                  form.price === String(profile.pricing?.suv || 3500) ? "bg-accent/10 border-accent text-accent" : "bg-text-main/5 border-transparent text-text-dim hover:text-text-main font-bold"
                 )}
               >
                 SUV
@@ -5229,7 +5229,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                 onClick={() => setForm({...form, price: String(profile.pricing?.truck || 5000)})} 
                 className={cn(
                   "flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase transition-all duration-300 border",
-                  form.price === String(profile.pricing?.truck || 5000) ? "bg-accent/10 border-accent text-accent" : "bg-white/5 border-transparent text-text-dim hover:text-white"
+                  form.price === String(profile.pricing?.truck || 5000) ? "bg-accent/10 border-accent text-accent" : "bg-text-main/5 border-transparent text-text-dim hover:text-text-main font-bold"
                 )}
               >
                 Heavy
@@ -5252,7 +5252,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         <button 
           type="submit" 
           disabled={submitting || !form.carModel || !form.plateNumber}
-          className="w-full py-6 bg-white text-bg rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target mt-4 italic"
+          className="w-full py-6 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4 italic"
         >
           {submitting ? (
             <div className="flex items-center justify-center gap-3">
@@ -5273,7 +5273,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
              <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
-             <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Transmission Registry</h3>
+             <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Transmission Registry</h3>
           </div>
           <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Active Verification Flow</span>
         </div>
@@ -5289,7 +5289,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                   <CarFront size={28} />
                 </div>
                 <div>
-                  <div className="font-black text-white uppercase text-sm leading-none flex items-center gap-2">
+                  <div className="font-black text-text-main uppercase text-sm leading-none flex items-center gap-2">
                     {log.carModel}
                     {log.usedCredit && <div className="bg-success/10 text-success text-[8px] px-1.5 py-0.5 rounded uppercase">Credit</div>}
                   </div>
@@ -5840,7 +5840,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   <select 
                     value={filters.workerId}
                     onChange={e => setFilters(prev => ({ ...prev, workerId: e.target.value }))}
-                    className="w-full bg-bg border border-border rounded-xl px-5 py-4 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-accent appearance-none scrollable-dropdown touch-target"
+                    className="w-full bg-bg border border-border rounded-xl px-5 py-4 text-sm font-bold text-text-main outline-none focus:ring-1 focus:ring-accent appearance-none scrollable-dropdown touch-target"
                   >
                     <option value="all" className="bg-card text-text-main italic">ALL OPERATIVES</option>
                     {workers.map(w => <option key={w.uid} value={w.uid} className="bg-card text-text-main font-bold">{w.name.toUpperCase()}</option>)}
@@ -5855,7 +5855,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                 <select 
                   value={filters.status}
                   onChange={e => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-accent appearance-none"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-text-main font-bold outline-none focus:ring-1 focus:ring-accent appearance-none"
                 >
                   <option value="all" className="bg-card text-text-main">Any Status</option>
                   <option value="completed" className="bg-card text-text-main">Completed</option>
@@ -5903,7 +5903,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
           <button 
             onClick={() => toggleSort('workerRating')}
             className={cn(
-              "flex items-center gap-2 transition-colors hover:text-white group",
+              "flex items-center gap-2 transition-colors hover:text-text-main group font-bold",
               sort.field === 'workerRating' ? "text-accent" : ""
             )}
           >
@@ -5912,14 +5912,14 @@ function HistoryView({ profile }: { profile: UserProfile }) {
               "flex flex-col -space-y-1.5 transition-opacity",
               sort.field === 'workerRating' ? "opacity-100" : "opacity-20 group-hover:opacity-100"
             )}>
-              <ArrowUp size={8} className={cn(sort.field === 'workerRating' && !sort.desc ? "text-accent" : "text-white")} />
-              <ArrowDown size={8} className={cn(sort.field === 'workerRating' && sort.desc ? "text-accent" : "text-white")} />
+              <ArrowUp size={8} className={cn(sort.field === 'workerRating' && !sort.desc ? "text-accent" : "text-text-main")} />
+              <ArrowDown size={8} className={cn(sort.field === 'workerRating' && sort.desc ? "text-accent" : "text-text-main")} />
             </div>
           </button>
           <button 
             onClick={() => toggleSort('price')}
             className={cn(
-              "flex items-center gap-2 transition-colors hover:text-white group min-w-[80px] justify-end",
+              "flex items-center gap-2 transition-colors hover:text-text-main group min-w-[80px] justify-end font-bold",
               sort.field === 'price' ? "text-accent" : ""
             )}
           >
@@ -5928,8 +5928,8 @@ function HistoryView({ profile }: { profile: UserProfile }) {
               "flex flex-col -space-y-1.5 transition-opacity",
               sort.field === 'price' ? "opacity-100" : "opacity-20 group-hover:opacity-100"
             )}>
-              <ArrowUp size={8} className={cn(sort.field === 'price' && !sort.desc ? "text-accent" : "text-white")} />
-              <ArrowDown size={8} className={cn(sort.field === 'price' && sort.desc ? "text-accent" : "text-white")} />
+              <ArrowUp size={8} className={cn(sort.field === 'price' && !sort.desc ? "text-accent" : "text-text-main")} />
+              <ArrowDown size={8} className={cn(sort.field === 'price' && sort.desc ? "text-accent" : "text-text-main")} />
             </div>
           </button>
         </div>
@@ -5993,7 +5993,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   </div>
                   <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">PROACTIVE MAINTENANCE CORE</span>
                 </div>
-                <p className="text-base text-white/90 leading-relaxed font-bold italic lowercase italic">"{wash.maintenanceTip}"</p>
+                <p className="text-base text-text-main leading-relaxed font-bold italic lowercase italic">"{wash.maintenanceTip}"</p>
                 <div className="absolute -right-4 -bottom-4 opacity-5 text-accent group-hover:opacity-10 transition-opacity">
                   <Zap size={80} />
                 </div>
@@ -6128,7 +6128,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none mb-4">
           {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
         </h2>
-        <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed font-medium">
+        <p className="text-text-main/70 text-base md:text-lg lowercase leading-relaxed font-bold italic">
           {profile.role === 'owner' ? "Configure your business identity and boundaries." : "Customize your interface and profile preferences."}
         </p>
       </header>
@@ -6154,7 +6154,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       value={settings.businessName}
                       onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
                       placeholder="e.g. LAGOS PREMIUM WASH"
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black italic uppercase"
                     />
                   </div>
                   <div className="space-y-3">
@@ -6163,7 +6163,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       value={settings.businessAddress}
                       onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
                       placeholder="e.g. 123 LEKKI PHASE 1, LAGOS"
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
                     />
                   </div>
                 </div>
@@ -6185,7 +6185,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       type="number"
                       value={settings.businessLat}
                       onChange={e => setSettings(prev => ({ ...prev, businessLat: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
                     />
                   </div>
                   <div className="space-y-3">
@@ -6194,7 +6194,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       type="number"
                       value={settings.businessLng}
                       onChange={e => setSettings(prev => ({ ...prev, businessLng: parseFloat(e.target.value) }))}
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
                     />
                   </div>
                 </div>
@@ -6222,7 +6222,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   {settings.theme === 'light' ? <Sun size={20} /> : <Moon size={20} />}
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white uppercase tracking-tight">Interface Theme</h4>
+                  <h4 className="text-sm font-bold text-text-main uppercase tracking-tight">Interface Theme</h4>
                   <p className="text-[10px] text-text-dim uppercase tracking-widest">Switch between light and dark modes</p>
                 </div>
               </div>
@@ -6270,7 +6270,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           <button 
             onClick={handleSave}
             disabled={loading}
-            className="w-full bg-white text-bg font-black py-4 rounded-xl uppercase tracking-widest hover:bg-accent hover:text-white transition active:scale-95 disabled:opacity-50"
+            className="w-full bg-accent text-white font-black py-4 rounded-xl uppercase tracking-widest hover:brightness-110 transition active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/20 italic"
           >
             {loading ? "Processing..." : "Commit Settings"}
           </button>
@@ -6416,7 +6416,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
                <Plus size={24} />
              </div>
              <div>
-               <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Provision Worker</h3>
+               <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Provision Worker</h3>
                <p className="text-[10px] text-accent font-black uppercase tracking-widest">Linked Station Access</p>
              </div>
           </div>
@@ -6459,7 +6459,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-text-main text-bg py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-2xl hover:brightness-110 transition-all disabled:opacity-50 touch-target italic"
+            className="w-full bg-accent text-white py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target italic flex items-center justify-center gap-3"
           >
             {loading ? <RefreshCw className="animate-spin" size={18} /> : (
               <>
