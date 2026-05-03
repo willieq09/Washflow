@@ -1410,11 +1410,11 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase italic leading-none">Your Hub.</h2>
-          <p className="text-text-dim text-base md:text-lg lowercase mt-2">Manage your fleet and upcoming sessions.</p>
+          <p className="text-text-main text-base md:text-lg lowercase mt-2 font-bold italic">Manage your fleet and upcoming sessions.</p>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="flex-1 md:flex-none bg-card px-4 md:px-6 py-3 rounded-2xl border border-border flex flex-col items-center justify-center min-w-[100px] md:min-w-[120px]">
-            <span className="text-[9px] md:text-[10px] font-black text-text-dim uppercase tracking-widest">Credits</span>
+            <span className="text-[9px] md:text-[10px] font-black text-text-main uppercase tracking-widest italic">Credits</span>
             <span className="text-xl md:text-2xl font-black text-accent">{profile.credits || 0}</span>
           </div>
           <button 
@@ -1432,12 +1432,12 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
           {upcoming.length > 0 ? (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-main/60 uppercase tracking-[0.2em] mb-4 block">Up Next</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] mb-4 block italic">Up Next</span>
                 <div className="text-3xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 leading-tight">
                   {upcoming[0].businessName} <br />
-                  <span className="opacity-40 text-xl md:text-3xl">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="opacity-80 text-xl md:text-3xl italic">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <div className="inline-flex items-center gap-2 bg-text-main/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-text-main">
+                <div className="inline-flex items-center gap-2 bg-text-main/40 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-text-main italic">
                   {upcoming[0].status} • {upcoming[0].vehicleInfo || 'Vehicle Selected'}
                 </div>
               </div>
@@ -1450,20 +1450,20 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                 >
                   Reschedule
                 </button>
-                <div className="hidden md:flex flex-1 items-center justify-center px-6 py-4 rounded-2xl border border-text-main/20 text-text-main font-black text-[10px] uppercase tracking-widest">
+                <div className="hidden md:flex flex-1 items-center justify-center px-6 py-4 rounded-2xl border-2 border-text-main/40 text-text-main font-black text-[10px] uppercase tracking-widest italic">
                   ETA 45m
                 </div>
               </div>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-4 md:space-y-6">
-              <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-text-main/10 flex items-center justify-center">
-                <Calendar size={28} className="text-text-main/40" />
-              </div>
-              <div>
-                <h3 className="text-xl md:text-2xl font-black text-text-main uppercase italic">No Active Bookings</h3>
-                <p className="text-xs md:text-sm text-text-main/60 mt-1 md:mt-2">Your garage is resting. Schedule a session to keep it pristine.</p>
-              </div>
+                  <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-text-main/10 flex items-center justify-center">
+                    <Calendar size={28} className="text-text-main" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl md:text-2xl font-black text-text-main uppercase italic">No Active Bookings</h3>
+                    <p className="text-xs md:text-sm text-text-main font-black lowercase mt-1 md:mt-2 italic opacity-80">Your garage is resting. Schedule a session to keep it pristine.</p>
+                  </div>
             </div>
           )}
         </div>
@@ -1481,7 +1481,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                    onBook={() => setView('marketplace')}
                  />
                ) : (
-                 <p className="text-xs text-text-dim leading-relaxed">Add a vehicle to your garage to receive predictive maintenance insights and performance tracking.</p>
+                 <p className="text-xs text-text-main leading-relaxed font-black uppercase italic tracking-tight">Add a vehicle to your garage to receive predictive maintenance insights and performance tracking.</p>
                )}
             </div>
           </div>
@@ -1498,7 +1498,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
             <MapPin className="text-accent" />
             <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Nearby Stations</h3>
           </div>
-          <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">Sorted by Proximity</span>
+          <span className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Sorted by Proximity</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1521,8 +1521,8 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                 </div>
               </div>
               <div className="p-5">
-                <h4 className="font-bold text-text-main group-hover:text-accent transition-colors">{biz.name}</h4>
-                <p className="text-xs text-text-dim mt-1 flex items-center gap-1">
+                <h4 className="font-black text-text-main group-hover:text-accent transition-colors uppercase italic tracking-tighter">{biz.name}</h4>
+                <p className="text-xs text-text-main font-bold mt-1 flex items-center gap-1 italic opacity-70">
                   <MapPin size={10} />
                   {biz.location}
                 </p>
@@ -1820,7 +1820,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       <header className="mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
         <div>
           <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">AutoLux Dashboard</h2>
-          <p className="text-text-dim mt-1 lowercase font-medium">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
+          <p className="text-text-main mt-1 lowercase font-black italic">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
         <div className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-success/10 text-success border border-success/20 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
           <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
@@ -1833,11 +1833,11 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
         {/* Main Stat: Today's Revenue */}
         <div className="md:col-span-2 md:row-span-1 bento-card flex flex-col justify-between border-t-4 border-t-accent p-6 md:p-8">
           <div>
-            <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em]">
+            <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">
               {profile.role === 'worker' ? "Personal Unit Output" : "Live: Today's Revenue"}
             </span>
-            <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter">{formatCurrency(stats.todayRevenue)}</div>
-            <p className="text-[10px] md:text-xs text-text-dim mt-2 font-medium">Synced from {stats.todayCount} service units completed today.</p>
+            <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(stats.todayRevenue)}</div>
+            <p className="text-[10px] md:text-xs text-text-main mt-2 font-black italic">Synced from {stats.todayCount} service units completed today.</p>
           </div>
           <div className="mt-8 flex items-end gap-1.5 h-16">
             {[30, 45, 20, 60, 40, 75, 95].map((h, i) => (
@@ -1863,7 +1863,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
               </div>
               <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Liquid Balance</span>
+                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Liquid Balance</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(availableBalance)}</div>
                   <button 
                     onClick={() => setIsWithdrawModalOpen(true)}
@@ -1874,18 +1874,18 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                   </button>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">In Queue (Manual)</span>
-                  <div className="text-4xl font-black mt-2 tracking-tighter text-amber-500">{formatCurrency(stats.pendingPayouts || 0)}</div>
-                  <p className="text-[8px] text-text-dim/50 uppercase mt-1">Pending admin wire transfer</p>
+                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">In Queue (Manual)</span>
+                  <div className="text-4xl font-black mt-2 tracking-tighter text-amber-500 font-bold">{formatCurrency(stats.pendingPayouts || 0)}</div>
+                  <p className="text-[8px] text-text-main font-black uppercase mt-1 italic">Pending admin wire transfer</p>
                   
                   {recentWithdrawals.length > 0 && (
                     <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2">
-                       <span className="text-[8px] font-black text-text-dim uppercase tracking-widest">Payout History</span>
+                       <span className="text-[8px] font-black text-text-main uppercase tracking-widest italic">Payout History</span>
                        {recentWithdrawals.map((w) => (
                          <div key={w.id} className="flex justify-between items-center bg-text-main/5 p-2 rounded-lg border border-border">
                             <div className="overflow-hidden">
-                               <div className="text-[9px] font-bold text-text-main leading-tight uppercase truncate">{w.bankName}</div>
-                               <div className="text-[7px] text-text-dim uppercase">{w.accountNumber}</div>
+                               <div className="text-[9px] font-black text-text-main leading-tight uppercase truncate">{w.bankName}</div>
+                               <div className="text-[7px] text-text-main font-bold uppercase italic opacity-70">{w.accountNumber}</div>
                             </div>
                             <div className="text-right flex-shrink-0">
                                <div className="text-[9px] font-black text-accent">{formatCurrency(w.amount)}</div>
@@ -1911,10 +1911,10 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           {profile.role === 'worker' ? (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Daily Goal Progress</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Daily Goal Progress</span>
                 <div className="flex items-end gap-2 mt-2">
                   <div className="text-5xl font-black tracking-tighter text-text-main">{stats.todayCount}</div>
-                  <div className="text-xl font-black text-text-dim mb-1">/ 15</div>
+                  <div className="text-xl font-black text-text-main/60 mb-1">/ 15</div>
                 </div>
                 <div className="w-full bg-text-main/5 h-2 rounded-full mt-4 overflow-hidden">
                     <motion.div 
@@ -1926,11 +1926,11 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-bold text-success flex items-center gap-1">
+                  <div className="text-[10px] font-black text-success flex items-center gap-1 uppercase italic">
                     <Award size={12} />
                     <span>Rank: Top 15%</span>
                   </div>
-                  <p className="text-[9px] text-text-dim mt-1 lowercase">Great job! You're outperforming 85% of staff today.</p>
+                  <p className="text-[9px] text-text-main font-black mt-1 lowercase italic">Great job! You're outperforming 85% of staff today.</p>
                 </div>
                 <div className="text-2xl font-black text-success">#{Math.floor(Math.random() * 3) + 1}</div>
               </div>
@@ -1938,7 +1938,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           ) : (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-dim uppercase tracking-[0.2em]">Volume (24h)</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Volume (24h)</span>
                 <div className="text-5xl font-black mt-2 tracking-tighter text-text-main">{stats.todayCount}</div>
               </div>
               <div className="mt-4">
@@ -1962,8 +1962,8 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
            <div className="w-12 h-12 rounded-full border-2 border-text-main/20 flex items-center justify-center text-text-main mb-3 group-hover:scale-110 transition">
              <Plus size={24} />
            </div>
-           <div className="font-bold text-lg text-text-main">New Wash</div>
-           <div className="text-[10px] text-text-main/70 uppercase tracking-widest mt-1">Quick Log</div>
+           <div className="font-black text-lg text-text-main uppercase italic tracking-tighter">New Wash</div>
+           <div className="text-[10px] text-text-main font-black uppercase tracking-widest mt-1 italic opacity-70">Quick Log</div>
         </div>
 
         {/* Elite Scanner Card - Only for Elite Owners */}
@@ -1987,7 +1987,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
 
         {/* AI Insight Card */}
         <div className="md:col-span-2 bento-card">
-           <span className="text-xs font-bold text-text-dim uppercase tracking-wider mb-4 block">AI Intelligence</span>
+           <span className="text-xs font-black text-text-main uppercase tracking-wider mb-4 block italic">AI Intelligence</span>
            <div className="bg-accent/5 border border-accent/20 rounded-xl p-4">
              <p className="text-sm leading-relaxed text-blue-100">
                <strong>Smart Suggestion:</strong> Based on current volume, worker performance is peaking. High satisfaction triggers incentive bonuses automatically.
@@ -2022,12 +2022,12 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                       <TrendingUp size={20} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-black text-text-main uppercase tracking-tighter">AI Performance Audit</h3>
-                      <p className="text-[10px] text-accent font-black uppercase tracking-widest">Generative Intelligence Report</p>
+                      <h3 className="text-xl font-black text-text-main uppercase tracking-tighter italic">AI Performance Audit</h3>
+                      <p className="text-[10px] text-accent font-black uppercase tracking-widest italic">Generative Intelligence Report</p>
                     </div>
                   </div>
                   <button onClick={() => setReport(null)} className="p-2 hover:bg-text-main/5 rounded-full transition">
-                    <X size={20} className="text-text-dim" />
+                    <X size={20} className="text-text-main font-black" />
                   </button>
                 </div>
                 <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
@@ -2068,19 +2068,19 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
         {/* Today's Queue / Upcoming Bookings */}
         <div className="md:col-span-2 bento-card">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-text-dim uppercase tracking-wider">Today's Queue</span>
-            <span className="text-[10px] font-black text-accent uppercase tracking-widest">{upcomingBookings.length} pending</span>
+            <span className="text-xs font-black text-text-main uppercase tracking-wider italic">Today's Queue</span>
+            <span className="text-[10px] font-black text-accent uppercase tracking-widest italic">{upcomingBookings.length} pending</span>
           </div>
           <div className="space-y-4">
             {upcomingBookings.map(booking => (
-              <div key={booking.id} className="flex items-center justify-between bg-text-main/5 p-4 rounded-2xl border border-border hover:border-accent/20 transition group">
+              <div key={booking.id} className="flex items-center justify-between bg-text-main/5 p-4 rounded-2xl border border-border hover:border-accent/20 transition group shadow-md">
                 <div className="flex items-center gap-4">
                    <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center text-accent">
                       <Calendar size={18} />
                    </div>
                    <div>
-                     <p className="font-bold text-sm text-text-main tracking-tight">{booking.vehicleInfo || 'Service Request'}</p>
-                     <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">
+                     <p className="font-black text-sm text-text-main tracking-tight uppercase italic">{booking.vehicleInfo || 'Service Request'}</p>
+                     <p className="text-[10px] font-black uppercase text-text-main tracking-widest italic opacity-70">
                        Slot: {booking.slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                      </p>
                    </div>
@@ -2091,7 +2091,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
                       disabled={assigningId === booking.id}
                       value=""
                       onChange={(e) => handleAssignWorker(booking, e.target.value)}
-                      className="bg-bg/50 text-text-dim px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40"
+                      className="bg-bg/50 text-text-main px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40 font-black italic shadow-lg"
                     >
                       <option value="" disabled className="bg-card text-text-main">Assign Pro</option>
                       {workers.map(w => (
@@ -6128,7 +6128,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none mb-4">
           {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
         </h2>
-        <p className="text-text-main/70 text-base md:text-lg lowercase leading-relaxed font-bold italic">
+        <p className="text-text-main text-base md:text-lg lowercase leading-relaxed font-black italic">
           {profile.role === 'owner' ? "Configure your business identity and boundaries." : "Customize your interface and profile preferences."}
         </p>
       </header>
@@ -6149,7 +6149,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 </label>
                 <div className="space-y-6">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Business Designation</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Business Designation</label>
                     <input 
                       value={settings.businessName}
                       onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
@@ -6158,12 +6158,12 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Physical Sector Address</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Physical Sector Address</label>
                     <input 
                       value={settings.businessAddress}
                       onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
                       placeholder="e.g. 123 LEKKI PHASE 1, LAGOS"
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-bold"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
                     />
                   </div>
                 </div>
@@ -6174,13 +6174,13 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   <MapPin size={20} className="text-accent" />
                   Operational Geofence
                 </label>
-                <p className="text-sm text-text-dim leading-relaxed font-medium">
+                <p className="text-sm text-text-main leading-relaxed font-bold italic">
                   Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Coordinate Latitude</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Coordinate Latitude</label>
                     <input 
                       type="number"
                       value={settings.businessLat}
@@ -6189,7 +6189,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Coordinate Longitude</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Coordinate Longitude</label>
                     <input 
                       type="number"
                       value={settings.businessLng}
@@ -6212,18 +6212,18 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           )}
 
           <div className={`space-y-6 ${profile.role === 'owner' ? 'pt-6 border-t border-border' : ''}`}>
-            <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
+            <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2 italic">
               <Sparkles size={14} className="text-accent" />
               Visual Interface
             </label>
             <div className="flex items-center justify-between bg-bg/50 p-4 rounded-2xl border border-border">
               <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl transition-colors ${settings.theme === 'light' ? 'bg-accent/20 text-accent' : 'bg-white/5 text-text-dim'}`}>
+                <div className={`p-3 rounded-xl transition-colors ${settings.theme === 'light' ? 'bg-accent/20 text-accent' : 'bg-white/5 text-accent'}`}>
                   {settings.theme === 'light' ? <Sun size={20} /> : <Moon size={20} />}
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-text-main uppercase tracking-tight">Interface Theme</h4>
-                  <p className="text-[10px] text-text-dim uppercase tracking-widest">Switch between light and dark modes</p>
+                  <h4 className="text-sm font-black text-text-main uppercase tracking-tight italic">Interface Theme</h4>
+                  <p className="text-[10px] text-text-main font-bold uppercase tracking-widest italic opacity-70">Switch between light and dark modes</p>
                 </div>
               </div>
               <button 
@@ -6251,9 +6251,9 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
           {profile.role === 'owner' && (
             <div className="space-y-2">
-              <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center justify-between">
+              <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center justify-between italic">
                 <span>Allowed Radius (Meters)</span>
-                <span className="text-accent">{settings.businessRadius}m</span>
+                <span className="text-accent font-black">{settings.businessRadius}m</span>
               </label>
               <input 
                 type="range"
@@ -6262,7 +6262,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 step="50"
                 value={settings.businessRadius}
                 onChange={e => setSettings(prev => ({ ...prev, businessRadius: parseInt(e.target.value) }))}
-                className="w-full accent-accent h-2 bg-white/5 rounded-lg appearance-none cursor-pointer"
+                className="w-full accent-accent h-2 bg-text-main/10 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           )}
@@ -6284,7 +6284,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 <Users size={20} className="text-accent" />
                 Staff Registry
               </label>
-              <p className="text-sm text-text-dim leading-relaxed font-medium max-w-md">
+              <p className="text-sm text-text-main leading-relaxed font-black max-w-md italic">
                 Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
               </p>
             </div>
@@ -6320,7 +6320,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       <p className="text-lg font-black text-text-main uppercase italic tracking-tighter leading-none">{worker.name}</p>
                       <span className="px-3 py-1 bg-success/10 text-success text-[8px] font-black uppercase rounded-full border border-success/20 tracking-widest">ACTIVE</span>
                     </div>
-                    <p className="text-[10px] text-accent/60 uppercase tracking-widest font-black italic">
+                    <p className="text-[10px] text-text-main/60 uppercase tracking-widest font-black italic">
                       {worker.permissions?.canManageTeam ? "UNIT COMMANDER" : "OPERATIONAL SPECIALIST"}
                     </p>
                   </div>
@@ -6344,17 +6344,17 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
             {/* Invited but not yet joined */}
             {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
-              <div key={auth.id} className="flex items-center justify-between p-6 bg-white/5 border border-dashed border-border/40 rounded-[1.5rem] opacity-70 group hover:opacity-100 transition-opacity">
+              <div key={auth.id} className="flex items-center justify-between p-6 bg-text-main/5 border border-dashed border-border/40 rounded-[1.5rem] group transition-opacity">
                 <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-text-dim border border-white/10 italic font-black text-sm">
+                  <div className="w-12 h-12 rounded-xl bg-text-main/5 flex items-center justify-center text-text-main border border-border italic font-black text-sm">
                     ?
                   </div>
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <p className="font-black text-text-main uppercase italic tracking-tighter">{auth.name}</p>
-                      <span className="px-2 py-0.5 bg-text-main/10 text-text-dim text-[8px] font-black uppercase rounded tracking-widest border border-border">PENDING INFILTRATION</span>
+                      <span className="px-2 py-0.5 bg-accent/10 text-accent text-[8px] font-black uppercase rounded tracking-widest border border-accent/20">PENDING INFILTRATION</span>
                     </div>
-                    <p className="text-[10px] text-text-dim/60 font-mono tracking-tighter truncate max-w-[200px]">
+                    <p className="text-[10px] text-text-main font-black tracking-tighter truncate max-w-[200px] italic">
                       {auth.email}
                     </p>
                   </div>
@@ -6428,17 +6428,17 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
         <form onSubmit={handleAdd} className="p-8 space-y-8">
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-accent uppercase tracking-[0.2em] ml-1 italic">Operative Full Name</label>
+              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1 italic">Operative Full Name</label>
               <input 
                 required
                 value={form.name}
                 onChange={e => setForm({...form, name: e.target.value})}
                 placeholder="e.g. JOHN DOE"
-                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-white outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase italic"
+                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase italic"
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-accent uppercase tracking-[0.2em] ml-1 italic">Protocol Email Address</label>
+              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1 italic">Protocol Email Address</label>
               <div className="relative">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" size={20} />
                 <input 
@@ -6447,7 +6447,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
                   value={form.email}
                   onChange={e => setForm({...form, email: e.target.value})}
                   placeholder="operative@washflow.systems"
-                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-base font-bold touch-target"
+                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-base font-black touch-target italic uppercase"
                 />
               </div>
               <p className="text-[9px] text-text-dim/60 font-black uppercase tracking-widest mt-2 px-2 italic">
