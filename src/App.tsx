@@ -16,7 +16,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -48,6 +48,7 @@ interface UserProfile {
   businessLat?: number;
   businessLng?: number;
   businessRadius?: number;
+  businessImage?: string;
   pricing?: {
     sedan: number;
     suv: number;
@@ -573,7 +574,7 @@ export default function App() {
 
         {/* Sidebar */}
         <nav className={cn(
-          "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:relative md:translate-x-0 md:w-64 md:z-auto md:transition-none",
+          "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 md:w-64",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div>
@@ -623,20 +624,12 @@ export default function App() {
                     }} 
                   />
                   {profile.role === 'owner' && (
-                    <>
-                      <NavItem 
-                        icon={<Store size={20} />} 
-                        label="My Business" 
-                        active={view === 'business'} 
-                        onClick={() => navigate('business')} 
-                      />
-                      <NavItem 
-                        icon={<CreditCard size={20} />} 
-                        label="Subscription" 
-                        active={view === 'billing'} 
-                        onClick={() => navigate('billing')} 
-                      />
-                    </>
+                    <NavItem 
+                      icon={<CreditCard size={20} />} 
+                      label="Subscription" 
+                      active={view === 'billing'} 
+                      onClick={() => navigate('billing')} 
+                    />
                   )}
                   {hasScannerAccess && (
                     <NavItem 
@@ -691,7 +684,7 @@ export default function App() {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 md:pl-64">
           <AnimatePresence mode="wait">
             {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
@@ -724,10 +717,7 @@ export default function App() {
               <SubscriptionView profile={profile} />
             )}
             {view === 'marketplace' && <MarketplaceView profile={profile!} setView={setView} />}
-            {view === 'business' && profile && profile.role === 'owner' && (
-              <BusinessManagementView profile={profile} onUpdate={(p) => setProfile(p)} />
-            )}
-            {view === 'settings' && profile && profile.role === 'owner' && (
+            {view === 'settings' && profile && (
               <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
             {view === 'my-cars' && <MyCarsView profile={profile!} setView={setView} onUpdate={(p) => setProfile(p)} />}
@@ -2600,441 +2590,8 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
   );
 }
 
-function BusinessManagementView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
-  const [business, setBusiness] = useState<Business | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'inventory'>('profile');
+/* Redundant business management views consolidated into SettingsView for better operating environment management */
 
-  const [formData, setFormData] = useState({
-    name: profile.name + "'s Wash",
-    location: '',
-    image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=800',
-    pricing: profile.pricing || { sedan: 1500, suv: 4000, truck: 6000 }
-  });
-
-  useEffect(() => {
-    const q = query(collection(db, 'wash_businesses'), where('ownerUid', '==', profile.uid), limit(1));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        const data = doc.data() as Business;
-        setBusiness({ ...data, id: doc.id });
-        setFormData({
-          name: data.name,
-          location: data.location,
-          image: data.image,
-          pricing: data.pricing || { sedan: 1500, suv: 4000, truck: 6000 }
-        });
-      }
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching business:", err);
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, [profile.uid]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile.plan) {
-      alert("Please subscribe to a plan before registering your business.");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (business) {
-        await updateDoc(doc(db, 'wash_businesses', business.id), {
-          ...formData,
-          updatedAt: serverTimestamp()
-        });
-      } else {
-        const newBusiness = {
-          ...formData,
-          ownerUid: profile.uid,
-          rating: 5.0,
-          ratingCount: 0,
-          qrCode: window.location.origin + "/?wash=" + profile.uid, // Placeholder or predictable
-          createdAt: serverTimestamp()
-        };
-        await addDoc(collection(db, 'wash_businesses'), newBusiness);
-      }
-      // Also update profile pricing for fallback
-      await updateDoc(doc(db, 'users', profile.uid), { pricing: formData.pricing });
-      onUpdate({ ...profile, pricing: formData.pricing });
-      alert("Business details successfully saved.");
-    } catch (err: any) {
-      handleFirestoreError(err, business ? OperationType.UPDATE : OperationType.CREATE, 'wash_businesses');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return <div className="p-20 text-center text-text-dim uppercase tracking-[0.3em] font-black animate-pulse">Loading Business Profile...</div>;
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto py-10">
-      <div className="flex gap-4 mb-8">
-        <button 
-          onClick={() => setActiveTab('profile')}
-          className={cn(
-            "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition",
-            activeTab === 'profile' ? "bg-accent text-white" : "bg-card text-text-dim border border-border hover:text-white"
-          )}
-        >
-          Station Profile
-        </button>
-        {business && (
-          <button 
-            onClick={() => setActiveTab('inventory')}
-            className={cn(
-              "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition",
-              activeTab === 'inventory' ? "bg-accent text-white" : "bg-card text-text-dim border border-border hover:text-white"
-            )}
-          >
-            Inventory & Services
-          </button>
-        )}
-      </div>
-
-      {activeTab === 'profile' ? (
-        <div className="bg-card rounded-[3rem] border border-border overflow-hidden shadow-2xl">
-          <div className="h-64 relative bg-bg/50">
-            <img src={formData.image} className="w-full h-full object-cover opacity-60" referrerPolicy="no-referrer" />
-            <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
-            <div className="absolute bottom-10 left-10">
-              <h2 className="text-4xl font-black text-text-main uppercase tracking-tighter mb-2">
-                {business ? 'Manage Your Station' : 'Launch Your Wash Station'}
-              </h2>
-              <p className="text-text-dim text-sm uppercase tracking-widest font-bold">
-                {business ? 'Keeping your digital storefront up to date' : 'Connect with thousands of customers in your area'}
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSave} className="p-10 space-y-8">
-            {!profile.plan && (
-               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-400">
-                 <Info size={20} />
-                 <p className="text-sm font-bold">You need an active subscription to list your business on the marketplace.</p>
-               </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Business Name</label>
-                <div className="relative">
-                  <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
-                  <input 
-                    type="text" 
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Downtown Shine Professionals"
-                    className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-text-main focus:border-accent transition-all placeholder:text-text-dim/30"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Location Details</label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
-                  <input 
-                    type="text" 
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="e.g., 123 Industrial Way, Suite B"
-                    className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-text-main focus:border-accent transition-all placeholder:text-text-dim/30"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Cover Image URL</label>
-              <div className="relative">
-                <Camera className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim" size={18} />
-                <input 
-                  type="text" 
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full bg-bg border border-border rounded-xl py-4 pl-12 pr-4 text-text-main focus:border-accent transition-all font-mono text-xs placeholder:text-text-dim/30"
-                  required
-                />
-              </div>
-            </div>
-
-              <div className="space-y-6 pt-6 border-t border-border">
-                <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-                  <DollarSign size={14} className="text-accent" />
-                  Dynamic Pricing Engine
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Sedan Base (₦)</label>
-                    <input 
-                      type="number"
-                      value={formData.pricing.sedan}
-                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, sedan: parseFloat(e.target.value) } })}
-                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">SUV Base (₦)</label>
-                    <input 
-                      type="number"
-                      value={formData.pricing.suv}
-                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, suv: parseFloat(e.target.value) } })}
-                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-text-dim/60 uppercase">Truck Base (₦)</label>
-                    <input 
-                      type="number"
-                      value={formData.pricing.truck}
-                      onChange={e => setFormData({ ...formData, pricing: { ...formData.pricing, truck: parseFloat(e.target.value) } })}
-                      className="w-full bg-bg border border-border rounded-xl p-4 text-white focus:border-accent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {business && (
-                <div className="space-y-6 pt-6 border-t border-border">
-                  <label className="text-xs font-black text-text-dim uppercase tracking-widest flex items-center gap-2">
-                    <Zap size={14} className="text-accent" />
-                    Digital QR Storefront
-                  </label>
-                  <div className="flex flex-col md:flex-row items-center gap-8 bg-bg/50 p-8 rounded-[2rem] border border-border">
-                    <div className="w-40 h-40 bg-white p-2 rounded-2xl shadow-2xl">
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + "/?wash=" + business.id)}`} 
-                        alt="QR Code"
-                        className="w-full h-full"
-                      />
-                    </div>
-                    <div className="flex-1 text-center md:text-left">
-                      <h4 className="text-lg font-black text-text-main uppercase tracking-tight mb-2">Automated QR Ready</h4>
-                      <p className="text-text-dim text-sm mb-4 leading-relaxed lowercase">This code is your permanent digital storefront. Customers scan this to add vehicles, pay, and track their wash credits instantly.</p>
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          const link = window.location.origin + "/?wash=" + business.id;
-                          navigator.clipboard.writeText(link);
-                          alert("Storefront link copied to clipboard.");
-                        }}
-                        className="flex items-center gap-2 text-accent font-bold hover:text-text-main transition"
-                      >
-                        <Share2 size={14} />
-                        Copy Digital Link
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-6 border-t border-border flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center text-accent">
-                  <ShieldCheck size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white">Verification Status</p>
-                  <p className="text-[10px] text-text-dim uppercase tracking-widest">{business ? 'Active & Listed' : 'Pending Registration'}</p>
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={saving || !profile.plan}
-                className="w-full md:w-auto px-8 py-4 bg-accent text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-accent-light transition-all shadow-xl shadow-accent/20 disabled:opacity-50 flex items-center justify-center gap-3"
-              >
-                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                {business ? 'Update Business Profile' : 'Register Wash Station'}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <BusinessInventoryManagement business={business!} profile={profile} />
-      )}
-    </motion.div>
-  );
-}
-
-function BusinessInventoryManagement({ business, profile }: { business: Business, profile: UserProfile }) {
-  const [items, setItems] = useState<MarketplaceItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [saving, setSaving] = useState(false);
-  
-  const [newItem, setNewItem] = useState({
-    name: '',
-    price: 0,
-    category: 'accessory' as any,
-    image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400',
-    description: ''
-  });
-
-  useEffect(() => {
-    const q = query(collection(db, 'marketplace_items'), where('businessId', '==', business.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MarketplaceItem));
-      setItems(data);
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, [business.id]);
-
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await addDoc(collection(db, 'marketplace_items'), {
-        ...newItem,
-        businessId: business.id,
-        ownerUid: profile.uid,
-        vendor: business.name,
-        createdAt: serverTimestamp()
-      });
-      setShowAdd(false);
-      setNewItem({
-        name: '',
-        price: 0,
-        category: 'accessory',
-        image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=400',
-        description: ''
-      });
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.CREATE, 'marketplace_items');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this item?")) return;
-    try {
-      await deleteDoc(doc(db, 'marketplace_items', id));
-    } catch (err: any) {
-      handleFirestoreError(err, OperationType.DELETE, 'marketplace_items');
-    }
-  };
-
-  return (
-    <div className="space-y-10 md:space-y-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-4 md:px-0">
-        <div className="text-center md:text-left">
-          <h3 className="text-3xl md:text-4xl font-black text-text-main uppercase italic tracking-tighter">Inventory & Services</h3>
-          <p className="text-text-dim text-sm md:text-base mt-2 lowercase font-medium">Manage products and specialized services you offer.</p>
-        </div>
-        <button 
-          onClick={() => setShowAdd(!showAdd)}
-          className="w-full md:w-auto px-10 py-5 bg-accent text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 transition shadow-xl shadow-accent/20 touch-target"
-        >
-          {showAdd ? <X size={18} /> : <Plus size={18} />}
-          {showAdd ? 'CANCEL ENTRY' : 'ADD NEW UNIT'}
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {showAdd && (
-          <motion.form 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            onSubmit={handleAddItem}
-            className="bg-card border border-border rounded-[2.5rem] p-6 md:p-12 overflow-hidden space-y-8 md:space-y-10 shadow-2xl mx-4 md:mx-0"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Item Name</label>
-                <input 
-                  type="text"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-lg font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                  placeholder="e.g. Nano Detailer"
-                  required
-                />
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Market Price (₦)</label>
-                <input 
-                  type="number"
-                  value={newItem.price}
-                  onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
-                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-lg font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Classification</label>
-                <select 
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value as any })}
-                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-base font-bold text-text-main focus:border-accent outline-none scrollable-dropdown touch-target"
-                >
-                  <option value="accessory" className="bg-card text-text-main">Accessory / Product</option>
-                  <option value="part" className="bg-card text-text-main">Physical Component</option>
-                  <option value="service" className="bg-card text-text-main">Specialized Operation</option>
-                </select>
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-text-dim tracking-widest ml-1">Asset URL (Image)</label>
-                <input 
-                  type="text"
-                  value={newItem.image}
-                  onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
-                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4.5 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                  placeholder="https://..."
-                  required
-                />
-              </div>
-            </div>
-            <button 
-              type="submit" 
-              disabled={saving}
-              className="w-full py-6 bg-white text-bg rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-accent hover:text-white transition-all disabled:opacity-50 touch-target italic"
-            >
-              {saving ? 'SYNCHRONIZING...' : 'BROADCAST TO INDICES'}
-            </button>
-          </motion.form>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 px-4 md:px-0">
-        {loading ? (
-          [1, 2, 3].map(i => <div key={i} className="h-64 bg-card rounded-[2rem] border border-border animate-pulse" />)
-        ) : items.map(item => (
-          <div key={item.id} className="bg-card border border-border rounded-[2.5rem] p-6 md:p-8 group relative transition-all hover:scale-[1.02] duration-300">
-            <button 
-              onClick={() => handleDeleteItem(item.id)}
-              className="absolute top-6 right-6 p-2 bg-red-500/10 text-red-400 rounded-xl opacity-0 group-hover:opacity-100 transition shadow-lg touch-target"
-            >
-              <Trash2 size={16} />
-            </button>
-            <div className="flex flex-col gap-6">
-              <img src={item.image} className="w-full aspect-square rounded-2xl object-cover border border-border shadow-xl" referrerPolicy="no-referrer" />
-              <div className="text-center md:text-left">
-                <h4 className="text-xl font-black text-text-main italic uppercase tracking-tighter mb-2">{item.name}</h4>
-                <div className="flex items-center justify-between">
-                  <p className="text-accent font-black text-lg tracking-tighter italic">{formatCurrency(item.price)}</p>
-                  <p className="text-[9px] font-black text-text-dim uppercase tracking-[0.15em] bg-text-main/5 px-3 py-1.5 rounded-full">{item.category}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
@@ -3748,7 +3305,13 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Vehicle Garage.</h2>
-          <p className="text-text-dim text-base md:text-lg lowercase mt-2">Verified records for all units in your fleet.</p>
+          <div className="flex items-center gap-3 mt-3">
+             <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 border border-accent/20 rounded-full">
+               <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
+               <span className="text-[9px] font-black uppercase text-accent tracking-widest leading-none">Operating Environment: Active</span>
+             </div>
+             <p className="text-text-dim text-xs lowercase hidden md:block opacity-60">Verified fleet status monitoring enabled.</p>
+          </div>
         </div>
         <button 
           onClick={() => setShowAdd(!showAdd)}
@@ -4797,6 +4360,19 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
+  const [stationInfo, setStationInfo] = useState<any>(null);
+
+  useEffect(() => {
+    if (profile.role === 'worker' && profile.stationId) {
+      const unsub = onSnapshot(doc(db, 'users', profile.stationId), (snap) => {
+        if (snap.exists()) {
+          setStationInfo(snap.data());
+        }
+      });
+      return unsub;
+    }
+  }, [profile]);
+
   useEffect(() => {
     // Current user's recent logs for quick verification
     const q = query(collection(db, 'washes'), where('workerId', '==', profile.uid), orderBy('timestamp', 'desc'), limit(5));
@@ -4937,7 +4513,11 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       }
 
       // 2. Geofence check
-      let geofence = { lat: profile.businessLat, lng: profile.businessLng, radius: profile.businessRadius || 500 };
+      const baseLat = profile.role === 'owner' ? profile.businessLat : stationInfo?.businessLat;
+      const baseLng = profile.role === 'owner' ? profile.businessLng : stationInfo?.businessLng;
+      const baseRadius = profile.role === 'owner' ? (profile.businessRadius || 500) : (stationInfo?.businessRadius || 500);
+
+      let geofence = { lat: baseLat, lng: baseLng, radius: baseRadius };
       
       // If it's a booking, check if it's a mobile/home service
       let bookingTarget: Booking | null = null;
@@ -6038,11 +5618,15 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   const [authorizedEmails, setAuthorizedEmails] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [settings, setSettings] = useState({
+    name: profile.name || '',
+    phone: profile.phone || '',
     businessName: profile.businessName || '',
     businessAddress: profile.businessAddress || '',
     businessLat: profile.businessLat || 0,
     businessLng: profile.businessLng || 0,
     businessRadius: profile.businessRadius || 500,
+    businessImage: profile.businessImage || 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=800',
+    pricing: profile.pricing || { sedan: 2000, suv: 4500, truck: 7000 },
     theme: profile.theme || 'dark'
   });
 
@@ -6112,11 +5696,38 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
     setLoading(true);
     try {
       await updateDoc(doc(db, 'users', profile.uid), settings);
+      
+      if (profile.role === 'owner') {
+        const q = query(collection(db, 'wash_businesses'), where('ownerUid', '==', profile.uid), limit(1));
+        const snap = await getDocs(q);
+        const bizData = {
+          name: settings.businessName,
+          location: settings.businessAddress,
+          image: settings.businessImage,
+          pricing: settings.pricing,
+          latitude: settings.businessLat,
+          longitude: settings.businessLng,
+          updatedAt: serverTimestamp()
+        };
+        
+        if (!snap.empty) {
+          await updateDoc(doc(db, 'wash_businesses', snap.docs[0].id), bizData);
+        } else {
+          await addDoc(collection(db, 'wash_businesses'), {
+            ...bizData,
+            ownerUid: profile.uid,
+            rating: 5.0,
+            ratingCount: 0,
+            createdAt: serverTimestamp()
+          });
+        }
+      }
+      
       onUpdate({ ...profile, ...settings });
-      alert("Business profile updated successfully.");
+      alert("Operating environment synchronized successfully.");
     } catch (error) {
       console.error("Save error:", error);
-      alert("Failed to save settings.");
+      alert("Failed to commit settings to the ledger.");
     } finally {
       setLoading(false);
     }
@@ -6140,9 +5751,34 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           stationId={profile.uid} 
         />
         <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl">
+          <div className="space-y-8">
+            <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+              <User size={20} className="text-accent" />
+              Identity Credentials
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Legal Identity / Display Name</label>
+                <input 
+                  value={settings.name}
+                  onChange={e => setSettings(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
+                />
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Primary Contact (Phone)</label>
+                <input 
+                  value={settings.phone}
+                  onChange={e => setSettings(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
           {profile.role === 'owner' && (
             <>
-              <div className="space-y-8">
+              <div className="space-y-8 pt-10 border-t border-border/40">
                 <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
                   <Store size={20} className="text-accent" />
                   Station Identity
@@ -6166,6 +5802,53 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
                     />
                   </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Cover Image (URL)</label>
+                    <div className="relative">
+                      <ImageIcon size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" />
+                      <input 
+                        value={settings.businessImage}
+                        onChange={e => setSettings(prev => ({ ...prev, businessImage: e.target.value }))}
+                        className="w-full bg-bg border border-border rounded-2xl pl-16 pr-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-8 pt-10 border-t border-border/40">
+                <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+                  <DollarSign size={20} className="text-accent" />
+                  Pricing Engine
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Sedan (₦)</label>
+                    <input 
+                      type="number"
+                      value={settings.pricing.sedan}
+                      onChange={e => setSettings(prev => ({ ...prev, pricing: { ...prev.pricing, sedan: parseFloat(e.target.value) } }))}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-text-main font-black outline-none focus:border-accent shadow-inner"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">SUV (₦)</label>
+                    <input 
+                      type="number"
+                      value={settings.pricing.suv}
+                      onChange={e => setSettings(prev => ({ ...prev, pricing: { ...prev.pricing, suv: parseFloat(e.target.value) } }))}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-text-main font-black outline-none focus:border-accent shadow-inner"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Truck (₦)</label>
+                    <input 
+                      type="number"
+                      value={settings.pricing.truck}
+                      onChange={e => setSettings(prev => ({ ...prev, pricing: { ...prev.pricing, truck: parseFloat(e.target.value) } }))}
+                      className="w-full bg-bg border border-border rounded-xl p-4 text-text-main font-black outline-none focus:border-accent shadow-inner"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -6174,9 +5857,11 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   <MapPin size={20} className="text-accent" />
                   Operational Geofence
                 </label>
-                <p className="text-sm text-text-main leading-relaxed font-bold italic">
-                  Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
-                </p>
+                <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
+                  <p className="text-sm text-text-main leading-relaxed font-black italic">
+                    Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
+                  </p>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
