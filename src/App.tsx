@@ -5769,11 +5769,6 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
       </header>
 
       <div className="space-y-8">
-        <AddWorkerModal 
-          isOpen={isAddModalOpen} 
-          onClose={() => setIsAddModalOpen(false)} 
-          stationId={profile.uid} 
-        />
         <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl">
           <div className="space-y-8">
             <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
@@ -5986,101 +5981,110 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         </div>
 
         {/* Team Delegation - Only for Owners */}
-        <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl overflow-hidden relative">
-          <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
-            <div className="space-y-4">
-              <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
-                <Users size={20} className="text-accent" />
-                Staff Registry
-              </label>
-              <p className="text-sm text-text-main leading-relaxed font-black max-w-md italic">
-                Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
-              </p>
+        {profile.role === 'owner' && (
+          <>
+            <AddWorkerModal 
+              isOpen={isAddModalOpen} 
+              onClose={() => setIsAddModalOpen(false)} 
+              stationId={profile.uid} 
+            />
+            <div className="bg-card border border-border rounded-[2.5rem] p-8 md:p-12 space-y-12 shadow-2xl overflow-hidden relative">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 relative z-10">
+              <div className="space-y-4">
+                <label className="text-xs md:text-sm font-black text-accent uppercase tracking-[0.25em] flex items-center gap-3">
+                  <Users size={20} className="text-accent" />
+                  Staff Registry
+                </label>
+                <p className="text-sm text-text-main leading-relaxed font-black max-w-md italic">
+                  Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="px-10 py-5 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-accent/20 flex items-center justify-center gap-3 transition-transform hover:scale-105 active:scale-95 touch-target"
+              >
+                <Plus size={20} /> PROVISION UNIT
+              </button>
+            </header>
+
+            <div className="space-y-4 relative z-10">
+              {/* Active Workers */}
+              {workers.map(worker => (
+                <div key={worker.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-bg/40 backdrop-blur-md border border-border rounded-[2rem] hover:border-accent/40 transition-all group shadow-lg gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="relative">
+                      {worker.photoUrl ? (
+                        <img src={worker.photoUrl} alt={worker.name} className="w-14 h-14 rounded-2xl border border-border group-hover:scale-105 transition-transform object-cover" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20 shadow-inner">
+                          <Users size={28} />
+                        </div>
+                      )}
+                      {worker.permissions?.canManageTeam && (
+                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent rounded-full flex items-center justify-center text-white border-2 border-bg shadow-lg">
+                          <Zap size={12} fill="currentColor" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <p className="text-lg font-black text-text-main uppercase italic tracking-tighter leading-none">{worker.name}</p>
+                        <span className="px-3 py-1 bg-success/10 text-success text-[8px] font-black uppercase rounded-full border border-success/20 tracking-widest">ACTIVE</span>
+                      </div>
+                      <p className="text-[10px] text-text-main/60 uppercase tracking-widest font-black italic">
+                        {worker.permissions?.canManageTeam ? "UNIT COMMANDER" : "OPERATIONAL SPECIALIST"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => togglePermission(worker.uid, 'canManageTeam')}
+                      className={cn(
+                        "w-full sm:w-auto px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md touch-target italic",
+                        worker.permissions?.canManageTeam 
+                          ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white" 
+                          : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white shadow-accent/10"
+                      )}
+                    >
+                      {worker.permissions?.canManageTeam ? "REVOKE LEAD" : "PROMOTE LEAD"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Invited but not yet joined */}
+              {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
+                <div key={auth.id} className="flex items-center justify-between p-6 bg-text-main/5 border border-dashed border-border/40 rounded-[1.5rem] group transition-opacity">
+                  <div className="flex items-center gap-5">
+                    <div className="w-12 h-12 rounded-xl bg-text-main/5 flex items-center justify-center text-text-main border border-border italic font-black text-sm">
+                      ?
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <p className="font-black text-text-main uppercase italic tracking-tighter">{auth.name}</p>
+                        <span className="px-2 py-0.5 bg-accent/10 text-accent text-[8px] font-black uppercase rounded tracking-widest border border-accent/20">PENDING INFILTRATION</span>
+                      </div>
+                      <p className="text-[10px] text-text-main font-black tracking-tighter truncate max-w-[200px] italic">
+                        {auth.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => handleDeleteInvitation(auth.id)}
+                    className="p-3 text-text-dim hover:text-red-500 transition-colors touch-target bg-white/5 rounded-full"
+                    title="Revoke Invitation"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
             </div>
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-10 py-5 bg-accent text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl shadow-accent/20 flex items-center justify-center gap-3 transition-transform hover:scale-105 active:scale-95 touch-target"
-            >
-              <Plus size={20} /> PROVISION UNIT
-            </button>
-          </header>
-
-          <div className="space-y-4 relative z-10">
-            {/* Active Workers */}
-            {workers.map(worker => (
-              <div key={worker.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-bg/40 backdrop-blur-md border border-border rounded-[2rem] hover:border-accent/40 transition-all group shadow-lg gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="relative">
-                    {worker.photoUrl ? (
-                      <img src={worker.photoUrl} alt={worker.name} className="w-14 h-14 rounded-2xl border border-border group-hover:scale-105 transition-transform object-cover" />
-                    ) : (
-                      <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20 shadow-inner">
-                        <Users size={28} />
-                      </div>
-                    )}
-                    {worker.permissions?.canManageTeam && (
-                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent rounded-full flex items-center justify-center text-white border-2 border-bg shadow-lg">
-                        <Zap size={12} fill="currentColor" />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className="text-lg font-black text-text-main uppercase italic tracking-tighter leading-none">{worker.name}</p>
-                      <span className="px-3 py-1 bg-success/10 text-success text-[8px] font-black uppercase rounded-full border border-success/20 tracking-widest">ACTIVE</span>
-                    </div>
-                    <p className="text-[10px] text-text-main/60 uppercase tracking-widest font-black italic">
-                      {worker.permissions?.canManageTeam ? "UNIT COMMANDER" : "OPERATIONAL SPECIALIST"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                   <button 
-                    onClick={() => togglePermission(worker.uid, 'canManageTeam')}
-                    className={cn(
-                      "w-full sm:w-auto px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md touch-target italic",
-                      worker.permissions?.canManageTeam 
-                        ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white" 
-                        : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white shadow-accent/10"
-                    )}
-                   >
-                     {worker.permissions?.canManageTeam ? "REVOKE LEAD" : "PROMOTE LEAD"}
-                   </button>
-                </div>
-              </div>
-            ))}
-
-            {/* Invited but not yet joined */}
-            {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
-              <div key={auth.id} className="flex items-center justify-between p-6 bg-text-main/5 border border-dashed border-border/40 rounded-[1.5rem] group transition-opacity">
-                <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-xl bg-text-main/5 flex items-center justify-center text-text-main border border-border italic font-black text-sm">
-                    ?
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className="font-black text-text-main uppercase italic tracking-tighter">{auth.name}</p>
-                      <span className="px-2 py-0.5 bg-accent/10 text-accent text-[8px] font-black uppercase rounded tracking-widest border border-accent/20">PENDING INFILTRATION</span>
-                    </div>
-                    <p className="text-[10px] text-text-main font-black tracking-tighter truncate max-w-[200px] italic">
-                      {auth.email}
-                    </p>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => handleDeleteInvitation(auth.id)}
-                  className="p-3 text-text-dim hover:text-red-500 transition-colors touch-target bg-white/5 rounded-full"
-                  title="Revoke Invitation"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))}
+            <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-accent/5 rounded-full blur-[100px]" />
           </div>
-          <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-accent/5 rounded-full blur-[100px]" />
-        </div>
+        </>
+        )}
       </div>
     </motion.div>
   );
