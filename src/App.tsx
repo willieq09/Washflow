@@ -574,7 +574,7 @@ export default function App() {
 
         {/* Sidebar */}
         <nav className={cn(
-          "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 md:w-64",
+          "fixed inset-y-0 left-0 z-[60] w-72 bg-card border-r border-border p-6 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 md:w-64 overflow-y-auto custom-scrollbar",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div>
@@ -652,8 +652,8 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mt-auto border-t border-border pt-6">
-            <div className="flex items-center gap-3 px-2 mb-6">
+          <div className="mt-auto border-t border-border pt-6 space-y-2">
+            <div className="flex items-center gap-3 px-2 mb-4">
               <img src={profile?.photoUrl} className="w-10 h-10 rounded-full border border-border" />
                 <div className="flex flex-col">
                   <span className="text-sm font-black text-text-main leading-none">{profile?.name}</span>
@@ -665,17 +665,16 @@ export default function App() {
               <SyncStatus isOnline={isOnline} pendingCount={pendingSync} />
             </div>
 
-            {profile?.role === 'owner' && (
-              <NavItem 
-                icon={<Settings2 size={18} />} 
-                label="Settings" 
-                active={view === 'settings'} 
-                onClick={() => navigate('settings')} 
-              />
-            )}
+            <NavItem 
+              icon={<Settings2 size={18} />} 
+              label="Settings" 
+              active={view === 'settings'} 
+              onClick={() => navigate('settings')} 
+            />
+
             <button 
               onClick={logout}
-              className="w-full flex items-center gap-2 px-2 py-2 text-text-dim hover:text-accent transition font-bold"
+              className="w-full flex items-center gap-2 px-4 py-3.5 text-text-dim hover:text-accent hover:bg-accent/5 rounded-2xl transition font-bold"
             >
               <LogOut size={18} />
               <span className="text-sm">Log out</span>
@@ -995,15 +994,21 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Account Number</label>
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Account Number</label>
+                  <span className="text-[9px] font-black text-accent uppercase tracking-widest italic animate-pulse">10-Digit NUBAN Only</span>
+                </div>
                 <input
                   type="text"
-                  placeholder="10 Digits"
+                  placeholder="Enter 10 Digits"
                   maxLength={10}
                   className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-base font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20 font-mono tracking-widest"
                   value={form.accountNumber}
                   onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value.replace(/\D/g, '') }))}
                 />
+                <p className="text-[9px] text-red-500/80 font-black uppercase tracking-tighter ml-1">
+                  * Do NOT enter card numbers here. Card numbers will be rejected.
+                </p>
               </div>
 
               <div className="space-y-3">
@@ -2642,6 +2647,10 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
 
   const handleBuy = async (item: MarketplaceItem) => {
     if (!profile || buying) return;
+    if (!profile.email) {
+      alert("Please ensure your email is set in your profile before checking out.");
+      return;
+    }
     setBuying(item.id);
     try {
       const response = await fetch('/api/paystack/initialize-order', {
@@ -2676,7 +2685,13 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       }
     } catch (err: any) {
       console.error("Buy error:", err);
-      alert(err.message || "An unexpected error occurred during checkout initialization.");
+      // Improve error message hint
+      const msg = err.message || "";
+      if (msg.toLowerCase().includes("account number")) {
+        alert("Paystack reported an 'Invalid Account Number' error. If you are using a card, please double-check your bank's 3D Secure verification or try another channel.");
+      } else {
+        alert(err.message || "An unexpected error occurred during checkout initialization.");
+      }
     } finally {
       setBuying(null);
     }
@@ -4084,6 +4099,10 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
 
   const handleSubscribe = async (plan: string) => {
     if (!profile || loading) return;
+    if (!profile.email) {
+      setError("Email required in profile before checkout.");
+      return;
+    }
     setLoading(plan);
     setError(null);
     try {
@@ -4131,7 +4150,12 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       }
     } catch (error: any) {
       console.error("[PAYSTACK ERROR]", error);
-      setError(error.message || "Could not start payment process. Please check your connection.");
+      const msg = error.message || "";
+      if (msg.toLowerCase().includes("account number")) {
+        setError("Paystack reported an 'Invalid Account Number' error. If you are using a card, this may be a bank authentication error. Please try another card or payment method.");
+      } else {
+        setError(error.message || "Could not start payment process. Please check your connection.");
+      }
     } finally {
       setLoading(null);
     }

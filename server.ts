@@ -108,6 +108,7 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
     const response = await axios.post("https://api.paystack.co/transaction/initialize", {
       email, 
       amount: Math.round(Number(amount)), 
+      currency: "NGN",
       reference,
       callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
       metadata: { userId, itemId, itemName, type: 'marketplace_item' },
@@ -139,6 +140,7 @@ app.post("/api/paystack/initialize", async (req, res) => {
     const response = await axios.post("https://api.paystack.co/transaction/initialize", {
       email, 
       amount: Math.round(Number(amount)), 
+      currency: "NGN",
       reference,
       callback_url: `${origin}/?paystack_success=true&plan=${plan}&ref=${reference}`,
       metadata: { userId, plan, type: 'subscription' },
