@@ -285,8 +285,7 @@ export default function App() {
     getRedirectResult(auth).then((result) => {
       if (result) {
         console.log("Redirect authentication success:", result.user.email);
-        setUser(result.user);
-        setAuthLoading(false);
+        // Let onAuthStateChanged handle the actual state update to ensure profile is fetched
       }
     }).catch((error) => {
       // Clear loading state on error to prevent blank white screen
@@ -304,7 +303,6 @@ export default function App() {
 
     const unsub = onAuthStateChanged(auth, async (u) => {
       try {
-        setUser(u);
         if (u) {
           const docRef = doc(db, 'users', u.uid);
           const docSnap = await getDoc(docRef);
@@ -341,7 +339,10 @@ export default function App() {
             }
             setProfile(newProfile);
           }
+          // Set user after profile is ready to avoid intermediate crash render
+          setUser(u);
         } else {
+          setUser(null);
           setProfile(null);
         }
       } catch (error) {
@@ -518,10 +519,12 @@ export default function App() {
   }
 
   // Determine if user has access to AI Scanner (Elite or Admin or specifically granted)
-  const hasScannerAccess = profile.plan === 'elite' || 
-                          (profile.email && ADMIN_EMAILS.includes(profile.email)) || 
-                          profile.role === 'admin' ||
-                          (profile.role === 'worker' && profile.permissions?.canManageTeam);
+  const hasScannerAccess = profile?.plan === 'elite' || 
+                          (profile?.email && ADMIN_EMAILS.includes(profile.email)) || 
+                          profile?.role === 'admin' ||
+                          (profile?.role === 'worker' && profile.permissions?.canManageTeam);
+
+  if (!profile) return null; // Safety break before main UI render
 
   return (
     <ErrorBoundary>
