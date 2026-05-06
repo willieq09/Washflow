@@ -10,7 +10,8 @@ import {
   signOut, 
   onAuthStateChanged,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  signInAnonymously
 } from 'firebase/auth';
 import { 
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
@@ -331,12 +332,12 @@ export default function App() {
               uid: u.uid,
               name: u.displayName || 'Anonymous User',
               email: u.email || '',
-              role: assignedRole,
+              role: assignedRole || 'customer', // Default to customer for phone/anonymous users
               stationId: assignedStationId,
               photoUrl: u.photoURL || null
             };
             
-            if (assignedRole) {
+            if (assignedRole || u.isAnonymous) {
                await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
             }
             setProfile(newProfile);
@@ -400,6 +401,39 @@ export default function App() {
       }
     }
   }, [profile]);
+
+  const handlePhoneLogin = async (name: string, phone: string) => {
+    setAuthLoading(true);
+    try {
+      const cred = await signInAnonymously(auth);
+      const u = cred.user;
+      const docRef = doc(db, 'users', u.uid);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        const newProfile: UserProfile = {
+          uid: u.uid,
+          name: name,
+          phone: '+234' + phone,
+          role: 'customer',
+          email: '',
+          credits: 0,
+          vehicles: [],
+          theme: 'dark'
+        };
+        await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
+        setProfile(newProfile);
+      } else {
+        setProfile(docSnap.data() as UserProfile);
+      }
+      setUser(u);
+    } catch (error) {
+      console.error("Phone login error:", error);
+      alert("Registration failed. Please check your connection.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const login = async () => {
     setAuthLoading(true);
@@ -490,7 +524,7 @@ export default function App() {
     );
   }
 
-  if (!user) return <LandingPage onLogin={login} authLoading={authLoading} />;
+  if (!user) return <LandingPage onLogin={login} onPhoneLogin={handlePhoneLogin} authLoading={authLoading} />;
 
   if (profile && !profile.role) {
     return <RoleSelection uid={profile.uid} name={profile.name} email={profile.email} />;
@@ -830,7 +864,20 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string) => void, authLoading: boolean }) {
+  const [mode, setMode] = useState<'business' | 'personal'>('personal');
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+
+  const handlePhoneSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (phone.length < 10 || !name) {
+      alert("Please provide a valid name and phone number (e.g. 08123456789)");
+      return;
+    }
+    onPhoneLogin(name, phone);
+  };
+
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4 md:p-6 text-text-main text-center pb-12">
       <motion.div 
@@ -841,31 +888,121 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
         <div className="inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-accent rounded-3xl mb-8 md:mb-10 shadow-2xl shadow-accent/20 rotate-3">
           <AnimatedVehicleIcon size={32} className="text-white" />
         </div>
-        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9] text-text-dim">
+        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9] text-text-dim/80">
           AUTOLUX <br />
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
-        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-black leading-relaxed uppercase tracking-tight italic">
+        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-medium leading-relaxed uppercase tracking-tight italic">
           The car wash owner operating system. Manage operations locally, scale subscriptions globally.
         </p>
-        <button 
-          onClick={onLogin}
-          disabled={authLoading}
-          className="w-full md:w-auto bg-accent text-white px-10 py-5 rounded-2xl font-black flex items-center justify-center gap-4 mx-auto hover:brightness-110 transition-all shadow-xl shadow-accent/20 active:scale-95 text-xl disabled:opacity-50 disabled:cursor-not-allowed touch-target"
-        >
-          {authLoading ? (
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-bg border-t-transparent rounded-full animate-spin" />
-              <span>Authenticating...</span>
-            </div>
-          ) : (
-            <>
-              <img src="https://www.google.com/favicon.ico" className="w-6 h-6" />
-              Authenticate Session
-            </>
-          )}
-        </button>
-        {authLoading && (
+
+        <div className="max-w-md mx-auto mb-10">
+          <div className="flex bg-card p-1 rounded-2xl mb-8 border border-border shadow-xl">
+            <button 
+              onClick={() => setMode('personal')}
+              className={cn(
+                "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+                mode === 'personal' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
+              )}
+            >
+              I HAVE A CAR
+            </button>
+            <button 
+              onClick={() => setMode('business')}
+              className={cn(
+                "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+                mode === 'business' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
+              )}
+            >
+              I WASH CARS
+            </button>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {mode === 'personal' ? (
+              <motion.form 
+                key="personal"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                onSubmit={handlePhoneSubmit}
+                className="space-y-4"
+              >
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="Enter your name"
+                    required
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                  />
+                </div>
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Phone Number (Opay/Moniepoint Style)</label>
+                  <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
+                    <input 
+                      type="tel" 
+                      placeholder="8012345678"
+                      required
+                      value={phone}
+                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                    />
+                  </div>
+                </div>
+                <button 
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full bg-accent text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-accent/20 uppercase tracking-widest text-xs disabled:opacity-50 touch-target"
+                >
+                  {authLoading ? (
+                    <RefreshCw size={20} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Zap size={20} className="fill-current" />
+                      Instant Access
+                    </>
+                  )}
+                </button>
+                <p className="text-[10px] text-text-dim font-medium italic">Used for identification and loyalty rewards across all partner stations.</p>
+              </motion.form>
+            ) : (
+              <motion.div
+                key="business"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <button 
+                  onClick={onLogin}
+                  disabled={authLoading}
+                  className="w-full bg-card border border-border text-text-main py-5 rounded-2xl font-black flex items-center justify-center gap-4 hover:border-accent transition-all shadow-xl active:scale-95 text-lg disabled:opacity-50 touch-target"
+                >
+                  {authLoading ? (
+                    <RefreshCw size={20} className="animate-spin text-accent" />
+                  ) : (
+                    <>
+                      <img src="https://www.google.com/favicon.ico" className="w-6 h-6" />
+                      Business Login
+                    </>
+                  )}
+                </button>
+                <div className="p-6 bg-accent/5 border border-accent/20 rounded-2xl text-left">
+                  <p className="text-xs text-text-main leading-relaxed font-bold lowercase">
+                    <span className="text-accent font-black uppercase italic mr-2 text-[10px]">Security:</span>
+                    Station owners and workers are required to authenticate via corporate email for audit integrity.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {authLoading && mode === 'business' && (
           <div className="mt-8 p-6 bg-accent/10 border border-accent/20 rounded-2xl max-w-lg mx-auto">
             <p className="text-sm text-accent font-black animate-pulse mb-4 tracking-wide uppercase">
               Authentication in progress...
@@ -877,10 +1014,6 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
               <p className="text-xs text-text-main leading-relaxed font-bold">
                 <span className="text-accent font-black">2. Iframe Restricted?</span> If the popup closes immediately, try opening the app in a 
                 <span className="text-accent font-black"> New Tab</span> using the icon in the top right of the preview.
-              </p>
-              <p className="text-xs text-text-main leading-relaxed font-mono font-bold">
-                <span className="text-accent font-black">3. Authorized Domain?</span> Ensure <code className="bg-text-main/10 px-1 rounded">run.app</code> is added to the 
-                Authorized Domains in your Firebase Auth settings.
               </p>
             </div>
           </div>
@@ -913,9 +1046,9 @@ const VEHICLE_DATA = {
 
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
   return (
-    <div className="bento-card">
-      <h3 className="font-black text-text-dim mb-2 uppercase italic tracking-tighter">{title}</h3>
-      <p className="text-sm text-text-dim leading-relaxed font-bold lowercase">{desc}</p>
+    <div className="bento-card border-white/5 bg-transparent shadow-none">
+      <h3 className="font-bold text-text-dim/70 mb-2 uppercase italic tracking-tighter">{title}</h3>
+      <p className="text-sm text-text-dim/50 leading-relaxed font-medium lowercase italic">{desc}</p>
     </div>
   );
 }
@@ -4365,8 +4498,11 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   const [form, setForm] = useState({ 
     carModel: preFill?.carModel || '', 
     plateNumber: preFill?.plateNumber || '', 
+    customerPhone: '',
     price: profile.pricing?.sedan?.toString() || '2000' 
   });
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [foundCustomer, setFoundCustomer] = useState<{ name: string, credits: number, id: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [lastLoggedId, setLastLoggedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -4391,6 +4527,32 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
   const [stationInfo, setStationInfo] = useState<any>(null);
 
+  const searchCustomerByPhone = async () => {
+    if (!form.customerPhone || form.customerPhone.length < 10) return;
+    
+    setSearchingCustomer(true);
+    try {
+      const fullPhone = form.customerPhone.startsWith('+234') ? form.customerPhone : '+234' + form.customerPhone.replace(/^0/, '');
+      const q = query(collection(db, 'users'), where('phone', '==', fullPhone), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const u = snap.docs[0].data();
+        setFoundCustomer({ name: u.name, credits: u.credits || 0, id: snap.docs[0].id });
+        
+        // Auto-fill car if they only have one
+        if (u.vehicles && u.vehicles.length === 1) {
+          setForm(prev => ({ ...prev, carModel: `${u.vehicles[0].make} ${u.vehicles[0].model}`, plateNumber: u.vehicles[0].plate }));
+        }
+      } else {
+        alert("Customer not found. They can sign up instantly on the home screen using their phone number.");
+        setFoundCustomer(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchingCustomer(false);
+    }
+  };
   useEffect(() => {
     if (profile.role === 'worker' && profile.stationId) {
       const unsub = onSnapshot(doc(db, 'users', profile.stationId), (snap) => {
@@ -4585,17 +4747,26 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
       let usedCredit = false;
 
       // Attempt to find customer and deduct credit
-      const customerQuery = query(collection(db, 'users'), where('role', '==', 'customer'));
-      const customerSnapshot = await getDocs(customerQuery);
-      const customerDoc = customerSnapshot.docs.find(d => {
-        const vehicles = d.data().vehicles || [];
-        return vehicles.some((v: any) => v.plate?.toUpperCase() === form.plateNumber.toUpperCase());
-      });
+      let customerId = foundCustomer?.id || null;
+      
+      if (!customerId) {
+        const customerQuery = query(collection(db, 'users'), where('role', '==', 'customer'));
+        const customerSnapshot = await getDocs(customerQuery);
+        const customerDoc = customerSnapshot.docs.find(d => {
+          const vehicles = d.data().vehicles || [];
+          return vehicles.some((v: any) => v.plate?.toUpperCase() === form.plateNumber.toUpperCase());
+        });
+        if (customerDoc) {
+          customerId = customerDoc.id;
+        }
+      }
 
-      if (customerDoc) {
-        const customerData = customerDoc.data();
-        if (customerData.credits > 0) {
-          await updateDoc(customerDoc.ref, { 
+      if (customerId) {
+        const cRef = doc(db, 'users', customerId);
+        const cSnap = await getDoc(cRef);
+        const customerData = cSnap.data();
+        if (customerData && customerData.credits > 0) {
+          await updateDoc(cRef, { 
             credits: customerData.credits - 1 
           });
           usedCredit = true;
@@ -4622,7 +4793,8 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         lat: currentLat,
         lng: currentLng,
         bookingId: preFill?.bookingId || null,
-        customerId: customerDoc?.id || null
+        customerId: customerId,
+        customerPhone: form.customerPhone || null
       };
       
       const docRef = await addDoc(collection(db, 'washes'), washData);
@@ -4678,7 +4850,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                Rating Link
              </button>
              <button 
-               onClick={() => { setLastLoggedId(null); setForm({ carModel: '', plateNumber: '', price: '2000' }); }}
+               onClick={() => { setLastLoggedId(null); setForm({ carModel: '', plateNumber: '', customerPhone: '', price: '2000' }); }}
                className="flex-1 bg-card border border-border text-text-main font-black py-4 rounded-xl hover:bg-text-main/5 transition"
              >
                Next Wash
@@ -4788,6 +4960,39 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         )}
 
         <div className="space-y-6">
+          <div className="space-y-3">
+            <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Customer Phone (Optional)</label>
+            <div className="flex gap-3">
+              <div className="relative flex-1 group">
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-accent font-bold text-xs">+234</div>
+                <input 
+                  type="tel"
+                  placeholder="8012345678"
+                  value={form.customerPhone}
+                  onChange={e => setForm({...form, customerPhone: e.target.value.replace(/\D/g, '').slice(0, 10)})}
+                  className="w-full bg-bg pl-16 pr-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-text-main font-bold tracking-widest"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={searchCustomerByPhone}
+                disabled={searchingCustomer || form.customerPhone.length < 10}
+                className="bg-accent text-white px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-accent/20 hover:brightness-110 transition disabled:opacity-50"
+              >
+                {searchingCustomer ? <RefreshCw className="animate-spin" size={16} /> : <Search size={16} />}
+              </button>
+            </div>
+            {foundCustomer && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-3 bg-success/10 border border-success/20 rounded-xl flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-success uppercase leading-none">{foundCustomer.name}</p>
+                  <p className="text-[8px] text-success/70 font-bold uppercase mt-1 tracking-widest">{foundCustomer.credits} Credits Available</p>
+                </div>
+                <CheckCircle size={16} className="text-success" />
+              </motion.div>
+            )}
+          </div>
+
           <div className="space-y-3">
             <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Car Model</label>
             <input 
@@ -5867,7 +6072,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                       
                       <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer backdrop-blur-sm">
                         <Camera size={32} className="text-accent mb-2" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-tighter">CHANGE LOGO</span>
+                        <span className="text-[10px] font-black text-white uppercase tracking-tighter">Open Gallery</span>
                         <input 
                           type="file" 
                           accept="image/*" 
@@ -5958,7 +6163,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 </label>
                 <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
                   <p className="text-sm text-text-main leading-relaxed font-black italic">
-                    Specify exactly where your shop is located. This enables the **Smart Geofence**, blocking unauthorized logs outside your station.
+                    <span className="text-accent uppercase">What is this?</span> The Operational Geofence is a virtual perimeter for your business. It ensures workers can only log washes when they are physically at the station, preventing fraudulent logs and verifying operational integrity.
                   </p>
                 </div>
 
