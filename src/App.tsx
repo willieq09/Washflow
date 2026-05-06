@@ -839,11 +839,11 @@ function LandingPage({ onLogin, authLoading }: { onLogin: () => void, authLoadin
         <div className="inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-accent rounded-3xl mb-8 md:mb-10 shadow-2xl shadow-accent/20 rotate-3">
           <AnimatedVehicleIcon size={32} className="text-white" />
         </div>
-        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9] text-text-main">
+        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9] text-text-dim">
           AUTOLUX <br />
           <span className="text-accent not-italic">OPERATING SYSTEM.</span>
         </h1>
-        <p className="text-lg md:text-xl text-text-main mb-10 md:mb-12 max-w-xl mx-auto font-black leading-relaxed uppercase tracking-tight italic">
+        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-black leading-relaxed uppercase tracking-tight italic">
           The car wash owner operating system. Manage operations locally, scale subscriptions globally.
         </p>
         <button 
@@ -912,8 +912,8 @@ const VEHICLE_DATA = {
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
   return (
     <div className="bento-card">
-      <h3 className="font-black text-text-main mb-2 uppercase italic tracking-tighter">{title}</h3>
-      <p className="text-sm text-text-main leading-relaxed font-bold lowercase">{desc}</p>
+      <h3 className="font-black text-text-dim mb-2 uppercase italic tracking-tighter">{title}</h3>
+      <p className="text-sm text-text-dim leading-relaxed font-bold lowercase">{desc}</p>
     </div>
   );
 }
