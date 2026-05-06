@@ -26,8 +26,10 @@ import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 import { sendEmail, generateBookingNotification } from './services/notificationService';
+import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 
 // --- Constants ---
+const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 const COMMISSION_RATE = 0.075; // 7.5% Platform Fee, 92.5% Owner Split
 const MIN_WITHDRAWAL = 1000;
 const ADMIN_EMAILS = ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'];
@@ -5701,22 +5703,64 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   };
 
   const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
     setLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        
+        let address = settings.businessAddress;
+        
+        // Attempt to reverse geocode if Google Maps is loaded
+        if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+          try {
+            const geocoder = new google.maps.Geocoder();
+            const response = await geocoder.geocode({ location: { lat, lng } });
+            if (response.results[0]) {
+              address = response.results[0].formatted_address;
+            }
+          } catch (error) {
+            console.error("Reverse geocoding failed:", error);
+          }
+        }
+
         setSettings(prev => ({
           ...prev,
-          businessLat: pos.coords.latitude,
-          businessLng: pos.coords.longitude
+          businessLat: lat,
+          businessLng: lng,
+          businessAddress: address // Auto-fill address from GPS
         }));
         setLoading(false);
       },
       (err) => {
-        alert("Could not get location. Ensure permissions are granted.");
+        let errorMsg = "Could not get location.";
+        if (err.code === err.PERMISSION_DENIED) errorMsg = "Location permission denied. Please enable GPS in your browser settings.";
+        alert(errorMsg);
         setLoading(false);
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Image too large. Please select a file under 2MB.");
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSettings(prev => ({ ...prev, businessImage: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = async () => {
@@ -5806,6 +5850,39 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   Station Identity
                 </label>
                 <div className="space-y-6">
+                  <div className="flex flex-col items-center gap-6 p-10 bg-accent/5 rounded-[2.5rem] border-2 border-dashed border-accent/20 relative group overflow-hidden transition-all hover:border-accent/40">
+                    <div className="relative w-40 h-40 bg-bg rounded-[3rem] shadow-2xl flex items-center justify-center border border-border group-hover:scale-105 transition-transform duration-500 overflow-hidden">
+                      {settings.businessImage ? (
+                        <img 
+                          src={settings.businessImage} 
+                          alt="Logo" 
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <div className="text-center p-4">
+                          <ImageIcon size={48} className="text-accent/20 mx-auto mb-2" />
+                          <span className="text-[8px] font-black text-accent uppercase tracking-widest whitespace-nowrap">brand slot</span>
+                        </div>
+                      )}
+                      
+                      <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer backdrop-blur-sm">
+                        <Camera size={32} className="text-accent mb-2" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-tighter">CHANGE LOGO</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageUpload} 
+                          className="hidden" 
+                        />
+                      </label>
+                    </div>
+                    
+                    <div className="text-center">
+                      <p className="text-xs font-black text-text-main uppercase tracking-widest mb-1 italic">STATION BRANDING</p>
+                      <p className="text-[9px] text-text-main/50 font-bold lowercase max-w-[200px] leading-tight">upload your custom logo to appear on customer receipts and dashboards (max 2mb)</p>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Business Designation</label>
                     <input 
@@ -5881,9 +5958,50 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 </label>
                 <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
                   <p className="text-sm text-text-main leading-relaxed font-black italic">
-                    Specify exactly where your shop is located. Workers will be blocked from logging washes if they are outside this radius.
+                    Specify exactly where your shop is located. This enables the **Smart Geofence**, blocking unauthorized logs outside your station.
                   </p>
                 </div>
+
+                {API_KEY && API_KEY !== 'YOUR_API_KEY' ? (
+                  <APIProvider apiKey={API_KEY} version="weekly">
+                    <div className="w-full h-72 rounded-[2rem] overflow-hidden border border-border shadow-2xl relative group mb-6">
+                      <Map
+                        defaultCenter={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }}
+                        center={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }}
+                        defaultZoom={15}
+                        mapId="STATION_LOCATOR"
+                        disableDefaultUI={true}
+                        zoomControl={true}
+                        gestureHandling="greedy"
+                        internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+                      >
+                        <AdvancedMarker position={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }} draggable={true} onDragEnd={(e) => {
+                          if (e.latLng) {
+                            const newLat = e.latLng.lat();
+                            const newLng = e.latLng.lng();
+                            setSettings(prev => ({ ...prev, businessLat: newLat, businessLng: newLng }));
+                          }
+                        }}>
+                          <Pin background="#EAB308" glyphColor="#fff" borderColor="#EAB308" />
+                        </AdvancedMarker>
+                      </Map>
+                      <div className="absolute inset-0 pointer-events-none border-4 border-accent/20 rounded-[2rem] z-10 transition-opacity opacity-50 group-hover:opacity-100" />
+                      <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 uppercase text-[8px] font-black text-white tracking-widest italic">
+                        STATION RADAR ACTIVE
+                      </div>
+                    </div>
+                  </APIProvider>
+                ) : (
+                  <div className="w-full py-12 bg-bg border border-dashed border-border rounded-[2rem] mb-6 flex flex-col items-center justify-center gap-4 text-center px-6">
+                    <div className="p-4 bg-accent/10 rounded-full text-accent">
+                      <Settings2 size={32} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-text-main uppercase tracking-widest">Maps Integration Pending</p>
+                      <p className="text-[10px] text-text-main/60 font-medium max-w-xs mt-1">Configure `GOOGLE_MAPS_PLATFORM_KEY` in Secrets to enable interactive station mapping.</p>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
@@ -5909,10 +6027,13 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 <button 
                   onClick={handleGetCurrentLocation}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 bg-accent/10 text-accent font-black py-5 rounded-2xl border border-accent/20 hover:bg-accent hover:text-white transition group disabled:opacity-50 touch-target uppercase text-xs tracking-widest shadow-xl"
+                  className="w-full flex flex-col items-center justify-center gap-2 bg-accent text-white font-black py-6 rounded-2xl shadow-2xl shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] transition group disabled:opacity-50 touch-target uppercase"
                 >
-                  <MapPin size={24} className="group-hover:animate-bounce" />
-                  {loading ? "DETECTING COORDINATES..." : "PIN CURRENT GPS DATA"}
+                  <div className="flex items-center gap-3">
+                    <MapPin size={24} className="group-hover:animate-bounce" />
+                    <span className="text-sm tracking-widest">{loading ? "DETECTING COORDINATES..." : "AUTO-DETECT STATION LOCATION"}</span>
+                  </div>
+                  <span className="text-[9px] opacity-60 font-medium lowercase tracking-normal">Syncs GPS data & validates physical address automatically</span>
                 </button>
               </div>
             </>
