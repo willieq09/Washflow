@@ -17,7 +17,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -653,11 +653,8 @@ export default function App() {
     );
   }
 
-  // Determine if user has access to Plate Scanner (Elite or Admin or specifically granted)
-  const hasScannerAccess = profile?.plan === 'elite' || 
-                          (profile?.email && ADMIN_EMAILS.includes(profile.email)) || 
-                          profile?.role === 'admin' ||
-                          (profile?.role === 'worker' && profile.permissions?.canManageTeam);
+  // Determine if user has access to Plate Scanner (DISABLED)
+  const hasScannerAccess = false;
 
   if (!profile) return null; // Safety break before main UI render
 
@@ -698,7 +695,7 @@ export default function App() {
            <MobileNavItem icon={<Gauge size={26} />} label="Dash" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
            {profile?.role === 'customer' ? (
              <>
-               <MobileNavItem icon={<Search size={26} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} badge="Soon" />
+               <MobileNavItem icon={<CreditCard size={26} />} label="Plans" active={view === 'subscription'} onClick={() => navigate('subscription')} />
                <MobileNavItem icon={<CarFront size={26} />} label="Cars" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
              </>
            ) : (
@@ -735,18 +732,16 @@ export default function App() {
               {profile?.role === 'customer' ? (
                 <>
                   <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
-                  <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} badge="Soon" />
                   <NavItem icon={<CarFront size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
-                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => navigate('subscription')} badge="Soon" />
-                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
+                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => navigate('subscription')} />
                 </>
               ) : (
                 <>
                   <NavItem icon={<Gauge size={20} />} label="Dashboard" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
                   <NavItem icon={<Plus size={20} />} label="Log Wash" active={view === 'log'} onClick={() => navigate('log')} />
-                  <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
                 </>
               )}
+              <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
               {(profile?.role === 'owner' || profile?.permissions?.canManageTeam) && (
                 <>
                   <NavItem 
@@ -767,14 +762,6 @@ export default function App() {
                       label="Subscription" 
                       active={view === 'billing'} 
                       onClick={() => navigate('billing')} 
-                    />
-                  )}
-                  {hasScannerAccess && (
-                    <NavItem 
-                      icon={<Camera size={20} className="text-accent" />} 
-                      label="Plate Scanner" 
-                      active={view === 'scanner'} 
-                      onClick={() => navigate('scanner')} 
                     />
                   )}
                   {profile.email && ADMIN_EMAILS.includes(profile.email) && (
@@ -825,43 +812,43 @@ export default function App() {
            <AnimatePresence mode="wait">
             {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
-                ? <CustomerDashboardView profile={profile} setView={setView} />
+                ? <CustomerDashboardView key="customer-dash" profile={profile} navigate={navigate} />
                 : (profile.role === 'admin' || view === 'admin')
-                  ? <AdminDashboardView />
-                  : <DashboardView profile={profile} setView={setView} onLogWash={(data) => {
+                  ? <AdminDashboardView key="admin-dash" />
+                  : <DashboardView key="owner-dash" profile={profile} navigate={navigate} onLogWash={(data) => {
                       if (data) setPreFillWash(data);
-                      setView('log');
+                      navigate('log');
                     }} />
             )}
             {view === 'log' && profile && (
               <LogWashForm 
+                key="log-wash"
                 profile={profile} 
                 onComplete={() => {
                   setPreFillWash(null);
-                  setView('history');
+                  navigate('history');
                 }} 
-                setView={setView}
+                navigate={navigate}
                 preFill={preFillWash}
               />
             )}
             {view === 'history' && profile && (
-              <HistoryView profile={profile} />
+              <HistoryView key="history" profile={profile} />
             )}
             {view === 'performance' && profile && (profile.role === 'owner' || profile.permissions?.canManageTeam) && (
-              <OwnerPerformanceView />
+              <OwnerPerformanceView key="performance" />
             )}
             {(view === 'billing' || view === 'subscription') && profile && (
-              <SubscriptionView profile={profile} />
+              <SubscriptionView key="subscription" profile={profile} />
             )}
-            {view === 'marketplace' && <MarketplaceView profile={profile!} setView={setView} />}
             {view === 'settings' && profile && (
-              <SettingsView profile={profile} onUpdate={(p) => setProfile(p)} />
+              <SettingsView key="settings" profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
-            {view === 'my-cars' && <MyCarsView profile={profile!} setView={setView} onUpdate={(p) => setProfile(p)} />}
+            {view === 'my-cars' && <MyCarsView key="my-cars" profile={profile!} navigate={navigate} onUpdate={(p) => setProfile(p)} />}
             {view === 'scanner' && profile && (
-              <ScannerView profile={profile} setView={setView} onLog={(data) => {
+              <ScannerView key="scanner" profile={profile} navigate={navigate} onLog={(data) => {
                 setPreFillWash(data);
-                setView('log');
+                navigate('log');
               }} />
             )}
           </AnimatePresence>
@@ -1565,7 +1552,7 @@ function AdminDashboardView() {
 
 // --- View Components ---
 
-function CustomerDashboardView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
+function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, navigate: (v: AppView) => void }) {
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [nearby, setNearby] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1678,7 +1665,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                 </div>
                 <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest italic">Link your phone number (OPay / Moniepoint) for verified updates.</p>
               </div>
-              <button onClick={() => setView('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
+              <button onClick={() => navigate('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
             </div>
           )}
         </div>
@@ -1689,12 +1676,11 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
           </div>
           <div className="relative">
             <button 
-              disabled={true}
-              title="Marketplace Launching Q3"
-              className="flex-1 md:flex-none bg-accent/20 text-white/40 px-6 md:px-8 py-3.5 rounded-2xl font-black text-[10px] md:text-[11px] uppercase tracking-widest cursor-not-allowed h-full flex flex-col items-center justify-center"
+              onClick={() => navigate('subscription')}
+              className="flex-1 md:flex-none bg-accent text-white px-6 md:px-8 py-3.5 rounded-2xl font-black text-[10px] md:text-[11px] uppercase tracking-widest h-full flex flex-col items-center justify-center shadow-lg shadow-accent/20 hover:brightness-110 active:scale-95 transition"
             >
-              <span>Book Wash</span>
-              <span className="text-[7px] text-accent font-black tracking-normal lowercase">coming soon</span>
+              <span>Manage Plan</span>
+              <span className="text-[7px] text-white/50 font-black tracking-normal lowercase">Explore Benefits</span>
             </button>
           </div>
         </div>
@@ -1754,8 +1740,8 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
         
         <div className="flex items-center justify-between opacity-30 grayscale cursor-not-allowed">
           <div className="flex items-center gap-3">
-            <MapPin className="text-accent" />
-            <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Nearby Stations</h3>
+            <MapPin className="text-accent" size={24} />
+            <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter italic">Nearby Stations</h3>
           </div>
           <span className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Sorted by Proximity</span>
         </div>
@@ -1764,7 +1750,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
           {nearby.length > 0 ? nearby.map((biz) => (
             <div 
               key={biz.id}
-              onClick={() => setView('marketplace')}
+              onClick={() => navigate('marketplace')}
               className="group cursor-pointer bento-card p-0 overflow-hidden hover:border-accent/40 transition-all active:scale-95"
             >
               <div className="h-40 bg-zinc-900/10 relative overflow-hidden">
@@ -1810,7 +1796,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
             <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Your Fleet</h3>
           </div>
           <button 
-            onClick={() => setView('my-cars')}
+            onClick={() => navigate('my-cars')}
             className="text-[10px] font-bold text-accent uppercase tracking-widest hover:underline"
           >
             Manage Vehicles
@@ -1839,7 +1825,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
             </div>
           ))}
           <button 
-            onClick={() => setView('my-cars')}
+            onClick={() => navigate('my-cars')}
             className="bento-card border-dashed border-border bg-transparent flex flex-col items-center justify-center gap-3 hover:border-accent hover:text-accent group transition min-h-[100px]"
           >
             <div className="w-8 h-8 rounded-full border border-current flex items-center justify-center">
@@ -1853,7 +1839,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
   );
 }
 
-function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, setView: (v: AppView) => void, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
+function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile, navigate: (v: AppView) => void, onLogWash: (data?: { carModel: string, plateNumber: string, bookingId?: string }) => void }) {
   const [stats, setStats] = useState({ 
     todayRevenue: 0, 
     todayCount: 0, 
@@ -2271,7 +2257,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
               <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
             </div>
             <button 
-              onClick={() => setView('history')}
+              onClick={() => navigate('history')}
               className="text-[10px] font-bold text-accent hover:underline uppercase tracking-widest"
             >
               Full Ledger
@@ -2746,7 +2732,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
 /* Redundant business management views consolidated into SettingsView for better operating environment management */
 
 
-function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: (v: AppView) => void }) {
+function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate: (v: AppView) => void }) {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [filter, setFilter] = useState<'all' | 'accessory' | 'part' | 'service'>('all');
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -2863,38 +2849,27 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       {/* Ecosystem Categories Grid */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Wash Stations', icon: <Store />, count: '24+ Nearby', img: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=400', color: 'bg-blue-500', active: true },
-          { label: 'Detailing Pros', icon: <Sparkles />, count: 'Scheduled Q3', img: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', color: 'bg-purple-500', comingSoon: true },
-          { label: 'Parts & Spares', icon: <Briefcase />, count: 'Vault Open Soon', img: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', color: 'bg-emerald-500', comingSoon: true },
-          { label: 'Mobile Experts', icon: <Truck />, count: 'Deploying Soon', img: 'https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=400', color: 'bg-orange-500', comingSoon: true }
+          { label: 'Wash Stations', icon: <Store />, count: '24+ Active', img: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=400', color: 'bg-blue-500', active: true },
+          { label: 'Detailing Pros', icon: <Sparkles />, count: '8 Labs Online', img: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', color: 'bg-purple-500' },
+          { label: 'Parts & Spares', icon: <Briefcase />, count: 'Verified Vendors', img: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', color: 'bg-emerald-500' },
+          { label: 'Mobile Experts', icon: <Truck />, count: 'On-Demand Fleet', img: 'https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=400', color: 'bg-orange-500' }
         ].map((cat, i) => (
           <motion.div 
             key={i}
-            whileHover={!cat.comingSoon ? { y: -5 } : {}}
-            className={cn(
-              "group relative h-40 rounded-3xl overflow-hidden cursor-pointer",
-              cat.comingSoon && "opacity-80 grayscale-[0.5]"
-            )}
+            whileHover={{ y: -5 }}
+            className="group relative h-40 rounded-3xl overflow-hidden cursor-pointer shadow-xl border border-border/20"
           >
             <img src={cat.img} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
-            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/10 to-transparent opacity-80" />
             
-            {cat.comingSoon && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
-                <div className="bg-accent text-white px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest rotate-[-5deg] shadow-2xl">
-                  Coming Soon
-                </div>
-              </div>
-            )}
-
-            <div className="absolute bottom-4 left-4 z-10">
+            <div className="absolute bottom-4 left-4 z-10 font-black">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-white bg-accent/80 p-1 rounded-md scale-75 peer-group-hover:scale-100 transition-transform">
+                <span className="text-white bg-accent p-1.5 rounded-lg shadow-lg">
                   {cat.icon}
                 </span>
                 <h4 className="text-text-main font-black uppercase text-[10px] tracking-widest">{cat.label}</h4>
               </div>
-              <p className="text-text-dim text-[8px] font-bold uppercase tracking-[0.2em] ml-6">{cat.count}</p>
+              <p className="text-text-dim text-[8px] font-bold uppercase tracking-[0.2em] ml-8">{cat.count}</p>
             </div>
           </motion.div>
         ))}
@@ -2912,30 +2887,21 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
         </div>
 
         <div className="flex items-center justify-between mb-8 opacity-40">
-          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
+          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2 italic">
             <ShoppingBag className="text-accent" /> Marketplace Picks
           </h3>
           <div className="flex bg-bg rounded-xl border border-border p-1">
              {['all', 'accessory', 'part', 'service'].map((f) => (
-                <div key={f} className="relative group/filter">
-                  <button 
-                    onClick={() => {
-                      if (f === 'all') setFilter(f as any);
-                    }}
-                    className={cn(
-                      "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all h-full",
-                      filter === f ? "bg-accent text-white" : "text-text-dim hover:text-white",
-                      f !== 'all' && "cursor-not-allowed opacity-50"
-                    )}
-                  >
-                    {f}
-                  </button>
-                  {f !== 'all' && (
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-accent text-white px-2 py-1 rounded text-[7px] font-black uppercase tracking-widest opacity-0 group-hover/filter:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
-                      Coming Soon
-                    </div>
+                <button 
+                  key={f}
+                  onClick={() => setFilter(f as any)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    filter === f ? "bg-accent text-white" : "text-text-dim hover:text-white"
                   )}
-                </div>
+                >
+                  {f}
+                </button>
              ))}
           </div>
         </div>
@@ -2997,7 +2963,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
             </div>
           </div>
           <button 
-            onClick={() => setView('business')}
+            onClick={() => navigate('business')}
             className="px-8 py-4 bg-white text-bg rounded-xl font-black text-xs uppercase tracking-widest hover:bg-accent hover:text-white transition-all shadow-xl group-hover:scale-105"
           >
             Manage Station <ChevronRight size={14} className="inline ml-1" />
@@ -3022,7 +2988,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
             <Store className="text-accent" /> Top Rated Stations
           </h3>
           <button 
-            onClick={() => setView('marketplace')}
+            onClick={() => navigate('marketplace')}
             className="text-[10px] font-black uppercase text-accent tracking-[0.2em] border-b border-accent/20 pb-1"
           >
             View All
@@ -3059,7 +3025,7 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
                <Store className="mx-auto text-text-dim/20 mb-4 group-hover:text-accent/20 transition-colors" size={64} />
                <p className="text-sm font-black text-text-dim uppercase tracking-widest">No active stations in this region yet.</p>
                {profile.role === 'owner' && (
-                 <button onClick={() => setView('business')} className="mt-4 text-accent text-xs font-black uppercase tracking-widest border-b border-accent/20 pb-0.5 hover:border-accent transition-colors">Be the first to join →</button>
+                 <button onClick={() => navigate('business')} className="mt-4 text-accent text-xs font-black uppercase tracking-widest border-b border-accent/20 pb-0.5 hover:border-accent transition-colors">Be the first to join →</button>
                )}
             </div>
           )}
@@ -3171,16 +3137,7 @@ function FilterBtn({ label, active, onClick }: { label: string, active?: boolean
 }
 
 function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: string) => void }) {
-  const [predictive, setPredictive] = useState<{ nextWash: string, maintenance: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const historyCount = vehicle.intensity === 'high' ? 6 : 2;
-    getPredictiveTips(vehicle, historyCount).then(res => {
-      setPredictive(res);
-      setLoading(false);
-    });
-  }, [vehicle]);
+  const [loading, setLoading] = useState(false);
 
   return (
     <motion.div 
@@ -3261,39 +3218,14 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="bg-white/5 border border-white/5 rounded-3xl p-5 relative overflow-hidden group/tip hover:bg-white/[0.07] transition-colors">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={12} className="text-accent" />
-            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">Predictive Wash</span>
-          </div>
-          {loading ? (
-            <div className="space-y-1.5">
-              <div className="h-2.5 bg-white/10 rounded w-full animate-pulse" />
-              <div className="h-2.5 bg-white/10 rounded w-2/3 animate-pulse" />
-            </div>
-          ) : (
-            <p className="text-xs text-white/70 font-medium leading-relaxed italic line-clamp-2">
-               "{predictive?.nextWash}"
-            </p>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 opacity-50">
+        <div className="bg-bg p-4 rounded-xl border border-border">
+          <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Status</span>
+          <p className="text-sm font-black text-white uppercase italic">Active Service</p>
         </div>
-
-        <div className="bg-white/5 border border-white/5 rounded-3xl p-5 relative overflow-hidden group/tip hover:bg-white/[0.07] transition-colors">
-          <div className="flex items-center gap-2 mb-2">
-            <Gauge size={12} className="text-accent" />
-            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">Maintenance</span>
-          </div>
-          {loading ? (
-            <div className="space-y-1.5">
-              <div className="h-2.5 bg-white/10 rounded w-full animate-pulse" />
-              <div className="h-2.5 bg-white/10 rounded w-2/3 animate-pulse" />
-            </div>
-          ) : (
-            <p className="text-xs text-white/70 font-medium leading-relaxed italic line-clamp-2">
-               "{predictive?.maintenance}"
-            </p>
-          )}
+        <div className="bg-bg p-4 rounded-xl border border-border">
+          <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Intensity</span>
+          <p className="text-sm font-black text-accent uppercase italic">{vehicle.intensity}</p>
         </div>
       </div>
     </motion.div>
@@ -3301,7 +3233,7 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
 }
 
 
-function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setView: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
+function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, navigate: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -3343,42 +3275,7 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
   };
 
   const handleCaptureAndIdentify = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    setIsProcessingScan(true);
-    const context = canvasRef.current.getContext('2d');
-    if (context) {
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
-      context.drawImage(videoRef.current, 0, 0);
-      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
-      try {
-        const res = await scanVehicleInfo(base64Image);
-        if (res.vehicle) {
-          const parts = res.vehicle.split(' ');
-          let year = new Date().getFullYear();
-          let make = '';
-          let model = '';
-          if (parts[0] && !isNaN(parseInt(parts[0]))) {
-            year = parseInt(parts[0]);
-            make = parts[1] || '';
-            model = parts.slice(2).join(' ') || '';
-          } else {
-            make = parts[0] || '';
-            model = parts.slice(1).join(' ') || '';
-          }
-          setNewVehicle(prev => ({
-            ...prev,
-            make: make || prev.make,
-            model: model || prev.model,
-            year: year || prev.year,
-            plate: res.plate || prev.plate
-          }));
-          stopScanning();
-        }
-      } catch (error) {
-        alert("Autoscan failed. Please enter manually.");
-      } finally { setIsProcessingScan(false); }
-    }
+    alert("Advanced recognition is currently disabled per administrative policy. Please enter vehicle details manually.");
   };
 
   const stats = useMemo(() => {
@@ -3667,7 +3564,7 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
   );
 }
 
-function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProfile, setView: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
+function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserProfile, navigate: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -3713,55 +3610,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
   };
 
   const handleCaptureAndIdentify = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    setIsProcessingScan(true);
-    const context = canvasRef.current.getContext('2d');
-    if (context) {
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
-      context.drawImage(videoRef.current, 0, 0);
-      
-      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
-      
-      try {
-        const res = await scanVehicleInfo(base64Image);
-        if (res.vehicle) {
-          // Parse "Year Brand Model" or similar from res.vehicle
-          // Gemini returns something like "2022 Toyota Camry"
-          const parts = res.vehicle.split(' ');
-          let year = new Date().getFullYear();
-          let make = '';
-          let model = '';
-
-          if (parts[0] && !isNaN(parseInt(parts[0]))) {
-            year = parseInt(parts[0]);
-            make = parts[1] || '';
-            model = parts.slice(2).join(' ') || '';
-          } else {
-            make = parts[0] || '';
-            model = parts.slice(1).join(' ') || '';
-          }
-
-          setNewVehicle(prev => ({
-            ...prev,
-            make: make || prev.make,
-            model: model || prev.model,
-            year: year || prev.year,
-            plate: res.plate || prev.plate,
-            tirePressure: res.tirePressure || prev.tirePressure,
-            dirtLevel: res.dirtLevel || prev.dirtLevel
-          }));
-          stopScanning();
-        } else {
-          alert("Could not identify vehicle. Please try again or clear the view.");
-        }
-      } catch (error) {
-        alert("Scan failed. Ensure good lighting and clear view.");
-      } finally {
-        setIsProcessingScan(false);
-      }
-    }
+    alert("AI recognition features have been decommissioned. Please utilize manual input.");
   };
 
   const filteredVehicles = useMemo(() => {
@@ -4295,7 +4144,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Enterprise Hub',
       price: '₦99,000',
       description: 'Total automation for high-volume enterprises.',
-      features: ['Everything in Pro', 'License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
+      features: ['Everything in Pro', 'Enhanced Analytics', 'Priority Support'],
       color: 'bg-accent text-white shadow-2xl shadow-accent/20',
       icon: <ShieldCheck size={24} className="text-white" />
     }
@@ -4316,7 +4165,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Premium Bundle',
       price: '₦10,000',
       description: 'High-frequency care for premium vehicles.',
-      features: ['5 Wash Credits', '1 Interior Detailing', 'Engine Bay Check', 'Everything in Silver'],
+      features: ['5 Wash Credits', '1 Interior Detailing', 'Engine Bay Check', 'Priority Queue Support'],
       color: 'bg-accent/10 border-accent/40 text-text-main',
       icon: <Sparkles size={24} className="text-accent" />,
       popular: true
@@ -4340,11 +4189,6 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 italic leading-none">
           {isCustomer ? 'Subscription Joy.' : 'Scale Your Flow.'}
         </h2>
-        {isCustomer && (
-          <div className="inline-block bg-accent text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 shadow-xl shadow-accent/20">
-            Marketplace Sellers Onboarding Soon
-          </div>
-        )}
         <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl mx-auto">
           {isCustomer ? 'Premium vehicle care, automated for your peace of mind.' : 'Choose a plan that matches your business velocity.'}
         </p>
@@ -4403,16 +4247,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         )}
       </header>
 
-      <div className={isCustomer ? "relative" : ""}>
-        {isCustomer && (
-          <div className="absolute inset-0 bg-bg/40 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center rounded-[3rem] border border-dashed border-accent/20">
-             <div className="bg-accent text-white px-6 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-2xl mb-2">
-               Plan Launch Impending
-             </div>
-             <p className="text-text-main text-[10px] font-black italic opacity-60">Wait for onboarded sellers...</p>
-          </div>
-        )}
-        <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8", isCustomer && "opacity-40 grayscale pointer-events-none")}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
           {tiers.map((tier) => (
           <div 
             key={tier.id} 
@@ -4467,9 +4302,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
           </div>
         ))}
       </div>
-    </div>
 
-    <div className="mt-20 text-center">
+      <div className="mt-20 text-center">
         <p className="text-text-dim text-sm max-w-lg mx-auto leading-relaxed">
           Secure billing powered by <span className="text-white font-bold">Paystack</span>. 
           Plans can be cancelled or upgraded at any time from your dashboard.
@@ -4478,7 +4312,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     </motion.div>
   );
 }
-function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserProfile, onComplete: () => void, setView: (v: AppView) => void, preFill?: { carModel: string, plateNumber: string, bookingId?: string } | null }) {
+function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: UserProfile, onComplete: () => void, navigate: (v: AppView) => void, preFill?: { carModel: string, plateNumber: string, bookingId?: string } | null }) {
   const [form, setForm] = useState({ 
     carModel: preFill?.carModel || '', 
     plateNumber: preFill?.plateNumber || '', 
@@ -4597,7 +4431,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
 
   const startCamera = async () => {
     if (profile.plan !== 'elite' && (!profile.email || !ADMIN_EMAILS.includes(profile.email))) {
-      setView('billing');
+      navigate('billing');
       return;
     }
     setCameraActive(true);
@@ -4624,43 +4458,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
   };
 
   const captureAndScan = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    setIsScanning(true);
-    const context = canvasRef.current.getContext('2d');
-    if (context) {
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
-      context.drawImage(videoRef.current, 0, 0);
-      
-      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
-      
-      try {
-        const result = await scanVehicleInfo(base64Image);
-        if (result.plate && result.vehicle) {
-          setForm(prev => ({
-            ...prev,
-            carModel: result.vehicle,
-            plateNumber: result.plate
-          }));
-          stopCamera();
-        } else if (result.vehicle && !result.plate) {
-          setForm(prev => ({ ...prev, carModel: result.vehicle }));
-          alert("Vehicle identified, but plate was not detected. Please enter the plate number manually.");
-          stopCamera();
-        } else if (result.plate && !result.vehicle) {
-          setForm(prev => ({ ...prev, plateNumber: result.plate }));
-          alert("Plate recognized! Please select the vehicle from your records or enter the model manually below.");
-          stopCamera();
-        } else {
-          alert("Could not detect vehicle info. Please try again or enter manually.");
-        }
-      } catch (error) {
-        alert("Scan failed. Please ensure you have a clear view of the plate.");
-      } finally {
-        setIsScanning(false);
-      }
-    }
+    alert("Automated data extraction is inactive. Manual validation required.");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -6498,7 +6296,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
   );
 }
 
-function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setView: (v: AppView) => void, onLog: (data: { carModel: string, plateNumber: string }) => void }) {
+function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navigate: (v: AppView) => void, onLog: (data: { carModel: string, plateNumber: string }) => void }) {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [result, setResult] = useState<{ plate: string, vehicle: string } | null>(null);
@@ -6595,37 +6393,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
   };
 
   const captureAndScan = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    setIsScanning(true);
-    const context = canvasRef.current.getContext('2d');
-    if (context) {
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
-      context.drawImage(videoRef.current, 0, 0);
-      
-      const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
-      
-      try {
-        const res = await scanVehicleInfo(base64Image);
-        if (res.plate && res.vehicle) {
-          setResult(res);
-          stopCamera();
-        } else if (res.vehicle && !res.plate) {
-          setResult({ ...res, plate: '' });
-          stopCamera();
-        } else if (res.plate && !res.vehicle) {
-          setResult({ ...res, vehicle: '' });
-          stopCamera();
-        } else {
-          alert("Could not detect vehicle info. Please try again or enter manually.");
-        }
-      } catch (error) {
-        alert("Scan failed. Please ensure you have a clear view of the plate.");
-      } finally {
-        setIsScanning(false);
-      }
-    }
+    alert("Intelligent stream analysis is offline. Continue with manual ledger entry.");
   };
 
   const handleManualSelection = (vehicle: any) => {
@@ -6642,7 +6410,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
           <p className="text-text-dim lowercase">Elite recognition for plates & models.</p>
         </div>
         <button 
-          onClick={() => setView('dashboard')} 
+          onClick={() => navigate('dashboard')} 
           className="text-text-dim hover:text-text-main uppercase text-[10px] font-black tracking-widest border-b border-border pb-1"
         >
           Exit Scanner
