@@ -17,7 +17,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -25,7 +25,6 @@ import {
 } from 'recharts';
 import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
-import { getMaintenanceTip, scanVehicleInfo, getPredictiveTips, generateAnalyticsReport, getWeatherOptimizedSchedule } from './services/geminiService';
 import { sendEmail, generateBookingNotification } from './services/notificationService';
 import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 
@@ -149,102 +148,6 @@ interface Incentive {
   amount: number;
   reason: string;
   timestamp: Timestamp;
-}
-
-// --- AI Components ---
-
-function StationAIInsights({ stats, recentWashes }: { stats: any, recentWashes: any[] }) {
-  const [report, setReport] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchReport = async () => {
-      setLoading(true);
-      try {
-        const res = await generateAnalyticsReport(stats, recentWashes);
-        setReport(res);
-      } catch (err) {
-        setReport("Unable to synthesize operational intelligence at this moment.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchReport();
-  }, []);
-
-  return (
-    <div className="bg-card rounded-[2.5rem] border border-accent/20 p-8 relative overflow-hidden group shadow-2xl">
-      <div className="flex items-center gap-4 mb-6">
-        <div className="w-12 h-12 bg-accent/20 rounded-2xl flex items-center justify-center text-accent">
-          <Sparkles size={24} />
-        </div>
-        <div>
-          <h3 className="text-xl font-black text-text-main uppercase tracking-tighter">Station Intelligence</h3>
-          <p className="text-[10px] text-accent font-black uppercase tracking-widest">Powered by Gemini AI</p>
-        </div>
-      </div>
-      
-      <div className="relative z-10">
-        {loading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : (
-          <div className="prose prose-invert prose-sm max-w-none text-text-main font-bold lowercase leading-relaxed italic">
-            <ReactMarkdown>{report || ''}</ReactMarkdown>
-          </div>
-        )}
-      </div>
-
-      <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2" />
-    </div>
-  );
-}
-
-function VehicleAIScout({ profile }: { profile: UserProfile }) {
-  const [tip, setTip] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const vehicle = profile.vehicles?.[0];
-
-  useEffect(() => {
-    if (!vehicle) {
-      setLoading(false);
-      return;
-    }
-    const fetchTip = async () => {
-      try {
-        const res = await getMaintenanceTip(`${vehicle.year} ${vehicle.make} ${vehicle.model}`);
-        setTip(res);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTip();
-  }, [vehicle]);
-
-  if (!vehicle) return null;
-
-  return (
-    <div className="bg-accent/10 border border-accent/20 rounded-3xl p-6 relative overflow-hidden group shadow-xl">
-       <div className="flex items-center gap-3 mb-4">
-         <Sparkles className="text-accent animate-pulse" size={20} />
-         <h4 className="text-xs font-black text-text-main uppercase tracking-widest">AI Care Scout</h4>
-       </div>
-       {loading ? (
-         <div className="space-y-2">
-           <Skeleton className="h-3 w-full" />
-           <Skeleton className="h-3 w-2/3" />
-         </div>
-       ) : (
-         <p className="text-sm text-text-main font-bold italic leading-relaxed lowercase">
-           "{tip}"
-         </p>
-       )}
-       <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-accent/20 rounded-full blur-2xl group-hover:bg-accent/30 transition-colors" />
-    </div>
-  );
 }
 
 function FeedbackModal({ isOpen, onClose, userProfile }: { isOpen: boolean, onClose: () => void, userProfile: UserProfile }) {
@@ -750,7 +653,7 @@ export default function App() {
     );
   }
 
-  // Determine if user has access to AI Scanner (Elite or Admin or specifically granted)
+  // Determine if user has access to Plate Scanner (Elite or Admin or specifically granted)
   const hasScannerAccess = profile?.plan === 'elite' || 
                           (profile?.email && ADMIN_EMAILS.includes(profile.email)) || 
                           profile?.role === 'admin' ||
@@ -869,7 +772,7 @@ export default function App() {
                   {hasScannerAccess && (
                     <NavItem 
                       icon={<Camera size={20} className="text-accent" />} 
-                      label="AI Scanner" 
+                      label="Plate Scanner" 
                       active={view === 'scanner'} 
                       onClick={() => navigate('scanner')} 
                     />
@@ -1245,7 +1148,7 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
         <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
           <FeatureCard title="Operator OS" desc="Stop revenue leakage. Manage team capacity and job logs with a high-fidelity dashboard." />
           <FeatureCard title="Subscription Joy" desc="Layer your favorite wash stations into a single monthly plan. One payment, endless shine." />
-          <FeatureCard title="AI Intelligence" desc="Get predictive scheduling based on local weather and your car's personal usage history." />
+          <FeatureCard title="Proactive Care" desc="Get predictive scheduling suggestions based on local weather and your car's personal usage history." />
         </div>
       </motion.div>
     </div>
@@ -1778,9 +1681,6 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
               <button onClick={() => setView('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
             </div>
           )}
-          <div className="mt-6">
-            <VehicleAIScout profile={profile} />
-          </div>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="flex-1 md:flex-none bg-card px-4 md:px-6 py-3 rounded-2xl border border-border flex flex-col items-center justify-center min-w-[100px] md:min-w-[120px]">
@@ -1802,7 +1702,7 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Next Session */}
-        <div className="lg:col-span-2 bento-card bg-accent border-none flex flex-col justify-between p-6 md:p-10 min-h-[250px] md:min-h-[300px]">
+        <div className="lg:col-span-3 bento-card bg-accent border-none flex flex-col justify-between p-6 md:p-10 min-h-[250px] md:min-h-[300px]">
           {upcoming.length > 0 ? (
             <>
               <div>
@@ -1840,28 +1740,6 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
                   </div>
             </div>
           )}
-        </div>
-
-        {/* AI Maintenance Corner */}
-        <div className="bento-card border-t-4 border-t-accent flex flex-col justify-between">
-          <div>
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">AI Pulse</span>
-            <h3 className="text-xl font-black text-text-main uppercase mt-2 mb-4 tracking-tighter italic">Garage Health</h3>
-            <div className="space-y-4">
-               {profile.vehicles && profile.vehicles.length > 0 ? (
-                 <AIProactiveSchedule 
-                   vehicle={profile.vehicles[0]} 
-                   washHistoryCount={0} 
-                   onBook={() => setView('marketplace')}
-                 />
-               ) : (
-                 <p className="text-xs text-text-main leading-relaxed font-black uppercase italic tracking-tight">Add a vehicle to your garage to receive predictive maintenance insights and performance tracking.</p>
-               )}
-            </div>
-          </div>
-          <button className="w-full mt-6 py-4 rounded-xl bg-accent text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-lg shadow-accent/20">
-            View Analytics
-          </button>
         </div>
       </div>
 
@@ -1991,23 +1869,9 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [report, setReport] = useState<string | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [recentWithdrawals, setRecentWithdrawals] = useState<any[]>([]);
-
-  const handleViewReport = async () => {
-    setReportLoading(true);
-    try {
-      const result = await generateAnalyticsReport(stats, recentWashes);
-      setReport(result);
-    } catch (error) {
-      console.error("Report generation failed:", error);
-    } finally {
-      setReportLoading(false);
-    }
-  };
 
   useEffect(() => {
     // Fetch Workers for assignment if owner/lead
@@ -2203,18 +2067,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">AutoLux Dashboard <span className="text-[10px] md:text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full ml-1 font-black uppercase not-italic border border-accent/10">BETA</span></h2>
           <p className="text-text-main mt-1 lowercase font-black italic">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
-        <div className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-success/10 text-success border border-success/20 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
-          <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-          System Active Shard
-        </div>
       </header>
-
-      {/* AI Business Insights */}
-      {(profile.role === 'owner' || profile.permissions?.canManageTeam) && (
-        <div className="mb-8">
-          <StationAIInsights stats={stats} recentWashes={recentWashes} />
-        </div>
-      )}
 
       {/* Bento Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 auto-rows-fr">
@@ -2354,104 +2207,6 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
            <div className="text-[10px] text-text-main font-black uppercase tracking-widest mt-1 italic opacity-70">Quick Log</div>
         </div>
 
-        {/* Elite Scanner Card - Only for Elite Owners */}
-        {profile.role === 'owner' && profile.plan === 'elite' && (
-          <div 
-            onClick={() => setView('scanner')}
-            className="md:col-span-1 bento-card bg-text-main border-none flex flex-col justify-between group cursor-pointer hover:brightness-110 transition-all duration-300 shadow-2xl shadow-accent/20"
-          >
-            <div className="flex justify-between items-start">
-               <div className="w-10 h-10 rounded-xl bg-bg/5 flex items-center justify-center group-hover:bg-text-main/10 text-bg group-hover:text-text-main">
-                 <Camera size={20} />
-               </div>
-               <div className="bg-bg/10 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest group-hover:bg-text-main/20 text-bg group-hover:text-text-main">Elite</div>
-            </div>
-            <div>
-               <h3 className="text-lg font-black uppercase tracking-tighter leading-tight group-hover:text-text-main text-bg">AI Plate <br/> Scanner</h3>
-               <p className="text-[9px] font-bold opacity-60 mt-2 group-hover:text-text-main text-bg">Instant biometric car identification.</p>
-            </div>
-          </div>
-        )}
-
-        {/* AI Insight Card */}
-        <div className="md:col-span-2 bento-card">
-           <span className="text-xs font-black text-text-main uppercase tracking-wider mb-4 block italic">AI Intelligence</span>
-           <div className="bg-accent/5 border border-accent/20 rounded-xl p-4">
-             <p className="text-sm leading-relaxed text-blue-100">
-               <strong>Smart Suggestion:</strong> Based on current volume, worker performance is peaking. High satisfaction triggers incentive bonuses automatically.
-             </p>
-             <button 
-               onClick={handleViewReport}
-               disabled={reportLoading}
-               className="text-xs font-bold text-accent mt-3 flex items-center gap-1 hover:underline disabled:opacity-50"
-             >
-               {reportLoading ? (
-                 <RefreshCw size={14} className="animate-spin" />
-               ) : (
-                 <ChevronRight size={14} />
-               )}
-               {reportLoading ? "Analyzing..." : "View analytics report"}
-             </button>
-           </div>
-        </div>
-
-        <AnimatePresence>
-          {report && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-bg/80 backdrop-blur-sm">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-card border border-border w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
-              >
-                <div className="p-8 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent">
-                      <TrendingUp size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-text-main uppercase tracking-tighter italic">AI Performance Audit</h3>
-                      <p className="text-[10px] text-accent font-black uppercase tracking-widest italic">Generative Intelligence Report</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setReport(null)} className="p-2 hover:bg-text-main/5 rounded-full transition">
-                    <X size={20} className="text-text-main font-black" />
-                  </button>
-                </div>
-                <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                  <div className="prose prose-invert max-w-none text-text-main/80">
-                    <ReactMarkdown
-                      components={{
-                        h1: ({ children }) => <h1 className="text-2xl font-black text-text-main uppercase tracking-tighter mb-6 mt-2 pb-2 border-b border-border">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-xl font-bold text-accent uppercase tracking-widest mt-8 mb-4">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-lg font-bold text-text-main mb-2">{children}</h3>,
-                        p: ({ children }) => <p className="mb-4 leading-relaxed text-sm font-medium">{children}</p>,
-                        ul: ({ children }) => <ul className="space-y-3 mb-6">{children}</ul>,
-                        li: ({ children }) => (
-                          <li className="flex gap-3 text-sm">
-                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                            <span>{children}</span>
-                          </li>
-                        ),
-                        strong: ({ children }) => <span className="text-text-main font-bold">{children}</span>,
-                      }}
-                    >
-                      {report}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-                <div className="p-8 bg-bg/50 border-t border-border flex justify-end">
-                  <button 
-                    onClick={() => setReport(null)}
-                    className="bg-accent text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center gap-2"
-                  >
-                    <CheckCircle size={16} /> Acknowledge Report
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
 
         {/* Today's Queue / Upcoming Bookings */}
         <div className="md:col-span-2 bento-card">
@@ -2619,7 +2374,7 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
           <RoleCard 
             icon={<Briefcase size={40} />} 
             title="Business Owner" 
-            desc="Manage stations, monitor teams, and scale your wash empire with AI insight."
+            desc="Manage stations, monitor teams, and scale your wash empire with operational insight."
             onClick={() => setRole('owner')}
             loading={loading === 'owner'}
             disabled={loading !== null}
@@ -2627,7 +2382,7 @@ function RoleSelection({ uid, name, email }: { uid: string, name: string, email:
           <RoleCard 
             icon={<AnimatedVehicleIcon size={40} />} 
             title="Car Owner" 
-            desc="Personalized maintenance logs, AI health alerts, and verified wash history."
+            desc="Personalized maintenance logs, system health alerts, and verified wash history."
             onClick={() => setRole('customer')}
             loading={loading === 'customer'}
             disabled={loading !== null}
@@ -3527,7 +3282,7 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
         <div className="bg-white/5 border border-white/5 rounded-3xl p-5 relative overflow-hidden group/tip hover:bg-white/[0.07] transition-colors">
           <div className="flex items-center gap-2 mb-2">
             <Gauge size={12} className="text-accent" />
-            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">AI Maintenance</span>
+            <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">Maintenance</span>
           </div>
           {loading ? (
             <div className="space-y-1.5">
@@ -3545,56 +3300,6 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
   );
 }
 
-function AIProactiveSchedule({ vehicle, washHistoryCount, onBook }: { vehicle: any, washHistoryCount: number, onBook?: (day: string) => void }) {
-  const [schedule, setSchedule] = useState<{ suggestion: string, reasoning: string, optimalDay: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulated weather forecast for the next 5 days
-    const weatherForecast = "Partly cloudy with showers expected on Wednesday and Thursday. Sunny weekend ahead.";
-    const lastWashDays = 4; // Mocked
-
-    getWeatherOptimizedSchedule(vehicle, weatherForecast, lastWashDays).then(res => {
-      setSchedule(res);
-      setLoading(false);
-    });
-  }, [vehicle]);
-
-  if (loading) return (
-    <div className="animate-pulse space-y-3">
-      <div className="h-4 bg-white/20 rounded w-1/2" />
-      <div className="h-20 bg-white/20 rounded-2xl w-full" />
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
-        <div className="flex items-center gap-2 mb-3">
-          <Calendar size={14} className="opacity-60" />
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Optimal Next Wash</span>
-        </div>
-        <p className="text-xl font-black uppercase tracking-tighter mb-1 leading-none">{schedule?.optimalDay}</p>
-        <p className="text-[10px] font-bold opacity-80">{schedule?.suggestion}</p>
-      </div>
-      
-      <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
-        <div className="flex items-center gap-2 mb-3">
-          <Info size={14} className="opacity-60" />
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">AI Reasoning</span>
-        </div>
-        <p className="text-xs leading-relaxed font-medium italic">"{schedule?.reasoning}"</p>
-      </div>
-
-      <button 
-        onClick={() => onBook?.(schedule?.optimalDay || 'future')}
-        className="w-full bg-bg text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border border-white/20 hover:bg-white hover:text-bg transition mt-2"
-      >
-        Book for {schedule?.optimalDay}
-      </button>
-    </div>
-  );
-}
 
 function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setView: (v: AppView) => void, onUpdate: (p: UserProfile) => void }) {
   const [vehicles, setVehicles] = useState(profile.vehicles || []);
@@ -3851,14 +3556,6 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
                     )}>{vehicle.dirtLevel || 'Pristine'}</p>
                   </div>
                 </div>
-
-                <div className="pt-6 border-t border-border">
-                  <AIProactiveSchedule 
-                    vehicle={vehicle} 
-                    washHistoryCount={0} 
-                    onBook={() => setView('marketplace')}
-                  />
-                </div>
               </div>
             </motion.div>
           ))}
@@ -3871,7 +3568,7 @@ function MyCarsView({ profile, setView, onUpdate }: { profile: UserProfile, setV
             </div>
             <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">No Units Detected</h3>
             <p className="text-sm text-text-dim mt-2 max-w-xs mx-auto leading-relaxed">
-              Your fleet registry is empty. Scan your first vehicle to begin active tracking.
+              Your fleet registry is empty.
             </p>
           </div>
         )}
@@ -4107,7 +3804,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
   };
 
   const handleDeleteVehicle = async (plate: string) => {
-    if (!confirm("Are you sure you want to remove this vehicle? This will also delete its AI history.")) return;
+    if (!confirm("Are you sure you want to remove this vehicle? This will also delete its history.")) return;
     try {
       const updatedVehicles = vehicles.filter(v => v.plate !== plate);
       await updateDoc(doc(db, 'users', profile.uid), { vehicles: updatedVehicles });
@@ -4183,7 +3880,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
                         "p-3 rounded-full transition-colors flex items-center justify-center",
                         isScannerOpen ? "bg-accent text-white" : "bg-white/5 text-text-dim hover:bg-white/10 hover:text-white"
                       )}
-                      title="AI Auto-Scan"
+                      title="Auto-Scan"
                     >
                       <Camera size={20} className={cn(isScannerOpen && "animate-pulse")} />
                     </button>
@@ -4327,7 +4024,7 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
         <div className="bento-card py-20 text-center border-dashed border-2">
           <CarFront size={64} className="text-text-dim mx-auto mb-6 opacity-10" />
           <h3 className="text-2xl font-black text-text-main mb-4 uppercase tracking-tighter italic">Garage Is Empty</h3>
-          <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to unlock personal AI tips and usage-based scheduling predictions.</p>
+          <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to your dashboard to track performance.</p>
           <button 
             onClick={() => setShowAdd(true)}
             className="bg-white text-bg px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl active:scale-95"
@@ -4363,19 +4060,6 @@ function CustomerVehicleView({ profile, setView, onUpdate }: { profile: UserProf
           </div>
 
           <aside className="space-y-6">
-            <div className="bg-accent p-8 rounded-[2.5rem] text-bg shadow-2xl shadow-accent/20">
-              <div className="flex items-center gap-2 mb-8">
-                <Sparkles size={20} />
-                <h3 className="font-black uppercase tracking-widest text-sm">Proactive Scheduling</h3>
-              </div>
-              
-              <AIProactiveSchedule 
-                vehicle={vehicles[0]} 
-                washHistoryCount={4} 
-                onBook={() => setView('marketplace')}
-              />
-            </div>
-
             <div className="bg-card p-8 rounded-[2.5rem] border border-border">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
@@ -4601,7 +4285,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Pro Accelerator',
       price: '₦49,000',
       description: 'The standard for growing wash stations.',
-      features: ['Everything in Starter', 'AI Maintenance Tips', 'Team Performance Ledger', 'Incentive Tracking'],
+      features: ['Everything in Starter', 'Maintenance Tips', 'Team Performance Ledger', 'Incentive Tracking'],
       color: 'bg-accent/10 border-accent/40',
       icon: <Sparkles size={24} className="text-accent" />,
       popular: true
@@ -4611,7 +4295,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Enterprise Hub',
       price: '₦99,000',
       description: 'Total automation for high-volume enterprises.',
-      features: ['Everything in Pro', 'AI License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
+      features: ['Everything in Pro', 'License Plate Scanner', 'Advanced Analytics', 'Priority Support'],
       color: 'bg-accent text-white shadow-2xl shadow-accent/20',
       icon: <ShieldCheck size={24} className="text-white" />
     }
@@ -4623,7 +4307,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Daily Essential',
       price: '₦2,500',
       description: '2 Professional station washes per month.',
-      features: ['2 Wash Credits', 'Digital Maintenance Log', 'Priority Queue', 'AI Health Alerts'],
+      features: ['2 Wash Credits', 'Digital Maintenance Log', 'Priority Queue', 'Health Alerts'],
       color: 'bg-card border border-border text-text-main',
       icon: <Check size={24} className="text-accent" />
     },
@@ -4642,7 +4326,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       name: 'Elite Pass',
       price: '₦48,000',
       description: 'The ultimate care package for your vehicle.',
-      features: ['16 Wash Credits (4x/Week)', 'Full Detailing', 'Ceramic Waxing', 'Gemini AI Diagnostics'],
+      features: ['16 Wash Credits (4x/Week)', 'Full Detailing', 'Ceramic Waxing', 'Advanced Diagnostics'],
       color: 'bg-accent text-white shadow-2xl shadow-accent/20',
       icon: <ShieldCheck size={24} className="text-white" />
     }
@@ -5036,9 +4720,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
         throw new Error("Operational Configuration Error: The business geofence has not been configured. Please contact your manager.");
       }
 
-      const tip = (profile.plan === 'standard' || profile.plan === 'elite')
-        ? await getMaintenanceTip(form.carModel)
-        : "Regular washing keeps your vehicle looking pristine!";
+      const tip = "Regular washing keeps your vehicle looking pristine!";
         
       const selectedWorker = profile.role === 'owner' ? (workers.find(w => w.uid === selectedWorkerId) || profile) : profile;
 
@@ -5133,7 +4815,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
           <div className="bg-bg p-6 rounded-2xl border border-border mb-10 text-left">
              <div className="flex items-center gap-2 mb-3">
                <Award size={16} className="text-accent" />
-               <span className="text-[10px] font-black text-accent uppercase tracking-widest">AI Tip for Customer</span>
+               <span className="text-[10px] font-black text-accent uppercase tracking-widest">Maintenance Tip for Customer</span>
              </div>
              <p className="text-text-main italic font-medium leading-relaxed">"{profile.name} recommends: Get regular waxing for that {form.carModel} to protect the finish."</p>
           </div>
@@ -5195,7 +4877,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
                   <Award size={18} className="text-accent flex-shrink-0" />
                   <p className="text-[9px] text-accent font-black uppercase tracking-tight leading-relaxed">
                     Power Suggestion: <span className="font-bold">
-                      AI recommended {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} 
+            {workers.find(w => w.uid === selectedWorkerId)?.name || 'best staff member'} was recommended 
                       {selectedWorkerId === [...workers].sort((a, b) => b.efficiency - a.efficiency)[0]?.uid ? " (Highest Efficiency)" : ""} to maximize throughput.
                     </span>
                   </p>
@@ -5215,7 +4897,7 @@ function LogWashForm({ profile, onComplete, setView, preFill }: { profile: UserP
             )}
           >
             {cameraActive ? <X size={16} /> : <Camera size={16} />}
-            {cameraActive ? "Cancel Scan" : "Scan Plate (AI)"}
+            {cameraActive ? "Cancel Scan" : "Scan Plate"}
           </button>
         </div>
 
@@ -6105,7 +5787,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   <div className="w-6 h-6 bg-accent rounded-md flex items-center justify-center shadow-lg">
                     <Award size={14} className="text-white" />
                   </div>
-                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">PROACTIVE MAINTENANCE CORE</span>
+                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">PROACTIVE MAINTENANCE</span>
                 </div>
                 <p className="text-base text-text-main leading-relaxed font-bold italic lowercase italic">"{wash.maintenanceTip}"</p>
                 <div className="absolute -right-4 -bottom-4 opacity-5 text-accent group-hover:opacity-10 transition-opacity">
@@ -6956,7 +6638,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-8 pb-20 px-4 md:px-0">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-4xl font-black text-text-main uppercase tracking-tighter">AI Scanner.</h2>
+          <h2 className="text-4xl font-black text-text-main uppercase tracking-tighter">Plate Scanner.</h2>
           <p className="text-text-dim lowercase">Elite recognition for plates & models.</p>
         </div>
         <button 
@@ -7070,7 +6752,7 @@ function ScannerView({ profile, setView, onLog }: { profile: UserProfile, setVie
                   className="w-full bg-white text-bg py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition disabled:opacity-50"
                  >
                    {isScanning ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
-                   {isScanning ? "Processing AI Insight..." : "Analyze Stream"}
+                   {isScanning ? "Processing Data..." : "Analyze Stream"}
                  </button>
               </div>
             </>
