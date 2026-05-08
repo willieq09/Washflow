@@ -17,7 +17,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, Sparkles, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -151,6 +151,201 @@ interface Incentive {
   timestamp: Timestamp;
 }
 
+// --- AI Components ---
+
+function StationAIInsights({ stats, recentWashes }: { stats: any, recentWashes: any[] }) {
+  const [report, setReport] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchReport = async () => {
+      setLoading(true);
+      try {
+        const res = await generateAnalyticsReport(stats, recentWashes);
+        setReport(res);
+      } catch (err) {
+        setReport("Unable to synthesize operational intelligence at this moment.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchReport();
+  }, []);
+
+  return (
+    <div className="bg-card rounded-[2.5rem] border border-accent/20 p-8 relative overflow-hidden group shadow-2xl">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 bg-accent/20 rounded-2xl flex items-center justify-center text-accent">
+          <Sparkles size={24} />
+        </div>
+        <div>
+          <h3 className="text-xl font-black text-text-main uppercase tracking-tighter">Station Intelligence</h3>
+          <p className="text-[10px] text-accent font-black uppercase tracking-widest">Powered by Gemini AI</p>
+        </div>
+      </div>
+      
+      <div className="relative z-10">
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <div className="prose prose-invert prose-sm max-w-none text-text-main font-bold lowercase leading-relaxed italic">
+            <ReactMarkdown>{report || ''}</ReactMarkdown>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2" />
+    </div>
+  );
+}
+
+function VehicleAIScout({ profile }: { profile: UserProfile }) {
+  const [tip, setTip] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const vehicle = profile.vehicles?.[0];
+
+  useEffect(() => {
+    if (!vehicle) {
+      setLoading(false);
+      return;
+    }
+    const fetchTip = async () => {
+      try {
+        const res = await getMaintenanceTip(`${vehicle.year} ${vehicle.make} ${vehicle.model}`);
+        setTip(res);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTip();
+  }, [vehicle]);
+
+  if (!vehicle) return null;
+
+  return (
+    <div className="bg-accent/10 border border-accent/20 rounded-3xl p-6 relative overflow-hidden group shadow-xl">
+       <div className="flex items-center gap-3 mb-4">
+         <Sparkles className="text-accent animate-pulse" size={20} />
+         <h4 className="text-xs font-black text-text-main uppercase tracking-widest">AI Care Scout</h4>
+       </div>
+       {loading ? (
+         <div className="space-y-2">
+           <Skeleton className="h-3 w-full" />
+           <Skeleton className="h-3 w-2/3" />
+         </div>
+       ) : (
+         <p className="text-sm text-text-main font-bold italic leading-relaxed lowercase">
+           "{tip}"
+         </p>
+       )}
+       <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-accent/20 rounded-full blur-2xl group-hover:bg-accent/30 transition-colors" />
+    </div>
+  );
+}
+
+function FeedbackModal({ isOpen, onClose, userProfile }: { isOpen: boolean, onClose: () => void, userProfile: UserProfile }) {
+  const [content, setContent] = useState('');
+  const [type, setType] = useState<'feedback' | 'bug'>('feedback');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!content.trim()) return;
+    setSubmitting(true);
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        userId: userProfile.uid,
+        userName: userProfile.name,
+        userEmail: userProfile.email,
+        content,
+        type,
+        status: 'new',
+        createdAt: serverTimestamp()
+      });
+      alert("System report received. Thank you for helping us tune the OS.");
+      setContent('');
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Transmission failure. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-bg/80 backdrop-blur-md"
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-lg bg-card border border-border p-8 rounded-[3rem] shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">System Report</h2>
+                <p className="text-[10px] text-accent font-black uppercase tracking-widest mt-1">Help us optimize AutoLux OS</p>
+              </div>
+              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-main transition-colors"><X size={24} /></button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex gap-4">
+                {(['feedback', 'bug'] as const).map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => setType(t)}
+                    className={cn(
+                      "flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                      type === t ? "bg-accent text-white border-accent shadow-lg shadow-accent/20" : "bg-bg text-text-dim border-border opacity-50"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <textarea 
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={type === 'bug' ? "Describe the anomaly..." : "Share your feature requests or thoughts..."}
+                className="w-full bg-bg border border-border rounded-2xl p-6 text-text-main placeholder:text-text-dim/30 focus:ring-accent focus:border-accent min-h-[150px] font-bold italic lowercase resize-none"
+              />
+
+              <button 
+                onClick={handleSubmit}
+                disabled={submitting || !content.trim()}
+                className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition disabled:opacity-50 flex items-center justify-center gap-3 italic"
+              >
+                {submitting ? <RefreshCw className="animate-spin" size={18} /> : (
+                   <>
+                    Initialize Broadcast
+                    <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                      <ChevronRight size={14} />
+                    </div>
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // --- Components ---
 
 // --- Utils ---
@@ -253,6 +448,7 @@ export default function App() {
   const [preFillWash, setPreFillWash] = useState<{ carModel: string, plateNumber: string, bookingId?: string } | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const rateJobId = new URLSearchParams(window.location.search).get('rate');
 
@@ -571,7 +767,7 @@ export default function App() {
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white shadow-lg shadow-accent/20">
               <Car className="w-5 h-5" />
             </div>
-            <span className="font-bold text-text-main tracking-tight">AutoLux</span>
+            <span className="font-bold text-text-main tracking-tight">AutoLux <span className="text-[7px] md:text-[8px] bg-accent/20 text-accent px-1.5 py-0.5 rounded ml-1 font-black uppercase tracking-widest border border-accent/10">BETA</span></span>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(true)}
@@ -599,7 +795,7 @@ export default function App() {
            <MobileNavItem icon={<Gauge size={26} />} label="Dash" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
            {profile?.role === 'customer' ? (
              <>
-               <MobileNavItem icon={<Search size={26} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} />
+               <MobileNavItem icon={<Search size={26} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} badge="Soon" />
                <MobileNavItem icon={<CarFront size={26} />} label="Cars" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
              </>
            ) : (
@@ -622,7 +818,7 @@ export default function App() {
                 <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
                   <Car className="w-6 h-6" />
                 </div>
-                <span className="text-xl font-bold text-text-main tracking-tight">AutoLux</span>
+                <span className="text-xl font-bold text-text-main tracking-tight">AutoLux <span className="text-[9px] bg-accent/20 text-accent px-2 py-0.5 rounded-full ml-1 font-black uppercase border border-accent/10">BETA</span></span>
               </div>
               <button 
                 onClick={() => setIsSidebarOpen(false)}
@@ -636,9 +832,9 @@ export default function App() {
               {profile?.role === 'customer' ? (
                 <>
                   <NavItem icon={<Gauge size={20} />} label="My Hub" active={view === 'dashboard'} onClick={() => navigate('dashboard')} />
-                  <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} />
+                  <NavItem icon={<Search size={20} />} label="Explore" active={view === 'marketplace'} onClick={() => navigate('marketplace')} badge="Soon" />
                   <NavItem icon={<CarFront size={20} />} label="My Vehicles" active={view === 'my-cars'} onClick={() => navigate('my-cars')} />
-                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => navigate('subscription')} />
+                  <NavItem icon={<CreditCard size={20} />} label="Subscription" active={view === 'subscription'} onClick={() => navigate('subscription')} badge="Soon" />
                   <NavItem icon={<Briefcase size={20} />} label="History" active={view === 'history'} onClick={() => navigate('history')} />
                 </>
               ) : (
@@ -723,7 +919,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 md:pl-64">
-          <AnimatePresence mode="wait">
+           <AnimatePresence mode="wait">
             {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
                 ? <CustomerDashboardView profile={profile} setView={setView} />
@@ -766,33 +962,55 @@ export default function App() {
               }} />
             )}
           </AnimatePresence>
+
+          <FeedbackModal 
+            isOpen={isFeedbackOpen} 
+            onClose={() => setIsFeedbackOpen(false)} 
+            userProfile={profile} 
+          />
+
+          {/* Floating Feedback Trigger */}
+          <button 
+            onClick={() => setIsFeedbackOpen(true)}
+            className="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-12 h-12 bg-card border border-border text-text-dim hover:text-accent hover:border-accent flex items-center justify-center rounded-2xl transition-all shadow-2xl z-40 group"
+          >
+            <Info size={24} className="group-hover:scale-110 transition-transform" />
+            <div className="absolute right-full mr-4 bg-accent text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">
+              Share Feedback
+            </div>
+          </button>
         </main>
       </div>
     </ErrorBoundary>
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: string }) {
   return (
     <button 
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition duration-200 group text-sm font-semibold touch-target",
-        active ? "bg-accent/10 text-accent shadow-sm" : "text-text-dim hover:bg-text-main/5 hover:text-text-main"
+        "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition duration-200 group text-xs font-black uppercase tracking-widest touch-target relative",
+        active ? "bg-accent text-white shadow-xl shadow-accent/20" : "text-text-dim hover:bg-text-main/5 hover:text-text-main"
       )}
     >
-      <span className={cn("transition", active ? "text-accent" : "text-text-dim group-hover:text-text-main")}>{icon}</span>
+      <span className={cn("transition", active ? "text-white" : "text-text-dim group-hover:text-text-main")}>{icon}</span>
       {label}
+      {badge && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 bg-accent/20 text-accent text-[6px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border border-accent/20">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
 
-function MobileNavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+function MobileNavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: string }) {
   return (
     <button 
       onClick={onClick}
       className={cn(
-        "mobile-nav-item transition-all duration-300",
+        "mobile-nav-item transition-all duration-300 relative",
         active ? "text-accent" : "text-text-dim"
       )}
     >
@@ -803,6 +1021,11 @@ function MobileNavItem({ icon, label, active, onClick }: { icon: React.ReactNode
         {icon}
         <span className="text-[9px] font-bold tracking-tight">{label}</span>
       </motion.div>
+      {badge && (
+        <span className="absolute top-1 right-1 bg-accent text-white text-[5px] font-black uppercase px-1 rounded-sm">
+          {badge}
+        </span>
+      )}
       {active && (
         <motion.div 
           layoutId="mobileNavUnderline"
@@ -1544,18 +1767,36 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase italic leading-none">Your Hub.</h2>
           <p className="text-text-main text-base md:text-lg lowercase mt-2 font-bold italic">Manage your fleet and upcoming sessions.</p>
+          {!profile.phone && (
+            <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+                  <Phone size={14} />
+                </div>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest italic">Link your phone number (OPay / Moniepoint) for verified updates.</p>
+              </div>
+              <button onClick={() => setView('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
+            </div>
+          )}
+          <div className="mt-6">
+            <VehicleAIScout profile={profile} />
+          </div>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="flex-1 md:flex-none bg-card px-4 md:px-6 py-3 rounded-2xl border border-border flex flex-col items-center justify-center min-w-[100px] md:min-w-[120px]">
             <span className="text-[9px] md:text-[10px] font-black text-text-main uppercase tracking-widest italic">Credits</span>
             <span className="text-xl md:text-2xl font-black text-accent">{profile.credits || 0}</span>
           </div>
-          <button 
-            onClick={() => setView('marketplace')}
-            className="flex-1 md:flex-none bg-accent text-white px-6 md:px-8 py-3.5 rounded-2xl font-black text-[10px] md:text-[11px] uppercase tracking-widest hover:brightness-110 transition h-full touch-target"
-          >
-            Book Wash
-          </button>
+          <div className="relative">
+            <button 
+              disabled={true}
+              title="Marketplace Launching Q3"
+              className="flex-1 md:flex-none bg-accent/20 text-white/40 px-6 md:px-8 py-3.5 rounded-2xl font-black text-[10px] md:text-[11px] uppercase tracking-widest cursor-not-allowed h-full flex flex-col items-center justify-center"
+            >
+              <span>Book Wash</span>
+              <span className="text-[7px] text-accent font-black tracking-normal lowercase">coming soon</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1625,8 +1866,15 @@ function CustomerDashboardView({ profile, setView }: { profile: UserProfile, set
       </div>
 
       {/* Nearby Stations */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between">
+      <section className="space-y-6 relative group overflow-hidden p-1">
+        <div className="absolute inset-0 bg-bg/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-accent/20">
+          <div className="bg-accent text-white px-6 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-2xl mb-2">
+            Ecosystem Coming Soon
+          </div>
+          <p className="text-text-main text-[10px] font-black italic opacity-60">Onboarding local wash partners...</p>
+        </div>
+        
+        <div className="flex items-center justify-between opacity-30 grayscale cursor-not-allowed">
           <div className="flex items-center gap-3">
             <MapPin className="text-accent" />
             <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Nearby Stations</h3>
@@ -1952,7 +2200,7 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
       />
       <header className="mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
         <div>
-          <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">AutoLux Dashboard</h2>
+          <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">AutoLux Dashboard <span className="text-[10px] md:text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full ml-1 font-black uppercase not-italic border border-accent/10">BETA</span></h2>
           <p className="text-text-main mt-1 lowercase font-black italic">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
         <div className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-success/10 text-success border border-success/20 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
@@ -1960,6 +2208,13 @@ function DashboardView({ profile, setView, onLogWash }: { profile: UserProfile, 
           System Active Shard
         </div>
       </header>
+
+      {/* AI Business Insights */}
+      {(profile.role === 'owner' || profile.permissions?.canManageTeam) && (
+        <div className="mb-8">
+          <StationAIInsights stats={stats} recentWashes={recentWashes} />
+        </div>
+      )}
 
       {/* Bento Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-3 md:gap-4 auto-rows-fr">
@@ -2853,19 +3108,31 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       {/* Ecosystem Categories Grid */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Wash Stations', icon: <Store />, count: '24+ Nearby', img: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=400', color: 'bg-blue-500' },
-          { label: 'Detailing Pros', icon: <Sparkles />, count: '12 Active', img: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', color: 'bg-purple-500' },
-          { label: 'Parts & Spares', icon: <Briefcase />, count: '450+ Items', img: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', color: 'bg-emerald-500' },
-          { label: 'Mobile Experts', icon: <Truck />, count: '8 Available', img: 'https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=400', color: 'bg-orange-500' }
+          { label: 'Wash Stations', icon: <Store />, count: '24+ Nearby', img: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=400', color: 'bg-blue-500', active: true },
+          { label: 'Detailing Pros', icon: <Sparkles />, count: 'Scheduled Q3', img: 'https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=400', color: 'bg-purple-500', comingSoon: true },
+          { label: 'Parts & Spares', icon: <Briefcase />, count: 'Vault Open Soon', img: 'https://images.unsplash.com/photo-1590674867551-11c3a2df5785?auto=format&fit=crop&q=80&w=400', color: 'bg-emerald-500', comingSoon: true },
+          { label: 'Mobile Experts', icon: <Truck />, count: 'Deploying Soon', img: 'https://images.unsplash.com/photo-1605610603061-9c3933bc0fa5?auto=format&fit=crop&q=80&w=400', color: 'bg-orange-500', comingSoon: true }
         ].map((cat, i) => (
           <motion.div 
             key={i}
-            whileHover={{ y: -5 }}
-            className="group relative h-40 rounded-3xl overflow-hidden cursor-pointer"
+            whileHover={!cat.comingSoon ? { y: -5 } : {}}
+            className={cn(
+              "group relative h-40 rounded-3xl overflow-hidden cursor-pointer",
+              cat.comingSoon && "opacity-80 grayscale-[0.5]"
+            )}
           >
             <img src={cat.img} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />
             <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/20 to-transparent" />
-            <div className="absolute bottom-4 left-4">
+            
+            {cat.comingSoon && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
+                <div className="bg-accent text-white px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest rotate-[-5deg] shadow-2xl">
+                  Coming Soon
+                </div>
+              </div>
+            )}
+
+            <div className="absolute bottom-4 left-4 z-10">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-white bg-accent/80 p-1 rounded-md scale-75 peer-group-hover:scale-100 transition-transform">
                   {cat.icon}
@@ -2879,23 +3146,41 @@ function MarketplaceView({ profile, setView }: { profile: UserProfile, setView: 
       </section>
 
       {/* Marketplace Picks */}
-      <section>
-        <div className="flex items-center justify-between mb-8">
+      <section className="relative">
+        <div className="absolute inset-0 bg-bg/40 backdrop-blur-[4px] z-30 flex flex-col items-center justify-center rounded-[3rem] border border-dashed border-accent/20">
+          <div className="bg-accent text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest shadow-2xl mb-4 rotate-[-2deg]">
+            Marketplace Launching Soon
+          </div>
+          <p className="text-text-main text-xs font-black italic max-w-xs text-center opacity-80 lowercase">
+            we are currently onboarding high-fidelity parts vendors and detailing labs. ecosystem supply drops begin shortly.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between mb-8 opacity-40">
           <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
             <ShoppingBag className="text-accent" /> Marketplace Picks
           </h3>
           <div className="flex bg-bg rounded-xl border border-border p-1">
              {['all', 'accessory', 'part', 'service'].map((f) => (
-                <button 
-                  key={f}
-                  onClick={() => setFilter(f as any)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                    filter === f ? "bg-accent text-white" : "text-text-dim hover:text-white"
+                <div key={f} className="relative group/filter">
+                  <button 
+                    onClick={() => {
+                      if (f === 'all') setFilter(f as any);
+                    }}
+                    className={cn(
+                      "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all h-full",
+                      filter === f ? "bg-accent text-white" : "text-text-dim hover:text-white",
+                      f !== 'all' && "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    {f}
+                  </button>
+                  {f !== 'all' && (
+                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-accent text-white px-2 py-1 rounded text-[7px] font-black uppercase tracking-widest opacity-0 group-hover/filter:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
+                      Coming Soon
+                    </div>
                   )}
-                >
-                  {f}
-                </button>
+                </div>
              ))}
           </div>
         </div>
@@ -4371,6 +4656,11 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 italic leading-none">
           {isCustomer ? 'Subscription Joy.' : 'Scale Your Flow.'}
         </h2>
+        {isCustomer && (
+          <div className="inline-block bg-accent text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 shadow-xl shadow-accent/20">
+            Marketplace Sellers Onboarding Soon
+          </div>
+        )}
         <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl mx-auto">
           {isCustomer ? 'Premium vehicle care, automated for your peace of mind.' : 'Choose a plan that matches your business velocity.'}
         </p>
@@ -4429,8 +4719,17 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
         )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-        {tiers.map((tier) => (
+      <div className={isCustomer ? "relative" : ""}>
+        {isCustomer && (
+          <div className="absolute inset-0 bg-bg/40 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center rounded-[3rem] border border-dashed border-accent/20">
+             <div className="bg-accent text-white px-6 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-2xl mb-2">
+               Plan Launch Impending
+             </div>
+             <p className="text-text-main text-[10px] font-black italic opacity-60">Wait for onboarded sellers...</p>
+          </div>
+        )}
+        <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8", isCustomer && "opacity-40 grayscale pointer-events-none")}>
+          {tiers.map((tier) => (
           <div 
             key={tier.id} 
             className={cn(
@@ -4484,8 +4783,9 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
           </div>
         ))}
       </div>
+    </div>
 
-      <div className="mt-20 text-center">
+    <div className="mt-20 text-center">
         <p className="text-text-dim text-sm max-w-lg mx-auto leading-relaxed">
           Secure billing powered by <span className="text-white font-bold">Paystack</span>. 
           Plans can be cancelled or upgraded at any time from your dashboard.
