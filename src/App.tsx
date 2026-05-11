@@ -462,27 +462,13 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const success = params.get('success') || params.get('paystack_success');
     const plan = params.get('plan') as any;
-    const orderType = params.get('order_type');
-    const itemId = params.get('item_id');
     
     if (success === 'true' && profile) {
-      if (orderType === 'item' && itemId) {
-        // Record order
-        addDoc(collection(db, 'orders'), {
-          userId: profile.uid,
-          itemId,
-          amount: 0, // Should ideally be passed back or fetched
-          status: 'completed',
-          createdAt: serverTimestamp()
-        }).then(() => {
-          alert("Order successful! Your product/service is confirmed.");
-          window.history.replaceState({}, '', window.location.pathname);
-        });
-      } else if (plan) {
+      if (plan) {
         let creditsToAward = 0;
         if (plan === 'basic_wash') creditsToAward = 2;
-        if (plan === 'premium_wash') creditsToAward = 4;
-        if (plan === 'unlimited_wash') creditsToAward = 99;
+        if (plan === 'premium_wash') creditsToAward = 5;
+        if (plan === 'unlimited_wash') creditsToAward = 16;
 
         const updateData: any = { plan };
         if (creditsToAward > 0) {
@@ -501,12 +487,17 @@ export default function App() {
     }
   }, [profile]);
 
-  const handlePhoneLogin = async (name: string, phone: string) => {
+  const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean) => {
     setAuthLoading(true);
     try {
       const cred = await signInAnonymously(auth);
       const u = cred.user;
       const docRef = doc(db, 'users', u.uid);
+      
+      // If logging in, we might want to check if this phone number already exists
+      // But since we are using anonymous auth, we'll just check if the current user doc exists
+      // In a more complex app, we'd query by phone number here.
+      
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -977,18 +968,19 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string) => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, authLoading: boolean }) {
   const [mode, setMode] = useState<'business' | 'personal'>('personal');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [isLogin, setIsLogin] = useState(false);
 
   const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length < 10 || !name) {
-      alert("Please provide a valid name and phone number (e.g. 08123456789)");
+    if (phone.length < 10 || (!isLogin && !name)) {
+      alert("Please provide a valid " + (isLogin ? "" : "name and ") + "phone number");
       return;
     }
-    onPhoneLogin(name, phone);
+    onPhoneLogin(name || 'Returning User', phone, isLogin);
   };
 
   return (
@@ -1001,18 +993,20 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
         <div className="inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-accent rounded-3xl mb-8 md:mb-10 shadow-2xl shadow-accent/20 rotate-3">
           <AnimatedVehicleIcon size={32} className="text-white" />
         </div>
-        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase italic leading-[0.9] text-text-dim/80">
+        <h1 className="text-5xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter uppercase leading-[0.9] text-text-dim/80">
           AUTOLUX <br />
-          <span className="text-accent not-italic">OPERATING SYSTEM.</span>
+          <span className="text-accent">{mode === 'personal' ? 'PREMIUM CAR CARE.' : 'OPERATING SYSTEM.'}</span>
         </h1>
-        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-medium leading-relaxed uppercase tracking-tight italic">
-          The car wash owner operating system. Manage operations locally, scale subscriptions globally.
+        <p className="text-lg md:text-xl text-text-dim mb-10 md:mb-12 max-w-xl mx-auto font-medium leading-relaxed uppercase tracking-tight">
+          {mode === 'personal' 
+            ? "Elite mobile detailing and unlimited wash subscriptions for the modern driver."
+            : "The car wash owner operating system. Manage operations locally, scale subscriptions globally."}
         </p>
 
         <div className="max-w-md mx-auto mb-10">
           <div className="flex bg-card p-1 rounded-2xl mb-8 border border-border shadow-xl">
             <button 
-              onClick={() => setMode('personal')}
+              onClick={() => { setMode('personal'); setIsLogin(false); }}
               className={cn(
                 "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
                 mode === 'personal' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
@@ -1021,7 +1015,7 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
               I HAVE A CAR
             </button>
             <button 
-              onClick={() => setMode('business')}
+              onClick={() => { setMode('business'); setIsLogin(false); }}
               className={cn(
                 "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
                 mode === 'business' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
@@ -1031,88 +1025,62 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
             </button>
           </div>
 
-          <AnimatePresence mode="wait">
-            {mode === 'personal' ? (
-              <motion.form 
-                key="personal"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                onSubmit={handlePhoneSubmit}
-                className="space-y-4"
-              >
-                <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="Enter your name"
-                    required
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                  />
-                </div>
-                <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Phone Number (Opay/Moniepoint Style)</label>
-                  <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
-                    <input 
-                      type="tel" 
-                      placeholder="8012345678"
-                      required
-                      value={phone}
-                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                    />
-                  </div>
-                </div>
-                <button 
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full bg-accent text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-accent/20 uppercase tracking-widest text-xs disabled:opacity-50 touch-target"
-                >
-                  {authLoading ? (
-                    <RefreshCw size={20} className="animate-spin" />
-                  ) : (
-                    <>
-                      <Zap size={20} className="fill-current" />
-                      Instant Access
-                    </>
-                  )}
-                </button>
-                <p className="text-[10px] text-text-dim font-medium italic">Used for identification and loyalty rewards across all partner stations.</p>
-              </motion.form>
-            ) : (
-              <motion.div
-                key="business"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
-                <button 
-                  onClick={onLogin}
-                  disabled={authLoading}
-                  className="w-full bg-card border border-border text-text-main py-5 rounded-2xl font-black flex items-center justify-center gap-4 hover:border-accent transition-all shadow-xl active:scale-95 text-lg disabled:opacity-50 touch-target"
-                >
-                  {authLoading ? (
-                    <RefreshCw size={20} className="animate-spin text-accent" />
-                  ) : (
-                    <>
-                      <img src="https://www.google.com/favicon.ico" className="w-6 h-6" />
-                      Business Login
-                    </>
-                  )}
-                </button>
-                <div className="p-6 bg-accent/5 border border-accent/20 rounded-2xl text-left">
-                  <p className="text-xs text-text-main leading-relaxed font-bold lowercase">
-                    <span className="text-accent font-black uppercase italic mr-2 text-[10px]">Security:</span>
-                    Station owners and workers are required to authenticate via corporate email for audit integrity.
-                  </p>
-                </div>
-              </motion.div>
+          <motion.form 
+            key={`${mode}-${isLogin}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onSubmit={handlePhoneSubmit}
+            className="space-y-4"
+          >
+            {!isLogin && (
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter your name"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                />
+              </div>
             )}
-          </AnimatePresence>
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Phone Number</label>
+              <div className="relative">
+                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
+                <input 
+                  type="tel" 
+                  placeholder="8012345678"
+                  required
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                />
+              </div>
+            </div>
+            <button 
+              type="submit"
+              disabled={authLoading}
+              className="w-full bg-accent text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-accent/20 uppercase tracking-widest text-xs disabled:opacity-50 touch-target"
+            >
+              {authLoading ? (
+                <RefreshCw size={20} className="animate-spin" />
+              ) : (
+                <>
+                  <Zap size={20} className="fill-current" />
+                  {isLogin ? 'Welcome Back' : 'Instant Access'}
+                </>
+              )}
+            </button>
+            <button 
+              type="button"
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-[10px] text-accent font-black uppercase tracking-widest hover:underline"
+            >
+              {isLogin ? "New here? Create an account" : "Already a member/partner? Log in"}
+            </button>
+          </motion.form>
         </div>
 
         {authLoading && mode === 'business' && (
@@ -1132,11 +1100,55 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
           </div>
         )}
         
-        <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-          <FeatureCard title="Operator OS" desc="Stop revenue leakage. Manage team capacity and job logs with a high-fidelity dashboard." />
-          <FeatureCard title="Subscription Joy" desc="Layer your favorite wash stations into a single monthly plan. One payment, endless shine." />
-          <FeatureCard title="Proactive Care" desc="Get predictive scheduling suggestions based on local weather and your car's personal usage history." />
+        <div className="mt-24 grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-2xl mx-auto">
+          {mode === 'business' ? (
+            <>
+              <FeatureCard title="Operator OS" desc="Stop revenue leakage. Manage team capacity and job logs with a high-fidelity dashboard." />
+              <FeatureCard title="Station Analytics" desc="Track throughput, popular services, and peak hours to optimize your operational flow." />
+            </>
+          ) : (
+            <>
+              <FeatureCard title="Subscription Joy" desc="Layer your favorite wash stations into a single monthly plan. One payment, endless shine." />
+              <FeatureCard title="Proactive Care" desc="Get predictive scheduling suggestions based on local weather and your car's personal usage history." />
+            </>
+          )}
         </div>
+
+        {/* Pricing Segment */}
+        <section className="mt-32 pt-20 border-t border-border/40">
+           <div className="text-center mb-16">
+             <h2 className="text-4xl md:text-6xl font-black text-text-main uppercase tracking-tighter mb-4 leading-none">Choose Your Tier.</h2>
+             <p className="text-text-dim max-w-md mx-auto font-bold">No contracts, no hidden fees. Just pure operational excellence.</p>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              <div className="bento-card border-none bg-accent text-white p-10 flex flex-col justify-between group cursor-pointer active:scale-95 transition" onClick={onLogin}>
+                 <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">I WASH CARS (Owners)</span>
+                    <h3 className="text-3xl font-black mt-4 uppercase">Pro Accelerator</h3>
+                    <p className="mt-4 text-sm opacity-80">Full dashboard, team logs, and QR deployment for your station.</p>
+                 </div>
+                 <div className="mt-10 flex items-center justify-between">
+                    <span className="text-2xl font-black">₦49,000/mo</span>
+                    <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-white group-hover:text-accent transition">
+                       <Zap size={20} />
+                    </div>
+                 </div>
+              </div>
+              <div className="bento-card border-none bg-card text-text-main p-10 flex flex-col justify-between group cursor-pointer active:scale-95 transition border border-border" onClick={() => setMode('personal')}>
+                 <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent">I HAVE A CAR (Customers)</span>
+                    <h3 className="text-3xl font-black mt-4 uppercase">Elite Pass</h3>
+                    <p className="mt-4 text-sm text-text-dim">16 professional washes per month with full ceramic detailing included.</p>
+                 </div>
+                 <div className="mt-10 flex items-center justify-between">
+                    <span className="text-2xl font-black">₦48,000/mo</span>
+                    <div className="w-12 h-12 rounded-full border border-border flex items-center justify-center group-hover:bg-accent group-hover:text-white transition">
+                       <Sparkles size={20} />
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </section>
       </motion.div>
     </div>
   );
@@ -1160,8 +1172,8 @@ const VEHICLE_DATA = {
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
   return (
     <div className="bento-card border-white/5 bg-transparent shadow-none">
-      <h3 className="font-bold text-text-dim/70 mb-2 uppercase italic tracking-tighter">{title}</h3>
-      <p className="text-sm text-text-dim/50 leading-relaxed font-medium lowercase italic">{desc}</p>
+      <h3 className="font-bold text-text-dim/70 mb-2 uppercase tracking-tighter">{title}</h3>
+      <p className="text-sm text-text-dim/50 leading-relaxed font-medium">{desc}</p>
     </div>
   );
 }
@@ -1728,66 +1740,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
           )}
         </div>
       </div>
-
-      {/* Nearby Stations */}
-      <section className="space-y-6 relative group overflow-hidden p-1">
-        <div className="absolute inset-0 bg-bg/40 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-accent/20">
-          <div className="bg-accent text-white px-6 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-2xl mb-2">
-            Ecosystem Coming Soon
-          </div>
-          <p className="text-text-main text-[10px] font-black italic opacity-60">Onboarding local wash partners...</p>
-        </div>
-        
-        <div className="flex items-center justify-between opacity-30 grayscale cursor-not-allowed">
-          <div className="flex items-center gap-3">
-            <MapPin className="text-accent" size={24} />
-            <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter italic">Nearby Stations</h3>
-          </div>
-          <span className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Sorted by Proximity</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {nearby.length > 0 ? nearby.map((biz) => (
-            <div 
-              key={biz.id}
-              onClick={() => navigate('marketplace')}
-              className="group cursor-pointer bento-card p-0 overflow-hidden hover:border-accent/40 transition-all active:scale-95"
-            >
-              <div className="h-40 bg-zinc-900/10 relative overflow-hidden">
-                <img 
-                  src={biz.image || `https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=1000`} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60 group-hover:opacity-100" 
-                  alt={biz.name}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-transparent" />
-                <div className="absolute top-4 right-4 bg-text-main/10 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1 border border-border">
-                  <Star size={12} className="text-accent fill-accent" />
-                  <span className="text-[10px] font-bold text-text-main">{biz.rating || '4.8'}</span>
-                </div>
-              </div>
-              <div className="p-5">
-                <h4 className="font-black text-text-main group-hover:text-accent transition-colors uppercase italic tracking-tighter">{biz.name}</h4>
-                <p className="text-xs text-text-main font-bold mt-1 flex items-center gap-1 italic opacity-70">
-                  <MapPin size={10} />
-                  {biz.location}
-                </p>
-                {location && biz.lat && (
-                  <div className="mt-3 text-[10px] font-black text-accent uppercase tracking-widest bg-accent/10 w-fit px-2 py-0.5 rounded">
-                    {calculateDistance(location.lat, location.lng, biz.lat, biz.lng).toFixed(1)} km away
-                  </div>
-                )}
-              </div>
-            </div>
-          )) : loading ? (
-            [1,2,3,4].map(i => <Skeleton key={i} className="h-64" />)
-          ) : (
-            <div className="col-span-full p-12 text-center bg-card border border-dashed border-border rounded-3xl">
-               <p className="text-text-dim">No stations indexed in your immediate perimeter.</p>
-            </div>
-          )}
-        </div>
-      </section>
-
+      
       {/* Your Fleet */}
       <section className="space-y-6">
         <div className="flex items-center justify-between">
@@ -4043,20 +3996,38 @@ function StarRating({ value, onChange, size = 24 }: { value: number, onChange: (
 function SubscriptionView({ profile }: { profile: UserProfile }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState(profile.email || '');
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('canceled') === 'true') {
       setError("Payment was canceled or could not be processed. Your card was not charged.");
-      // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
+  const handleUpdateEmail = async () => {
+    if (!emailInput || !emailInput.includes('@')) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setIsUpdatingEmail(true);
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), { email: emailInput });
+      profile.email = emailInput; // Local update
+      setError(null);
+    } catch (err: any) {
+      setError("Could not update email. Check your connection.");
+    } finally {
+      setIsUpdatingEmail(false);
+    }
+  };
+
   const handleSubscribe = async (plan: string) => {
     if (!profile || loading) return;
     if (!profile.email) {
-      setError("Email required in profile before checkout.");
+      setError("Email required in profile before checkout. Please update your contact mail below.");
       return;
     }
     setLoading(plan);
@@ -4095,12 +4066,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
       }
 
       if (data && data.authorization_url) {
-        // Use top.location to escape the AI Studio iframe for payments
-        if (window.top) {
-          window.top.location.href = data.authorization_url;
-        } else {
-          window.location.href = data.authorization_url;
-        }
+        // Redirect current window to checkout
+        window.location.assign(data.authorization_url);
       } else {
         throw new Error("Invalid response from payment server: missing checkout URL.");
       }
@@ -4210,6 +4177,26 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
                    <p className="text-text-main font-medium text-sm leading-relaxed mb-4">
                      {error}
                    </p>
+                   {!profile.email && (
+                     <div className="mb-6 space-y-3">
+                        <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-60">Update Deployment Email</label>
+                        <div className="flex gap-2">
+                          <input 
+                            value={emailInput}
+                            onChange={e => setEmailInput(e.target.value)}
+                            placeholder="your@email.com"
+                            className="flex-1 bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:border-accent font-black"
+                          />
+                          <button 
+                            onClick={handleUpdateEmail}
+                            disabled={isUpdatingEmail}
+                            className="bg-accent text-white px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-accent/20"
+                          >
+                            {isUpdatingEmail ? "..." : "Link"}
+                          </button>
+                        </div>
+                     </div>
+                   )}
                    <div className="flex flex-wrap gap-2">
                      <button 
                        onClick={() => setError(null)}
