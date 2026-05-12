@@ -11,13 +11,15 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
-  signInAnonymously
+  signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
 } from 'firebase/auth';
 import { 
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -198,7 +200,7 @@ function FeedbackModal({ isOpen, onClose, userProfile }: { isOpen: boolean, onCl
           >
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter italic">System Report</h2>
+                <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter">System Report</h2>
                 <p className="text-[10px] text-accent font-black uppercase tracking-widest mt-1">Help us optimize AutoLux OS</p>
               </div>
               <button onClick={onClose} className="p-2 text-text-dim hover:text-text-main transition-colors"><X size={24} /></button>
@@ -224,13 +226,13 @@ function FeedbackModal({ isOpen, onClose, userProfile }: { isOpen: boolean, onCl
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={type === 'bug' ? "Describe the anomaly..." : "Share your feature requests or thoughts..."}
-                className="w-full bg-bg border border-border rounded-2xl p-6 text-text-main placeholder:text-text-dim/30 focus:ring-accent focus:border-accent min-h-[150px] font-bold italic lowercase resize-none"
+                className="w-full bg-bg border border-border rounded-2xl p-6 text-text-main placeholder:text-text-dim/30 focus:ring-accent focus:border-accent min-h-[150px] font-bold lowercase resize-none"
               />
 
               <button 
                 onClick={handleSubmit}
                 disabled={submitting || !content.trim()}
-                className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition disabled:opacity-50 flex items-center justify-center gap-3 italic"
+                className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition disabled:opacity-50 flex items-center justify-center gap-3"
               >
                 {submitting ? <RefreshCw className="animate-spin" size={18} /> : (
                    <>
@@ -558,6 +560,25 @@ export default function App() {
     }
   };
 
+  const handleEmailLogin = async (name: string, email: string, pass: string, isSignUp: boolean) => {
+    setAuthLoading(true);
+    try {
+      if (isSignUp) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        if (userCredential.user) {
+          await updateProfile(userCredential.user, { displayName: name });
+        }
+      } else {
+        await signInWithEmailAndPassword(auth, email, pass);
+      }
+    } catch (error: any) {
+      console.error("Email auth error:", error);
+      alert("Authentication failed: " + error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const logout = () => {
     setLoading(true);
     signOut(auth).finally(() => setLoading(false));
@@ -589,7 +610,7 @@ export default function App() {
           animate={{ opacity: 1 }}
           className="max-w-xs"
         >
-          <p className="text-xs text-text-dim mb-4 leading-relaxed italic">
+          <p className="text-xs text-text-dim mb-4 leading-relaxed">
             Synchronization is taking longer than expected. This can happen on some mobile browsers.
           </p>
           <button 
@@ -614,7 +635,7 @@ export default function App() {
     );
   }
 
-  if (!user) return <LandingPage onLogin={login} onPhoneLogin={handlePhoneLogin} authLoading={authLoading} />;
+  if (!user) return <LandingPage onLogin={login} onPhoneLogin={handlePhoneLogin} onEmailLogin={handleEmailLogin} authLoading={authLoading} />;
 
   if (profile && !profile.role) {
     return <RoleSelection uid={profile.uid} name={profile.name} email={profile.email} />;
@@ -628,7 +649,7 @@ export default function App() {
           <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
             <ShieldCheck size={40} />
           </div>
-          <h2 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Access Unauthorized</h2>
+          <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter">Access Unauthorized</h2>
           <p className="text-text-dim lowercase font-medium">
             Your worker account is not linked to an active station. 
             Please contact your station owner to verify your authorization.
@@ -968,10 +989,13 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean) => void, authLoading: boolean }) {
   const [mode, setMode] = useState<'business' | 'personal'>('personal');
+  const [authMethod, setAuthMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(false);
 
   const handlePhoneSubmit = (e: React.FormEvent) => {
@@ -981,6 +1005,15 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
       return;
     }
     onPhoneLogin(name || 'Returning User', phone, isLogin);
+  };
+
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || password.length < 6 || (!isLogin && !name)) {
+      alert("Please provide a valid " + (isLogin ? "" : "name, ") + "email and password (min 6 chars)");
+      return;
+    }
+    onEmailLogin(name, email, password, !isLogin);
   };
 
   return (
@@ -1006,7 +1039,7 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
         <div className="max-w-md mx-auto mb-10">
           <div className="flex bg-card p-1 rounded-2xl mb-8 border border-border shadow-xl">
             <button 
-              onClick={() => { setMode('personal'); setIsLogin(false); }}
+              onClick={() => { setMode('personal'); setIsLogin(false); setAuthMethod('phone'); }}
               className={cn(
                 "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
                 mode === 'personal' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
@@ -1025,40 +1058,106 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
             </button>
           </div>
 
+          {mode === 'business' && (
+            <div className="flex justify-center gap-4 mb-6">
+              <button 
+                onClick={() => setAuthMethod('phone')}
+                className={cn(
+                  "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
+                  authMethod === 'phone' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
+                )}
+              >
+                Phone
+              </button>
+              <button 
+                onClick={() => setAuthMethod('email')}
+                className={cn(
+                  "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
+                  authMethod === 'email' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
+                )}
+              >
+                Email
+              </button>
+            </div>
+          )}
+
           <motion.form 
-            key={`${mode}-${isLogin}`}
+            key={`${mode}-${authMethod}-${isLogin}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            onSubmit={handlePhoneSubmit}
+            onSubmit={authMethod === 'email' ? handleEmailSubmit : handlePhoneSubmit}
             className="space-y-4"
           >
-            {!isLogin && (
-              <div className="space-y-2 text-left">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter your name"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                />
-              </div>
+            {authMethod === 'email' ? (
+              <>
+                {!isLogin && (
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="Enter your name"
+                      required
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                    />
+                  </div>
+                )}
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">{isLogin ? 'Email Address' : 'Business Email'}</label>
+                  <input 
+                    type="email" 
+                    placeholder="partner@autolux.com"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                  />
+                </div>
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Password</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    required
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {!isLogin && (
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="Enter your name"
+                      required
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                    />
+                  </div>
+                )}
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Phone Number</label>
+                  <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
+                    <input 
+                      type="tel" 
+                      placeholder="8012345678"
+                      required
+                      value={phone}
+                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                    />
+                  </div>
+                </div>
+              </>
             )}
-            <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Phone Number</label>
-              <div className="relative">
-                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
-                <input 
-                  type="tel" 
-                  placeholder="8012345678"
-                  required
-                  value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
-                />
-              </div>
-            </div>
+            
             <button 
               type="submit"
               disabled={authLoading}
@@ -1068,18 +1167,29 @@ function LandingPage({ onLogin, onPhoneLogin, authLoading }: { onLogin: () => vo
                 <RefreshCw size={20} className="animate-spin" />
               ) : (
                 <>
-                  <Zap size={20} className="fill-current" />
-                  {isLogin ? 'Welcome Back' : 'Instant Access'}
+                  {authMethod === 'email' ? <Mail size={20} /> : <Zap size={20} className="fill-current" />}
+                  {isLogin ? 'Welcome Back' : (authMethod === 'email' ? 'Partner Sign Up' : 'Instant Access')}
                 </>
               )}
             </button>
-            <button 
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-[10px] text-accent font-black uppercase tracking-widest hover:underline"
-            >
-              {isLogin ? "New here? Create an account" : "Already a member/partner? Log in"}
-            </button>
+            <div className="flex flex-col gap-2">
+              <button 
+                type="button"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-[10px] text-accent font-black uppercase tracking-widest hover:underline"
+              >
+                {isLogin ? "New here? Create an account" : "Already a member/partner? Log in"}
+              </button>
+              {mode === 'business' && (
+                <button 
+                  type="button"
+                  onClick={onLogin}
+                  className="text-[10px] text-text-dim font-black uppercase tracking-widest hover:text-text-main transition-colors"
+                >
+                  Or continue with Google
+                </button>
+              )}
+            </div>
           </motion.form>
         </div>
 
@@ -1231,7 +1341,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-md rounded-[2.5rem] border border-border p-8 md:p-10 shadow-2xl relative overflow-hidden">
         <div className="flex justify-between items-center mb-8 md:mb-10">
-          <h3 className="text-2xl md:text-3xl font-black text-text-main uppercase italic tracking-tighter leading-none">Withdrawal Console</h3>
+          <h3 className="text-2xl md:text-3xl font-black text-text-main uppercase tracking-tighter leading-none">Withdrawal Console</h3>
           <button onClick={onClose} className="p-3 bg-accent text-white rounded-full hover:brightness-110 transition-all shadow-lg shadow-accent/20 touch-target">
             <X size={20} />
           </button>
@@ -1240,7 +1350,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
         <div className="space-y-6 md:space-y-10">
           <div className="p-6 bg-accent text-white rounded-3xl shadow-xl shadow-accent/10">
             <span className="text-[10px] font-black opacity-70 uppercase tracking-widest ml-1">Available to Clear</span>
-            <div className="text-3xl md:text-4xl font-black italic tracking-tighter">{formatCurrency(balance)}</div>
+            <div className="text-3xl md:text-4xl font-black tracking-tighter">{formatCurrency(balance)}</div>
           </div>
 
           <div className="space-y-6 md:space-y-8">
@@ -1259,7 +1369,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
               <div className="space-y-3">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-[10px] font-black text-text-dim uppercase tracking-widest">Account Number</label>
-                  <span className="text-[9px] font-black text-accent uppercase tracking-widest italic animate-pulse">10-Digit NUBAN Only</span>
+                  <span className="text-[9px] font-black text-accent uppercase tracking-widest animate-pulse">10-Digit NUBAN Only</span>
                 </div>
                 <input
                   type="text"
@@ -1299,7 +1409,7 @@ function WithdrawalModal({ isOpen, onClose, balance, userId }: { isOpen: boolean
             <button
               onClick={handleWithdraw}
               disabled={submitting || !form.amount || parseFloat(form.amount) <= 0 || parseFloat(form.amount) > balance}
-              className="w-full py-5 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4 italic"
+              className="w-full py-5 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4"
             >
               {submitting ? <RefreshCw className="animate-spin mx-auto" size={20} /> : "Finalize Withdrawal Flow"}
             </button>
@@ -1438,7 +1548,7 @@ function AdminDashboardView() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-10 pb-20">
       <header>
-        <h2 className="text-5xl font-black text-text-main tracking-tighter uppercase italic leading-none">Console.</h2>
+        <h2 className="text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Console.</h2>
         <p className="text-text-dim text-lg lowercase mt-2">Platform-wide operation health and mission control.</p>
       </header>
       
@@ -1446,7 +1556,7 @@ function AdminDashboardView() {
       <section className="bento-card border-accent/20 bg-accent/5">
         <div className="flex items-center gap-3 mb-6">
           <DollarSign className="text-accent" />
-          <h3 className="text-xl font-black text-text-main uppercase italic">Withdrawal Settlement Queue</h3>
+          <h3 className="text-xl font-black text-text-main uppercase">Withdrawal Settlement Queue</h3>
           {pendingWithdrawals.length > 0 && (
             <span className="bg-accent text-white px-2 py-0.5 rounded-full text-[10px] font-black">{pendingWithdrawals.length} REQUESTS</span>
           )}
@@ -1491,7 +1601,7 @@ function AdminDashboardView() {
                 <button 
                   onClick={() => handleSettle(w.id)}
                   disabled={settlingId === w.id}
-                  className="mt-6 w-full bg-accent text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2 group italic"
+                  className="mt-6 w-full bg-accent text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition shadow-xl shadow-accent/20 flex items-center justify-center gap-2 group"
                 >
                   {settlingId === w.id ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} className="group-hover:scale-125 transition" />}
                   Confirm Manual Payment
@@ -1523,7 +1633,7 @@ function AdminDashboardView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bento-card">
-          <h3 className="text-xl font-black text-text-main uppercase italic mb-6">Top Performing Professionals</h3>
+          <h3 className="text-xl font-black text-text-main uppercase mb-6">Top Performing Professionals</h3>
           <div className="space-y-4">
             {topEntities.workers.map((w, i) => (
               <div key={i} className="flex items-center justify-between p-4 bg-text-main/5 rounded-2xl border border-border group hover:border-accent transition-colors">
@@ -1548,7 +1658,7 @@ function AdminDashboardView() {
               <Zap size={160} />
            </div>
            <Award className="text-accent mb-6" size={64} />
-           <h3 className="text-3xl font-black text-text-main uppercase italic tracking-tighter mb-4">Platform Audit Active</h3>
+           <h3 className="text-3xl font-black text-text-main uppercase tracking-tighter mb-4">Platform Audit Active</h3>
            <p className="text-text-dim text-sm max-w-xs lowercase">The system is currently verifying all 7.5% commission payouts across {stats.totalOwners} verified business shards.</p>
            <button 
              onClick={handleDownloadRegistry}
@@ -1667,15 +1777,15 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-8 md:space-y-12 pb-12">
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
-          <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase italic leading-none">Your Hub.</h2>
-          <p className="text-text-main text-base md:text-lg lowercase mt-2 font-bold italic">Manage your fleet and upcoming sessions.</p>
+          <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Your Hub.</h2>
+          <p className="text-text-main text-base md:text-lg lowercase mt-2 font-bold">Manage your fleet and upcoming sessions.</p>
           {!profile.phone && (
             <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
                   <Phone size={14} />
                 </div>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest italic">Link your phone number (OPay / Moniepoint) for verified updates.</p>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Link your phone number (OPay / Moniepoint) for verified updates.</p>
               </div>
               <button onClick={() => navigate('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
             </div>
@@ -1683,7 +1793,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="flex-1 md:flex-none bg-card px-4 md:px-6 py-3 rounded-2xl border border-border flex flex-col items-center justify-center min-w-[100px] md:min-w-[120px]">
-            <span className="text-[9px] md:text-[10px] font-black text-text-main uppercase tracking-widest italic">Credits</span>
+            <span className="text-[9px] md:text-[10px] font-black text-text-main uppercase tracking-widest">Credits</span>
             <span className="text-xl md:text-2xl font-black text-accent">{profile.credits || 0}</span>
           </div>
           <div className="relative">
@@ -1704,12 +1814,12 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
           {upcoming.length > 0 ? (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] mb-4 block italic">Up Next</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] mb-4 block">Up Next</span>
                 <div className="text-3xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 leading-tight">
                   {upcoming[0].businessName} <br />
-                  <span className="opacity-80 text-xl md:text-3xl italic">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="opacity-80 text-xl md:text-3xl">@ {upcoming[0].slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <div className="inline-flex items-center gap-2 bg-text-main/40 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-text-main italic">
+                <div className="inline-flex items-center gap-2 bg-text-main/40 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-text-main">
                   {upcoming[0].status} • {upcoming[0].vehicleInfo || 'Vehicle Selected'}
                 </div>
               </div>
@@ -1722,7 +1832,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
                 >
                   Reschedule
                 </button>
-                <div className="hidden md:flex flex-1 items-center justify-center px-6 py-4 rounded-2xl border-2 border-text-main/40 text-text-main font-black text-[10px] uppercase tracking-widest italic">
+                <div className="hidden md:flex flex-1 items-center justify-center px-6 py-4 rounded-2xl border-2 border-text-main/40 text-text-main font-black text-[10px] uppercase tracking-widest">
                   ETA 45m
                 </div>
               </div>
@@ -1733,8 +1843,8 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
                     <Calendar size={28} className="text-text-main" />
                   </div>
                   <div>
-                    <h3 className="text-xl md:text-2xl font-black text-text-main uppercase italic">No Active Bookings</h3>
-                    <p className="text-xs md:text-sm text-text-main font-black lowercase mt-1 md:mt-2 italic opacity-80">Your garage is resting. Schedule a session to keep it pristine.</p>
+                    <h3 className="text-xl md:text-2xl font-black text-text-main uppercase">No Active Bookings</h3>
+                    <p className="text-xs md:text-sm text-text-main font-black lowercase mt-1 md:mt-2 opacity-80">Your garage is resting. Schedule a session to keep it pristine.</p>
                   </div>
             </div>
           )}
@@ -1763,7 +1873,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
                 <CarFront size={32} />
               </div>
               <div>
-                <div className="font-bold text-text-main italic uppercase">{car.make} {car.model}</div>
+                <div className="font-bold text-text-main uppercase">{car.make} {car.model}</div>
                 <div className="text-[10px] text-text-dim font-bold tracking-[0.2em] mt-1">{car.plate}</div>
                 <div className="mt-2 flex items-center gap-2">
                   <div className={cn(
@@ -2003,8 +2113,8 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
       />
       <header className="mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
         <div>
-          <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">AutoLux Dashboard <span className="text-[10px] md:text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full ml-1 font-black uppercase not-italic border border-accent/10">BETA</span></h2>
-          <p className="text-text-main mt-1 lowercase font-black italic">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
+          <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase leading-none">AutoLux Dashboard <span className="text-[10px] md:text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full ml-1 font-black uppercase not-italic border border-accent/10">BETA</span></h2>
+          <p className="text-text-main mt-1 lowercase font-black">{profile.role === 'owner' ? 'Administrative Control' : 'Personal Performance'}</p>
         </div>
       </header>
 
@@ -2013,11 +2123,11 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
         {/* Main Stat: Today's Revenue */}
         <div className="md:col-span-2 md:row-span-1 bento-card flex flex-col justify-between border-t-4 border-t-accent p-6 md:p-8">
           <div>
-            <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">
+            <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em]">
               {profile.role === 'worker' ? "Personal Unit Output" : "Live: Today's Revenue"}
             </span>
             <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(stats.todayRevenue)}</div>
-            <p className="text-[10px] md:text-xs text-text-main mt-2 font-black italic">Synced from {stats.todayCount} service units completed today.</p>
+            <p className="text-[10px] md:text-xs text-text-main mt-2 font-black">Synced from {stats.todayCount} service units completed today.</p>
           </div>
           <div className="mt-8 flex items-end gap-1.5 h-16">
             {[30, 45, 20, 60, 40, 75, 95].map((h, i) => (
@@ -2043,7 +2153,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
               </div>
               <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Liquid Balance</span>
+                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em]">Liquid Balance</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(availableBalance)}</div>
                   <button 
                     onClick={() => setIsWithdrawModalOpen(true)}
@@ -2054,18 +2164,18 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
                   </button>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">In Queue (Manual)</span>
+                  <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em]">In Queue (Manual)</span>
                   <div className="text-4xl font-black mt-2 tracking-tighter text-amber-500 font-bold">{formatCurrency(stats.pendingPayouts || 0)}</div>
-                  <p className="text-[8px] text-text-main font-black uppercase mt-1 italic">Pending admin wire transfer</p>
+                  <p className="text-[8px] text-text-main font-black uppercase mt-1">Pending admin wire transfer</p>
                   
                   {recentWithdrawals.length > 0 && (
                     <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2">
-                       <span className="text-[8px] font-black text-text-main uppercase tracking-widest italic">Payout History</span>
+                       <span className="text-[8px] font-black text-text-main uppercase tracking-widest">Payout History</span>
                        {recentWithdrawals.map((w) => (
                          <div key={w.id} className="flex justify-between items-center bg-text-main/5 p-2 rounded-lg border border-border">
                             <div className="overflow-hidden">
                                <div className="text-[9px] font-black text-text-main leading-tight uppercase truncate">{w.bankName}</div>
-                               <div className="text-[7px] text-text-main font-bold uppercase italic opacity-70">{w.accountNumber}</div>
+                               <div className="text-[7px] text-text-main font-bold uppercase opacity-70">{w.accountNumber}</div>
                             </div>
                             <div className="text-right flex-shrink-0">
                                <div className="text-[9px] font-black text-accent">{formatCurrency(w.amount)}</div>
@@ -2091,7 +2201,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
           {profile.role === 'worker' ? (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Daily Goal Progress</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em]">Daily Goal Progress</span>
                 <div className="flex items-end gap-2 mt-2">
                   <div className="text-5xl font-black tracking-tighter text-text-main">{stats.todayCount}</div>
                   <div className="text-xl font-black text-text-main/60 mb-1">/ 15</div>
@@ -2106,11 +2216,11 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-black text-success flex items-center gap-1 uppercase italic">
+                  <div className="text-[10px] font-black text-success flex items-center gap-1 uppercase">
                     <Award size={12} />
                     <span>Rank: Top 15%</span>
                   </div>
-                  <p className="text-[9px] text-text-main font-black mt-1 lowercase italic">Great job! You're outperforming 85% of staff today.</p>
+                  <p className="text-[9px] text-text-main font-black mt-1 lowercase">Great job! You're outperforming 85% of staff today.</p>
                 </div>
                 <div className="text-2xl font-black text-success">#{Math.floor(Math.random() * 3) + 1}</div>
               </div>
@@ -2118,7 +2228,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
           ) : (
             <>
               <div>
-                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] italic">Volume (24h)</span>
+                <span className="text-[10px] font-black text-text-main uppercase tracking-[0.2em]">Volume (24h)</span>
                 <div className="text-5xl font-black mt-2 tracking-tighter text-text-main">{stats.todayCount}</div>
               </div>
               <div className="mt-4">
@@ -2142,16 +2252,16 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
            <div className="w-12 h-12 rounded-full border-2 border-text-main/20 flex items-center justify-center text-text-main mb-3 group-hover:scale-110 transition">
              <Plus size={24} />
            </div>
-           <div className="font-black text-lg text-text-main uppercase italic tracking-tighter">New Wash</div>
-           <div className="text-[10px] text-text-main font-black uppercase tracking-widest mt-1 italic opacity-70">Quick Log</div>
+           <div className="font-black text-lg text-text-main uppercase tracking-tighter">New Wash</div>
+           <div className="text-[10px] text-text-main font-black uppercase tracking-widest mt-1 opacity-70">Quick Log</div>
         </div>
 
 
         {/* Today's Queue / Upcoming Bookings */}
         <div className="md:col-span-2 bento-card">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-black text-text-main uppercase tracking-wider italic">Today's Queue</span>
-            <span className="text-[10px] font-black text-accent uppercase tracking-widest italic">{upcomingBookings.length} pending</span>
+            <span className="text-xs font-black text-text-main uppercase tracking-wider">Today's Queue</span>
+            <span className="text-[10px] font-black text-accent uppercase tracking-widest">{upcomingBookings.length} pending</span>
           </div>
           <div className="space-y-4">
             {upcomingBookings.map(booking => (
@@ -2161,8 +2271,8 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
                       <Calendar size={18} />
                    </div>
                    <div>
-                     <p className="font-black text-sm text-text-main tracking-tight uppercase italic">{booking.vehicleInfo || 'Service Request'}</p>
-                     <p className="text-[10px] font-black uppercase text-text-main tracking-widest italic opacity-70">
+                     <p className="font-black text-sm text-text-main tracking-tight uppercase">{booking.vehicleInfo || 'Service Request'}</p>
+                     <p className="text-[10px] font-black uppercase text-text-main tracking-widest opacity-70">
                        Slot: {booking.slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                      </p>
                    </div>
@@ -2173,7 +2283,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
                       disabled={assigningId === booking.id}
                       value=""
                       onChange={(e) => handleAssignWorker(booking, e.target.value)}
-                      className="bg-bg/50 text-text-main px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40 font-black italic shadow-lg"
+                      className="bg-bg/50 text-text-main px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40 font-black shadow-lg"
                     >
                       <option value="" disabled className="bg-card text-text-main">Assign Pro</option>
                       {workers.map(w => (
@@ -2196,7 +2306,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
             ))}
             {upcomingBookings.length === 0 && (
               <div className="text-center py-6">
-                <p className="text-xs text-text-dim italic">No bookings in the queue...</p>
+                <p className="text-xs text-text-dim">No bookings in the queue...</p>
               </div>
             )}
           </div>
@@ -2367,7 +2477,7 @@ function RoleCard({ icon, title, desc, onClick, highlight, loading, disabled }: 
       <h3 className="text-3xl font-black mb-4 uppercase tracking-tighter leading-none">{title}</h3>
       <p className={cn(
         "text-sm leading-relaxed mb-10 font-bold", 
-        highlight ? "text-bg/80 italic font-black" : "text-text-main/70 lowercase font-bold italic"
+        highlight ? "text-bg/80 font-black" : "text-text-main/70 lowercase font-bold"
       )}>
         {desc}
       </p>
@@ -2461,7 +2571,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
         <div className="p-8 md:p-12">
           <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              <h3 className="text-3xl md:text-4xl font-black text-text-main uppercase italic tracking-tighter leading-none">Book at {business.name}</h3>
+              <h3 className="text-3xl md:text-4xl font-black text-text-main uppercase tracking-tighter leading-none">Book at {business.name}</h3>
               <p className="text-text-dim text-sm mt-3 font-bold uppercase tracking-wider">Step {step} of 4 — {
                 step === 1 ? 'Choose Vehicle' : 
                 step === 2 ? 'Select Tier' : 
@@ -2498,7 +2608,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                           <CarFront size={28} strokeWidth={1.5} />
                         </div>
                         <div className="text-left">
-                          <p className="font-black text-xl tracking-tighter uppercase italic leading-none mb-1">{v.make} {v.model}</p>
+                          <p className="font-black text-xl tracking-tighter uppercase leading-none mb-1">{v.make} {v.model}</p>
                           <p className={cn("text-xs font-black tracking-widest font-mono", selectedVehicle?.includes(v.plate) ? "text-white/70" : "text-text-dim/60")}>{v.plate}</p>
                         </div>
                       </div>
@@ -2514,7 +2624,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                 <div className="p-16 border-2 border-dashed border-border rounded-[2.5rem] text-center space-y-6">
                   <CarFront className="mx-auto opacity-20" size={56} />
                   <div>
-                    <h4 className="text-text-main font-black uppercase italic tracking-tighter text-xl">Garage Vacant</h4>
+                    <h4 className="text-text-main font-black uppercase tracking-tighter text-xl">Garage Vacant</h4>
                     <p className="text-sm text-text-dim mt-2 lowercase max-w-xs mx-auto">Initialize a vehicle unit in your garage first to begin the booking flow.</p>
                   </div>
                   <button onClick={onClose} className="text-accent text-[10px] font-black uppercase tracking-widest border-b border-accent/20 pb-1">Assemble Unit Now →</button>
@@ -2537,8 +2647,8 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                   <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'basic' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
                     <Zap size={24} />
                   </div>
-                  <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Basic Wash</p>
-                  <p className="text-3xl font-black italic tracking-tighter text-text-main">$15</p>
+                  <p className="font-black text-sm uppercase tracking-widest mb-1">Basic Wash</p>
+                  <p className="text-3xl font-black tracking-tighter text-text-main">$15</p>
                 </button>
                 <button 
                   onClick={() => setSelectedPlan('premium')}
@@ -2550,8 +2660,8 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                   <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'premium' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
                     <Sparkles size={24} />
                   </div>
-                  <p className="font-black text-sm uppercase tracking-widest mb-1 italic">Premium Care</p>
-                  <p className="text-3xl font-black italic tracking-tighter text-text-main">$25</p>
+                  <p className="font-black text-sm uppercase tracking-widest mb-1">Premium Care</p>
+                  <p className="text-3xl font-black tracking-tighter text-text-main">$25</p>
                   <div className="absolute top-4 right-4 bg-white text-accent px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest shadow-lg">Elite</div>
                 </button>
               </div>
@@ -2573,7 +2683,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                     <Store size={28} />
                    </div>
                    <div className="text-left flex-1">
-                     <p className="font-black text-lg uppercase tracking-tighter italic leading-none mb-1">In-Station</p>
+                     <p className="font-black text-lg uppercase tracking-tighter leading-none mb-1">In-Station</p>
                      <p className={cn("text-xs lowercase", serviceType === 'in-station' ? "text-white/70" : "text-text-dim")}>Visit {business.name} and get served instantly.</p>
                    </div>
                    <div className={cn("text-sm font-black", serviceType === 'in-station' ? "text-white" : "text-accent")}>FREE</div>
@@ -2589,7 +2699,7 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                     <MapPin size={28} />
                    </div>
                    <div className="text-left flex-1">
-                     <p className="font-black text-lg uppercase tracking-tighter italic leading-none mb-1">Mobile Service</p>
+                     <p className="font-black text-lg uppercase tracking-tighter leading-none mb-1">Mobile Service</p>
                      <p className={cn("text-xs lowercase", serviceType === 'home-service' ? "text-white/70" : "text-text-dim")}>Our professional comes to your specific location.</p>
                    </div>
                    <div className={cn("text-sm font-black", serviceType === 'home-service' ? "text-white" : "text-accent")}>+$10</div>
@@ -2628,19 +2738,19 @@ function BookingModal({ business, profile, onClose }: { business: Business, prof
                 <div className="space-y-4">
                    <div className="flex justify-between items-center text-sm">
                       <span className="font-bold text-text-main/50 lowercase">Unit ID</span>
-                      <span className="text-text-main font-black italic uppercase tracking-tighter truncate max-w-[150px]">{selectedVehicle}</span>
+                      <span className="text-text-main font-black uppercase tracking-tighter truncate max-w-[150px]">{selectedVehicle}</span>
                    </div>
                    <div className="flex justify-between items-center text-sm">
                       <span className="font-bold text-text-main/50 lowercase">Engagement</span>
-                      <span className="text-text-main font-black italic uppercase tracking-tighter">{serviceType.replace('-', ' ')}</span>
+                      <span className="text-text-main font-black uppercase tracking-tighter">{serviceType.replace('-', ' ')}</span>
                    </div>
                    <div className="flex justify-between items-center text-sm">
                       <span className="font-bold text-text-main/50 lowercase">Service Tier</span>
-                      <span className="text-text-main font-black italic uppercase tracking-tighter">{selectedPlan}</span>
+                      <span className="text-text-main font-black uppercase tracking-tighter">{selectedPlan}</span>
                    </div>
                    <div className="border-t border-accent/20 my-4 pt-4 flex justify-between items-end">
-                      <span className="text-sm font-black text-text-main uppercase italic tracking-tighter">Total Due</span>
-                      <span className="text-xl font-black text-accent italic">
+                      <span className="text-sm font-black text-text-main uppercase tracking-tighter">Total Due</span>
+                      <span className="text-xl font-black text-accent">
                         {formatCurrency((selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0))}
                       </span>
                    </div>
@@ -2789,8 +2899,8 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
       {/* Search Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-border overflow-hidden relative">
         <div className="relative z-10 p-2 md:p-0">
-          <h2 className="text-3xl md:text-5xl font-black text-text-main uppercase tracking-tighter mb-3 italic leading-none">Explore Ecosystem.</h2>
-          <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl font-bold italic">Find premium wash labs, professional components, and mobile experts in your sector.</p>
+          <h2 className="text-3xl md:text-5xl font-black text-text-main uppercase tracking-tighter mb-3 leading-none">Explore Ecosystem.</h2>
+          <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl font-bold">Find premium wash labs, professional components, and mobile experts in your sector.</p>
         </div>
         <div className="flex bg-bg rounded-[1.5rem] border border-border p-3 md:min-w-[400px] relative z-10 mx-2 md:mx-0 shadow-inner group focus-within:border-accent/40 transition-colors">
           <Search className="text-text-dim mx-4 self-center group-focus-within:text-accent transition-colors" size={24} />
@@ -2834,13 +2944,13 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
           <div className="bg-accent text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest shadow-2xl mb-4 rotate-[-2deg]">
             Marketplace Launching Soon
           </div>
-          <p className="text-text-main text-xs font-black italic max-w-xs text-center opacity-80 lowercase">
+          <p className="text-text-main text-xs font-black max-w-xs text-center opacity-80 lowercase">
             we are currently onboarding high-fidelity parts vendors and detailing labs. ecosystem supply drops begin shortly.
           </p>
         </div>
 
         <div className="flex items-center justify-between mb-8 opacity-40">
-          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2 italic">
+          <h3 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-2">
             <ShoppingBag className="text-accent" /> Marketplace Picks
           </h3>
           <div className="flex bg-bg rounded-xl border border-border p-1">
@@ -2878,14 +2988,14 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
                        <ShieldCheck className="text-accent" size={14} />
                        <p className="text-accent text-[9px] font-black uppercase tracking-[0.25em]">{item.vendor || 'Authorized Lab'}</p>
                     </div>
-                    <h4 className="font-black text-3xl md:text-2xl text-text-main uppercase italic tracking-tighter leading-none mb-3">{item.name}</h4>
+                    <h4 className="font-black text-3xl md:text-2xl text-text-main uppercase tracking-tighter leading-none mb-3">{item.name}</h4>
                   </div>
                   <div className="flex flex-col gap-6 mt-auto">
-                    <p className="text-4xl md:text-3xl font-black text-text-main italic tracking-tighter leading-none">{formatCurrency(item.price)}</p>
+                    <p className="text-4xl md:text-3xl font-black text-text-main tracking-tighter leading-none">{formatCurrency(item.price)}</p>
                     <button 
                       onClick={() => handleBuy(item)}
                       disabled={buying === item.id}
-                      className="w-full bg-accent text-white py-6 md:py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target italic"
+                      className="w-full bg-accent text-white py-6 md:py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target"
                     >
                       {buying === item.id ? <RefreshCw className="animate-spin mx-auto" size={18} /> : "Initialize Order →"}
                     </button>
@@ -2896,7 +3006,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
           ) : (
             <div className="col-span-full py-32 text-center bg-card/50 rounded-[4rem] border border-dashed border-border/60 mx-4 md:mx-0">
                <ShoppingBag className="mx-auto text-text-dim opacity-10 mb-10" size={120} />
-               <h4 className="text-3xl font-black text-text-main italic uppercase tracking-tighter mb-4">Inventory Cycle Empty</h4>
+               <h4 className="text-3xl font-black text-text-main uppercase tracking-tighter mb-4">Inventory Cycle Empty</h4>
                <p className="text-sm text-text-dim lowercase max-w-xs mx-auto font-medium">Re-sync in progress. New units will be broadcasted to this classification shortly.</p>
             </div>
           )}
@@ -2912,7 +3022,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
             </div>
             <div>
               <h4 className="text-xl font-black text-text-main uppercase tracking-tight">Expand Your Reach</h4>
-              <p className="text-sm text-text-dim max-w-md mt-1 italic font-bold">Register your wash station to appear in searches and receive instant bookings from our curated community.</p>
+              <p className="text-sm text-text-dim max-w-md mt-1 font-bold">Register your wash station to appear in searches and receive instant bookings from our curated community.</p>
             </div>
           </div>
           <button 
@@ -3174,11 +3284,11 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 opacity-50">
         <div className="bg-bg p-4 rounded-xl border border-border">
           <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Status</span>
-          <p className="text-sm font-black text-white uppercase italic">Active Service</p>
+          <p className="text-sm font-black text-white uppercase">Active Service</p>
         </div>
         <div className="bg-bg p-4 rounded-xl border border-border">
           <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Intensity</span>
-          <p className="text-sm font-black text-accent uppercase italic">{vehicle.intensity}</p>
+          <p className="text-sm font-black text-accent uppercase">{vehicle.intensity}</p>
         </div>
       </div>
     </motion.div>
@@ -3297,7 +3407,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-24 px-4 md:px-0">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
-          <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">Vehicle Garage.</h2>
+          <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none">Vehicle Garage.</h2>
           <div className="flex items-center gap-3 mt-3">
              <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 border border-accent/20 rounded-full">
                <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
@@ -3386,7 +3496,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
 
               <div className="p-8 space-y-6">
                 <div>
-                  <h3 className="text-2xl font-black text-white tracking-tighter uppercase italic">{vehicle.make} {vehicle.model}</h3>
+                  <h3 className="text-2xl font-black text-white tracking-tighter uppercase">{vehicle.make} {vehicle.model}</h3>
                   <p className="font-mono text-xs text-text-dim uppercase tracking-widest mt-1">{vehicle.plate}</p>
                 </div>
 
@@ -3416,7 +3526,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
             <div className="w-20 h-20 bg-white/5 rounded-[2rem] flex items-center justify-center mb-6">
               <CarFront className="w-10 h-10 text-white/20" />
             </div>
-            <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">No Units Detected</h3>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">No Units Detected</h3>
             <p className="text-sm text-text-dim mt-2 max-w-xs mx-auto leading-relaxed">
               Your fleet registry is empty.
             </p>
@@ -3435,7 +3545,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-accent" />
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">New Fleet Unit</h3>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">New Fleet Unit</h3>
                 <button onClick={() => setShowAdd(false)} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors"><X size={20} className="text-text-dim" /></button>
               </div>
 
@@ -3628,7 +3738,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
     <div className="space-y-8 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">My Garage</h2>
+          <h2 className="text-4xl font-black text-white uppercase tracking-tighter">My Garage</h2>
           <p className="text-text-dim text-sm lowercase mt-1">Manage your fleet and track predictive health metrics.</p>
         </div>
         
@@ -3674,7 +3784,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
              >
                 <div className="absolute top-0 left-0 w-full h-1 bg-accent" />
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-black text-text-main uppercase italic tracking-tighter">Registration</h3>
+                  <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Registration</h3>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={isScannerOpen ? stopScanning : startScanning}
@@ -3825,7 +3935,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
       {vehicles.length === 0 ? (
         <div className="bento-card py-20 text-center border-dashed border-2">
           <CarFront size={64} className="text-text-dim mx-auto mb-6 opacity-10" />
-          <h3 className="text-2xl font-black text-text-main mb-4 uppercase tracking-tighter italic">Garage Is Empty</h3>
+          <h3 className="text-2xl font-black text-text-main mb-4 uppercase tracking-tighter">Garage Is Empty</h3>
           <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to your dashboard to track performance.</p>
           <button 
             onClick={() => setShowAdd(true)}
@@ -4153,7 +4263,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto pb-24 px-4 md:px-0">
       <header className="text-center mb-10 md:mb-16">
-        <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 italic leading-none">
+        <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase mb-4 leading-none">
           {isCustomer ? 'Subscription Joy.' : 'Scale Your Flow.'}
         </h2>
         <p className="text-text-dim text-base md:text-lg lowercase leading-relaxed max-w-xl mx-auto">
@@ -4179,7 +4289,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
                    </p>
                    {!profile.email && (
                      <div className="mb-6 space-y-3">
-                        <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-60">Update Deployment Email</label>
+                        <label className="text-[10px] font-black text-text-main uppercase tracking-widest opacity-60">Update Deployment Email</label>
                         <div className="flex gap-2">
                           <input 
                             value={emailInput}
@@ -4257,7 +4367,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
               )}>
                 {tier.icon}
               </div>
-              <h3 className={cn("text-2xl md:text-3xl font-black mb-3 uppercase italic tracking-tight", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-text-main")}>{tier.name}</h3>
+              <h3 className={cn("text-2xl md:text-3xl font-black mb-3 uppercase tracking-tight", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-text-main")}>{tier.name}</h3>
               <div className="flex items-baseline gap-1">
                 <span className={cn("text-4xl md:text-5xl font-black tracking-tighter", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-text-main")}>{tier.price}</span>
                 <span className={cn("text-sm font-bold opacity-60", (tier.id === 'elite' || tier.id === 'unlimited_wash') ? "text-bg" : "text-text-main")}>/MO</span>
@@ -4602,7 +4712,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
                <Award size={16} className="text-accent" />
                <span className="text-[10px] font-black text-accent uppercase tracking-widest">Maintenance Tip for Customer</span>
              </div>
-             <p className="text-text-main italic font-medium leading-relaxed">"{profile.name} recommends: Get regular waxing for that {form.carModel} to protect the finish."</p>
+             <p className="text-text-main font-medium leading-relaxed">"{profile.name} recommends: Get regular waxing for that {form.carModel} to protect the finish."</p>
           </div>
 
           <div className="flex gap-4">
@@ -4631,7 +4741,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="max-w-xl mx-auto pb-24">
       <header className="mb-8 md:mb-10 text-center">
-        <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase italic leading-none">Log Job</h2>
+        <h2 className="text-3xl md:text-4xl font-black text-text-main tracking-tight uppercase leading-none">Log Job</h2>
         <p className="text-text-dim mt-2 lowercase font-medium">Capture current vehicle details instantly.</p>
       </header>
 
@@ -4833,7 +4943,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
         <button 
           type="submit" 
           disabled={submitting || !form.carModel || !form.plateNumber}
-          className="w-full py-6 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4 italic"
+          className="w-full py-6 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4"
         >
           {submitting ? (
             <div className="flex items-center justify-center gap-3">
@@ -4854,7 +4964,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
              <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
-             <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Transmission Registry</h3>
+             <h3 className="text-xl font-black text-text-main uppercase tracking-tighter">Transmission Registry</h3>
           </div>
           <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">Active Verification Flow</span>
         </div>
@@ -5195,7 +5305,7 @@ function OwnerPerformanceView() {
           
           {workers.length === 0 && (
             <div className="bento-card text-center py-10 border-dashed opacity-50">
-              <p className="text-xs text-text-dim italic lowercase">No active staff in selected temporal range.</p>
+              <p className="text-xs text-text-dim lowercase">No active staff in selected temporal range.</p>
             </div>
           )}
         </div>
@@ -5369,7 +5479,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto pb-24 md:pb-20 px-4 md:px-0">
       <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6 bg-card p-8 md:p-0 md:bg-transparent rounded-3xl md:rounded-none border border-border md:border-none">
         <div className="text-center md:text-left">
-          <h2 className="text-3xl md:text-5xl font-black text-text-main tracking-tighter uppercase italic leading-none">Operational Ledger</h2>
+          <h2 className="text-3xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Operational Ledger</h2>
           <p className="text-text-dim mt-3 font-medium lowercase">Full cryptographic history of service transactions.</p>
         </div>
         <button 
@@ -5423,7 +5533,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                     onChange={e => setFilters(prev => ({ ...prev, workerId: e.target.value }))}
                     className="w-full bg-bg border border-border rounded-xl px-5 py-4 text-sm font-bold text-text-main outline-none focus:ring-1 focus:ring-accent appearance-none scrollable-dropdown touch-target"
                   >
-                    <option value="all" className="bg-card text-text-main italic">ALL OPERATIVES</option>
+                    <option value="all" className="bg-card text-text-main">ALL OPERATIVES</option>
                     {workers.map(w => <option key={w.uid} value={w.uid} className="bg-card text-text-main font-bold">{w.name.toUpperCase()}</option>)}
                   </select>
                 </div>
@@ -5531,7 +5641,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   <CarFront size={32} />
                 </div>
                 <div>
-                  <h4 className="font-black text-2xl text-text-main uppercase italic tracking-tighter leading-none mb-1">{wash.carModel}</h4>
+                  <h4 className="font-black text-2xl text-text-main uppercase tracking-tighter leading-none mb-1">{wash.carModel}</h4>
                   <p className="text-xs text-text-dim font-black tracking-widest uppercase opacity-60 mb-3">{wash.plateNumber}</p>
                   <div className="flex items-center gap-2 text-[10px] uppercase font-black text-accent tracking-wider">
                     <Calendar size={12} />
@@ -5540,7 +5650,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                 </div>
               </div>
               <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4">
-                <p className="text-4xl font-black text-text-main italic tracking-tighter leading-none">{formatCurrency(wash.price)}</p>
+                <p className="text-4xl font-black text-text-main tracking-tighter leading-none">{formatCurrency(wash.price)}</p>
                 <div className="flex flex-col items-end gap-3">
                   {wash.isPending ? (
                     <div className="flex items-center gap-2 text-accent animate-pulse font-black text-[9px] uppercase tracking-widest bg-accent/5 px-4 py-2 rounded-full border border-accent/20">
@@ -5572,9 +5682,9 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                   <div className="w-6 h-6 bg-accent rounded-md flex items-center justify-center shadow-lg">
                     <Award size={14} className="text-white" />
                   </div>
-                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em] italic">PROACTIVE MAINTENANCE</span>
+                  <span className="text-[10px] font-black text-accent uppercase tracking-[0.2em]">PROACTIVE MAINTENANCE</span>
                 </div>
-                <p className="text-base text-text-main leading-relaxed font-bold italic lowercase italic">"{wash.maintenanceTip}"</p>
+                <p className="text-base text-text-main leading-relaxed font-bold lowercase">"{wash.maintenanceTip}"</p>
                 <div className="absolute -right-4 -bottom-4 opacity-5 text-accent group-hover:opacity-10 transition-opacity">
                   <Zap size={80} />
                 </div>
@@ -5588,7 +5698,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-text-dim">
                        <Users size={16} />
                      </div>
-                     <span className="text-[10px] font-black text-text-dim uppercase tracking-widest italic">{wash.workerName}</span>
+                     <span className="text-[10px] font-black text-text-dim uppercase tracking-widest">{wash.workerName}</span>
                    </div>
                    <div className="flex gap-2">
                      {workers.find(w => w.uid === wash.workerId)?.badges?.map((badge: any) => (
@@ -5605,7 +5715,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
         ))}
         {filteredAndSortedWashes.length === 0 && (
           <div className="bento-card text-center py-20 border-dashed">
-            <p className="text-text-dim italic">No service history found matching current filters.</p>
+            <p className="text-text-dim">No service history found matching current filters.</p>
           </div>
         )}
       </div>
@@ -5779,10 +5889,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-24 md:pb-20 px-4 md:px-0">
       <header className="mb-10 text-center md:text-left md:mb-12">
-        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none mb-4">
+        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none mb-4">
           {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
         </h2>
-        <p className="text-text-main text-base md:text-lg lowercase leading-relaxed font-black italic">
+        <p className="text-text-main text-base md:text-lg lowercase leading-relaxed font-black">
           {profile.role === 'owner' ? "Configure your business identity and boundaries." : "Customize your interface and profile preferences."}
         </p>
       </header>
@@ -5796,7 +5906,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Legal Identity / Display Name</label>
+                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Legal Identity / Display Name</label>
                 <input 
                   value={settings.name}
                   onChange={e => setSettings(prev => ({ ...prev, name: e.target.value }))}
@@ -5804,7 +5914,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 />
               </div>
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Primary Contact (Phone)</label>
+                <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Primary Contact (Phone)</label>
                 <input 
                   value={settings.phone}
                   onChange={e => setSettings(prev => ({ ...prev, phone: e.target.value }))}
@@ -5850,22 +5960,22 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     </div>
                     
                     <div className="text-center">
-                      <p className="text-xs font-black text-text-main uppercase tracking-widest mb-1 italic">STATION BRANDING</p>
+                      <p className="text-xs font-black text-text-main uppercase tracking-widest mb-1">STATION BRANDING</p>
                       <p className="text-[9px] text-text-main/50 font-bold lowercase max-w-[200px] leading-tight">upload your custom logo to appear on customer receipts and dashboards (max 2mb)</p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Business Designation</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Business Designation</label>
                     <input 
                       value={settings.businessName}
                       onChange={e => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
                       placeholder="e.g. LAGOS PREMIUM WASH"
-                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black italic uppercase"
+                      className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase"
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Physical Sector Address</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Physical Sector Address</label>
                     <input 
                       value={settings.businessAddress}
                       onChange={e => setSettings(prev => ({ ...prev, businessAddress: e.target.value }))}
@@ -5874,7 +5984,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Cover Image (URL)</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Cover Image (URL)</label>
                     <div className="relative">
                       <ImageIcon size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" />
                       <input 
@@ -5894,7 +6004,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Sedan (₦)</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest opacity-70">Sedan (₦)</label>
                     <input 
                       type="number"
                       value={settings.pricing.sedan}
@@ -5903,7 +6013,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">SUV (₦)</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest opacity-70">SUV (₦)</label>
                     <input 
                       type="number"
                       value={settings.pricing.suv}
@@ -5912,7 +6022,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest italic opacity-70">Truck (₦)</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest opacity-70">Truck (₦)</label>
                     <input 
                       type="number"
                       value={settings.pricing.truck}
@@ -5929,7 +6039,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   Operational Geofence
                 </label>
                 <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
-                  <p className="text-sm text-text-main leading-relaxed font-black italic">
+                  <p className="text-sm text-text-main leading-relaxed font-black">
                     <span className="text-accent uppercase">What is this?</span> The Operational Geofence is a virtual perimeter for your business. It ensures workers can only log washes when they are physically at the station, preventing fraudulent logs and verifying operational integrity.
                   </p>
                 </div>
@@ -5958,7 +6068,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                         </AdvancedMarker>
                       </Map>
                       <div className="absolute inset-0 pointer-events-none border-4 border-accent/20 rounded-[2rem] z-10 transition-opacity opacity-50 group-hover:opacity-100" />
-                      <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 uppercase text-[8px] font-black text-white tracking-widest italic">
+                      <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 uppercase text-[8px] font-black text-white tracking-widest">
                         STATION RADAR ACTIVE
                       </div>
                     </div>
@@ -5977,7 +6087,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Coordinate Latitude</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Coordinate Latitude</label>
                     <input 
                       type="number"
                       value={settings.businessLat}
@@ -5986,7 +6096,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1 italic">Coordinate Longitude</label>
+                    <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Coordinate Longitude</label>
                     <input 
                       type="number"
                       value={settings.businessLng}
@@ -6012,7 +6122,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           )}
 
           <div className={`space-y-6 ${profile.role === 'owner' ? 'pt-6 border-t border-border' : ''}`}>
-            <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2 italic">
+            <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center gap-2">
               <Sparkles size={14} className="text-accent" />
               Visual Interface
             </label>
@@ -6022,8 +6132,8 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   {settings.theme === 'light' ? <Sun size={20} /> : <Moon size={20} />}
                 </div>
                 <div>
-                  <h4 className="text-sm font-black text-text-main uppercase tracking-tight italic">Interface Theme</h4>
-                  <p className="text-[10px] text-text-main font-bold uppercase tracking-widest italic opacity-70">Switch between light and dark modes</p>
+                  <h4 className="text-sm font-black text-text-main uppercase tracking-tight">Interface Theme</h4>
+                  <p className="text-[10px] text-text-main font-bold uppercase tracking-widest opacity-70">Switch between light and dark modes</p>
                 </div>
               </div>
               <button 
@@ -6051,7 +6161,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 
           {profile.role === 'owner' && (
             <div className="space-y-2">
-              <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center justify-between italic">
+              <label className="text-xs font-black text-text-main uppercase tracking-widest flex items-center justify-between">
                 <span>Allowed Radius (Meters)</span>
                 <span className="text-accent font-black">{settings.businessRadius}m</span>
               </label>
@@ -6070,7 +6180,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           <button 
             onClick={handleSave}
             disabled={loading}
-            className="w-full bg-accent text-white font-black py-4 rounded-xl uppercase tracking-widest hover:brightness-110 transition active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/20 italic"
+            className="w-full bg-accent text-white font-black py-4 rounded-xl uppercase tracking-widest hover:brightness-110 transition active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/20"
           >
             {loading ? "Processing..." : "Commit Settings"}
           </button>
@@ -6091,7 +6201,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   <Users size={20} className="text-accent" />
                   Staff Registry
                 </label>
-                <p className="text-sm text-text-main leading-relaxed font-black max-w-md italic">
+                <p className="text-sm text-text-main leading-relaxed font-black max-w-md">
                   Provision new worker accounts and manage existing staff permissions. Workers must be added here before they can access the station dashboard.
                 </p>
               </div>
@@ -6124,10 +6234,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     </div>
                     <div>
                       <div className="flex items-center gap-3 mb-1">
-                        <p className="text-lg font-black text-text-main uppercase italic tracking-tighter leading-none">{worker.name}</p>
+                        <p className="text-lg font-black text-text-main uppercase tracking-tighter leading-none">{worker.name}</p>
                         <span className="px-3 py-1 bg-success/10 text-success text-[8px] font-black uppercase rounded-full border border-success/20 tracking-widest">ACTIVE</span>
                       </div>
-                      <p className="text-[10px] text-text-main/60 uppercase tracking-widest font-black italic">
+                      <p className="text-[10px] text-text-main/60 uppercase tracking-widest font-black">
                         {worker.permissions?.canManageTeam ? "UNIT COMMANDER" : "OPERATIONAL SPECIALIST"}
                       </p>
                     </div>
@@ -6137,7 +6247,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     <button 
                       onClick={() => togglePermission(worker.uid, 'canManageTeam')}
                       className={cn(
-                        "w-full sm:w-auto px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md touch-target italic",
+                        "w-full sm:w-auto px-8 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md touch-target",
                         worker.permissions?.canManageTeam 
                           ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white" 
                           : "bg-accent/10 text-accent border border-accent/20 hover:bg-accent hover:text-white shadow-accent/10"
@@ -6153,15 +6263,15 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
               {authorizedEmails.filter(auth => !workers.find(w => w.email === auth.email)).map(auth => (
                 <div key={auth.id} className="flex items-center justify-between p-6 bg-text-main/5 border border-dashed border-border/40 rounded-[1.5rem] group transition-opacity">
                   <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 rounded-xl bg-text-main/5 flex items-center justify-center text-text-main border border-border italic font-black text-sm">
+                    <div className="w-12 h-12 rounded-xl bg-text-main/5 flex items-center justify-center text-text-main border border-border font-black text-sm">
                       ?
                     </div>
                     <div>
                       <div className="flex items-center gap-3 mb-1">
-                        <p className="font-black text-text-main uppercase italic tracking-tighter">{auth.name}</p>
+                        <p className="font-black text-text-main uppercase tracking-tighter">{auth.name}</p>
                         <span className="px-2 py-0.5 bg-accent/10 text-accent text-[8px] font-black uppercase rounded tracking-widest border border-accent/20">PENDING INFILTRATION</span>
                       </div>
-                      <p className="text-[10px] text-text-main font-black tracking-tighter truncate max-w-[200px] italic">
+                      <p className="text-[10px] text-text-main font-black tracking-tighter truncate max-w-[200px]">
                         {auth.email}
                       </p>
                     </div>
@@ -6225,7 +6335,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
                <Plus size={24} />
              </div>
              <div>
-               <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Provision Worker</h3>
+               <h3 className="text-xl font-black text-text-main uppercase tracking-tighter">Provision Worker</h3>
                <p className="text-[10px] text-accent font-black uppercase tracking-widest">Linked Station Access</p>
              </div>
           </div>
@@ -6237,17 +6347,17 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
         <form onSubmit={handleAdd} className="p-8 space-y-8">
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1 italic">Operative Full Name</label>
+              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1">Operative Full Name</label>
               <input 
                 required
                 value={form.name}
                 onChange={e => setForm({...form, name: e.target.value})}
                 placeholder="e.g. JOHN DOE"
-                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase italic"
+                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase"
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1 italic">Protocol Email Address</label>
+              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1">Protocol Email Address</label>
               <div className="relative">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" size={20} />
                 <input 
@@ -6256,10 +6366,10 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
                   value={form.email}
                   onChange={e => setForm({...form, email: e.target.value})}
                   placeholder="operative@washflow.systems"
-                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-base font-black touch-target italic uppercase"
+                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-base font-black touch-target uppercase"
                 />
               </div>
-              <p className="text-[9px] text-text-dim/60 font-black uppercase tracking-widest mt-2 px-2 italic">
+              <p className="text-[9px] text-text-dim/60 font-black uppercase tracking-widest mt-2 px-2">
                 Note: Operative must use this exact Google Email to authenticate.
               </p>
             </div>
@@ -6268,7 +6378,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-accent text-white py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target italic flex items-center justify-center gap-3"
+            className="w-full bg-accent text-white py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target flex items-center justify-center gap-3"
           >
             {loading ? <RefreshCw className="animate-spin" size={18} /> : (
               <>
@@ -6587,7 +6697,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center opacity-20">
                  <Search size={40} className="mx-auto mb-4" />
                  <p className="text-xs font-black uppercase tracking-widest">Waiting for data stream...</p>
-                 <p className="text-[10px] mt-2 italic lowercase text-text-dim">Initiate the lens or select manually from your records.</p>
+                 <p className="text-[10px] mt-2 lowercase text-text-dim">Initiate the lens or select manually from your records.</p>
                </div>
              )}
           </div>
