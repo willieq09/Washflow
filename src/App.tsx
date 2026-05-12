@@ -413,14 +413,18 @@ export default function App() {
           if (docSnap.exists()) {
             setProfile(docSnap.data() as UserProfile);
           } else {
-            const isOwnerEmail = u.email && ADMIN_EMAILS.includes(u.email);
+            const isOwnerEmail = u.email && (ADMIN_EMAILS.includes(u.email) || localStorage.getItem('pending_owner_signup') === 'true');
+            if (localStorage.getItem('pending_owner_signup')) {
+              localStorage.removeItem('pending_owner_signup');
+            }
             
             // Check if this email is an authorized worker
             let assignedRole: any = isOwnerEmail ? 'owner' : null;
             let assignedStationId: string | null = null;
 
             if (!assignedRole && u.email) {
-              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', u.email));
+              const normalizedEmail = u.email.toLowerCase();
+              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
               const authWorkerSnap = await getDocs(authWorkerQuery);
               if (!authWorkerSnap.empty) {
                 const authData = authWorkerSnap.docs[0].data();
@@ -438,7 +442,7 @@ export default function App() {
               photoUrl: u.photoURL || null
             };
             
-            if (assignedRole || u.isAnonymous) {
+            if (assignedRole || u.isAnonymous || u.email) {
                await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
             }
             setProfile(newProfile);
@@ -492,36 +496,59 @@ export default function App() {
   const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean) => {
     setAuthLoading(true);
     try {
+      const cleanDigits = phone.trim().replace(/\D/g, '');
+      const stripped = cleanDigits.replace(/^234/, '').replace(/^0+/, '');
+      const formattedPhone = '+234' + stripped;
+
+      if (stripped.length < 10) {
+        throw new Error("Phone number is too short. Please include your network prefix (e.g. 803...)");
+      }
+
       const cred = await signInAnonymously(auth);
       const u = cred.user;
-      const docRef = doc(db, 'users', u.uid);
       
-      // If logging in, we might want to check if this phone number already exists
-      // But since we are using anonymous auth, we'll just check if the current user doc exists
-      // In a more complex app, we'd query by phone number here.
+      // Look for existing user with this phone number (demo recovery logic)
+      const q = query(collection(db, 'users'), where('phone', '==', formattedPhone), limit(1));
+      const querySnap = await getDocs(q);
       
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
+      if (!querySnap.empty) {
+        const existingDoc = querySnap.docs[0];
+        const existingData = existingDoc.data() as UserProfile;
+        
+        if (existingDoc.id !== u.uid) {
+          // Migrate data to new UID so onAuthStateChanged finds it next time
+          await setDoc(doc(db, 'users', u.uid), {
+            ...existingData,
+            uid: u.uid,
+            name: isLogin ? existingData.name : name, // Update name if provided
+            updatedAt: serverTimestamp()
+          });
+        }
+        
+        setProfile({
+          ...existingData,
+          uid: u.uid,
+          name: isLogin ? existingData.name : name
+        });
+      } else {
+        // Create brand new profile
         const newProfile: UserProfile = {
           uid: u.uid,
           name: name,
-          phone: '+234' + phone,
+          phone: formattedPhone,
           role: 'customer',
           email: '',
           credits: 0,
           vehicles: [],
           theme: 'dark'
         };
-        await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
+        await setDoc(doc(db, 'users', u.uid), { ...newProfile, createdAt: serverTimestamp() });
         setProfile(newProfile);
-      } else {
-        setProfile(docSnap.data() as UserProfile);
       }
       setUser(u);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Phone login error:", error);
-      alert("Registration failed. Please check your connection.");
+      alert("Registration failed: " + (error.message || "Please check your connection."));
     } finally {
       setAuthLoading(false);
     }
@@ -560,10 +587,14 @@ export default function App() {
     }
   };
 
-  const handleEmailLogin = async (name: string, email: string, pass: string, isSignUp: boolean) => {
+  const handleEmailLogin = async (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => {
     setAuthLoading(true);
     try {
       if (isSignUp) {
+        if (isBusiness) {
+          // Store intent to be an owner for the profile creation logic in onAuthStateChanged
+          localStorage.setItem('pending_owner_signup', 'true');
+        }
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         if (userCredential.user) {
           await updateProfile(userCredential.user, { displayName: name });
@@ -989,7 +1020,7 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean) => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => void, authLoading: boolean }) {
   const [mode, setMode] = useState<'business' | 'personal'>('personal');
   const [authMethod, setAuthMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
@@ -1013,7 +1044,7 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
       alert("Please provide a valid " + (isLogin ? "" : "name, ") + "email and password (min 6 chars)");
       return;
     }
-    onEmailLogin(name, email, password, !isLogin);
+    onEmailLogin(name, email, password, !isLogin, mode === 'business');
   };
 
   return (
@@ -6302,14 +6333,17 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.email || !form.name) return;
+    const normalizedEmail = form.email.trim().toLowerCase();
+    if (!normalizedEmail || !form.name) return;
     setLoading(true);
     try {
       await addDoc(collection(db, 'authorized_workers'), {
         ...form,
+        email: normalizedEmail,
         stationId,
         createdAt: serverTimestamp()
       });
+      alert("Operative Provisioned Successfully. They can now login with their email.");
       setForm({ email: '', name: '' });
       onClose();
     } catch (error) {
