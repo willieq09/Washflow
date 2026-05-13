@@ -503,6 +503,14 @@ export default function App() {
     }
   }, [profile]);
 
+  useEffect(() => {
+    if (profile?.theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  }, [profile?.theme]);
+
   const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean, isBusiness?: boolean, email?: string) => {
     setAuthLoading(true);
     try {
@@ -3316,7 +3324,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
                   </div>
                 </div>
                 <div className="p-6">
-                  <h4 className="text-lg font-black text-white uppercase mb-1">{b.name}</h4>
+                  <h4 className="text-lg font-black text-text-main uppercase mb-1">{b.name}</h4>
                   <div className="flex items-center gap-1.5 text-text-dim text-xs mb-6">
                     <MapPin size={12} /> {b.location}
                   </div>
@@ -3348,7 +3356,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
         </div>
         <div className="relative z-10 flex flex-col md:flex-row gap-12">
           <div className="w-full md:w-1/3">
-            <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 leading-none">Auto Care <br/> Experts.</h3>
+            <h3 className="text-3xl font-black text-text-main uppercase tracking-tighter mb-4 leading-none">Auto Care <br/> Experts.</h3>
             <p className="text-text-dim text-sm lowercase leading-relaxed mb-8">Our ecosystem connects you with vetted professionals specializing in premium ceramic coatings, interior restoration, and engine detailing.</p>
             <div className="space-y-4">
               {[
@@ -3369,14 +3377,14 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
             <div className="h-64 rounded-3xl overflow-hidden relative group">
               <img src="https://images.unsplash.com/photo-1601362840469-51e4d8d59085?auto=format&fit=crop&q=80&w=800" className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-6">
-                <h5 className="text-white font-black uppercase text-xs">Premium Ceramic Coating</h5>
+                <h5 className="text-text-main font-black uppercase text-xs">Premium Ceramic Coating</h5>
                 <p className="text-white/60 text-[10px] uppercase tracking-widest mt-1">Starting at $299</p>
               </div>
             </div>
             <div className="h-64 rounded-3xl overflow-hidden relative group">
               <img src="https://images.unsplash.com/photo-1552933529-e359b2477262?auto=format&fit=crop&q=80&w=800" className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-6">
-                <h5 className="text-white font-black uppercase text-xs">Interior Steam Clean</h5>
+                <h5 className="text-text-main font-black uppercase text-xs">Interior Steam Clean</h5>
                 <p className="text-white/60 text-[10px] uppercase tracking-widest mt-1">Starting at $149</p>
               </div>
             </div>
@@ -3409,7 +3417,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-white mb-1">{item.name}</h4>
+                <h4 className="text-sm font-bold text-text-main mb-1">{item.name}</h4>
                 <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">By {item.vendor}</p>
               </div>
               <button 
@@ -3494,7 +3502,7 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
             )}
           </div>
           
-          <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 leading-none">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+          <h3 className="text-3xl font-black text-text-main uppercase tracking-tighter mb-4 leading-none">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
           
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-bg/40 p-4 rounded-2xl border border-border/50 group-hover:border-accent/20 transition-colors">
@@ -3530,7 +3538,7 @@ function VehicleCard({ vehicle, onDelete }: { vehicle: any, onDelete?: (plate: s
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 opacity-50">
         <div className="bg-bg p-4 rounded-xl border border-border">
           <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Status</span>
-          <p className="text-sm font-black text-white uppercase">Active Service</p>
+          <p className="text-sm font-black text-text-main uppercase">Active Service</p>
         </div>
         <div className="bg-bg p-4 rounded-xl border border-border">
           <span className="text-[9px] font-black text-text-dim uppercase tracking-widest block mb-1">Intensity</span>
@@ -3653,7 +3661,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-24 px-4 md:px-0">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
         <div>
-          <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none">Vehicle Garage.</h2>
+          <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Vehicle Garage.</h2>
           <div className="flex items-center gap-3 mt-3">
              <div className="flex items-center gap-2 px-3 py-1 bg-accent/10 border border-accent/20 rounded-full">
                <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
@@ -3742,7 +3750,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
 
               <div className="p-8 space-y-6">
                 <div>
-                  <h3 className="text-2xl font-black text-white tracking-tighter uppercase">{vehicle.make} {vehicle.model}</h3>
+                  <h3 className="text-2xl font-black text-text-main tracking-tighter uppercase">{vehicle.make} {vehicle.model}</h3>
                   <p className="font-mono text-xs text-text-dim uppercase tracking-widest mt-1">{vehicle.plate}</p>
                 </div>
 
@@ -3772,7 +3780,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
             <div className="w-20 h-20 bg-white/5 rounded-[2rem] flex items-center justify-center mb-6">
               <CarFront className="w-10 h-10 text-white/20" />
             </div>
-            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">No Units Detected</h3>
+            <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">No Units Detected</h3>
             <p className="text-sm text-text-dim mt-2 max-w-xs mx-auto leading-relaxed">
               Your fleet registry is empty.
             </p>
@@ -3791,7 +3799,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-accent" />
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">New Fleet Unit</h3>
+                <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">New Fleet Unit</h3>
                 <button onClick={() => setShowAdd(false)} className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-colors"><X size={20} className="text-text-dim" /></button>
               </div>
 
@@ -3979,7 +3987,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
     <div className="space-y-8 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h2 className="text-4xl font-black text-white uppercase tracking-tighter">My Garage</h2>
+          <h2 className="text-4xl font-black text-text-main uppercase tracking-tighter">My Garage</h2>
           <p className="text-text-dim text-sm lowercase mt-1">Manage your fleet and track predictive health metrics.</p>
         </div>
         
@@ -4249,7 +4257,7 @@ function CustomerRatingView({ jobId }: { jobId: string }) {
         <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center text-success mx-auto mb-8">
           <Heart size={40} fill="currentColor" />
         </div>
-        <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">You’re Awesome!</h2>
+        <h2 className="text-4xl font-black text-text-main uppercase tracking-tighter mb-4">You’re Awesome!</h2>
         <p className="text-text-dim lowercase leading-relaxed">Your feedback helps {wash?.workerName} and the station improve. See you next time!</p>
       </motion.div>
     );
@@ -6097,9 +6105,9 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
       
       onUpdate({ ...profile, ...settings });
       alert("Operating environment synchronized successfully.");
-    } catch (error) {
-      console.error("Save error:", error);
-      alert("Failed to commit settings to the ledger.");
+    } catch (error: any) {
+      console.error("Save error details for analysis:", error);
+      handleFirestoreError(error, OperationType.WRITE, `settings/${profile.uid}`);
     } finally {
       setLoading(false);
     }
@@ -6108,7 +6116,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl mx-auto pb-24 md:pb-20 px-4 md:px-0">
       <header className="mb-10 text-center md:text-left md:mb-12">
-        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none mb-4">
+        <h2 className="text-3xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none mb-4">
           {profile.role === 'owner' ? "Operating Environment." : "Personal Settings."}
         </h2>
         <p className="text-text-main text-base md:text-lg lowercase leading-relaxed font-black">
@@ -6345,7 +6353,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
               <Sparkles size={14} className="text-accent" />
               Visual Interface
             </label>
-            <div className="flex items-center justify-between bg-bg/50 p-4 rounded-2xl border border-border">
+            <div className="flex items-center justify-between bg-bg p-4 rounded-2xl border border-border shadow-inner">
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-xl transition-colors ${settings.theme === 'light' ? 'bg-accent/20 text-accent' : 'bg-white/5 text-accent'}`}>
                   {settings.theme === 'light' ? <Sun size={20} /> : <Moon size={20} />}
@@ -6370,9 +6378,9 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
               >
                 <motion.div 
                   animate={{ x: settings.theme === 'light' ? 26 : 4 }}
-                  className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center"
+                  className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center border border-border/20"
                 >
-                   {settings.theme === 'light' ? <Sun size={12} className="text-accent" /> : <Moon size={12} className="text-bg" />}
+                   {settings.theme === 'light' ? <Sun size={12} className="text-accent" /> : <Moon size={12} className="text-accent" />}
                 </motion.div>
               </button>
             </div>
@@ -6399,9 +6407,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
           <button 
             onClick={handleSave}
             disabled={loading}
-            className="w-full bg-accent text-white font-black py-4 rounded-xl uppercase tracking-widest hover:brightness-110 transition active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/20"
+            className="w-full bg-accent text-white font-black py-5 rounded-2xl uppercase tracking-[0.2em] text-xs hover:brightness-110 transition active:scale-95 disabled:opacity-50 shadow-xl shadow-accent/20 flex items-center justify-center gap-3"
           >
-            {loading ? "Processing..." : "Commit Settings"}
+            {loading ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
+            {loading ? "COMMITTING..." : "COMMIT SETTINGS"}
           </button>
         </div>
 

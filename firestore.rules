@@ -123,7 +123,9 @@ service cloud.firestore {
 
     match /wash_businesses/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isSignedIn() && (isStationOwner() || isAdmin()) && incoming().ownerUid == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /plans/{id} {
