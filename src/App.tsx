@@ -1774,11 +1774,164 @@ function AdminDashboardView() {
 
 // --- View Components ---
 
+function BookingModal({ 
+  isOpen, 
+  onClose, 
+  station, 
+  profile 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  station: Business | null, 
+  profile: UserProfile 
+}) {
+  const [selectedVehicle, setSelectedVehicle] = useState<string>('');
+  const [slot, setSlot] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && profile.vehicles && profile.vehicles.length > 0) {
+      setSelectedVehicle(profile.vehicles[0].plate);
+    }
+  }, [isOpen, profile]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!station || !selectedVehicle || !slot) return;
+    
+    setSubmitting(true);
+    const path = 'bookings';
+    try {
+      const vehicle = profile.vehicles?.find(v => v.plate === selectedVehicle);
+      const vehicleInfo = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.plate})` : selectedVehicle;
+      
+      let price = station.pricing?.sedan || 2500; // fallback
+      const vehicleType = vehicle?.model.toLowerCase().includes('suv') ? 'suv' : 
+                          vehicle?.make.toLowerCase().includes('truck') ? 'truck' : 'sedan';
+      if (station.pricing) {
+        price = (station.pricing as any)[vehicleType] || price;
+      }
+
+      await addDoc(collection(db, 'bookings'), {
+        userId: profile.uid,
+        vehicleId: selectedVehicle,
+        vehicleInfo,
+        businessId: station.id,
+        stationId: station.ownerUid,
+        businessName: station.name,
+        slot: Timestamp.fromDate(new Date(slot)),
+        status: 'pending',
+        serviceType: 'in-station',
+        price,
+        createdAt: serverTimestamp()
+      });
+
+      alert("Booking transmitted. Awaiting station confirmation.");
+      onClose();
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.CREATE, path);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!isOpen || !station) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-bg/80 backdrop-blur-md"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-lg bg-card border border-border p-8 md:p-10 rounded-[3rem] shadow-2xl"
+      >
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter">Initialize Wash</h2>
+              <p className="text-[10px] text-accent font-black uppercase tracking-widest mt-1">Booking @ {station.name}</p>
+            </div>
+            <button onClick={onClose} className="p-2 text-text-dim hover:text-text-main transition-colors"><X size={24} /></button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Vehicle</label>
+                {profile.vehicles && profile.vehicles.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {profile.vehicles.map((v, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedVehicle(v.plate)}
+                        className={cn(
+                          "w-full p-4 rounded-2xl border transition-all flex items-center justify-between",
+                          selectedVehicle === v.plate 
+                            ? "border-accent bg-accent/5 text-text-main shadow-lg" 
+                            : "border-border bg-bg text-text-dim hover:border-text-dim/50"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <CarFront size={20} className={selectedVehicle === v.plate ? "text-accent" : ""} />
+                          <div className="text-left">
+                            <div className="text-sm font-black uppercase leading-none">{v.make} {v.model}</div>
+                            <div className="text-[10px] font-bold mt-1 opacity-60 tracking-widest">{v.plate}</div>
+                          </div>
+                        </div>
+                        {selectedVehicle === v.plate && <CheckCircle size={18} className="text-accent" />}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-500 font-bold uppercase italic">No vehicles enlisted in your profile.</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Schedule Slot</label>
+                <input 
+                  type="datetime-local" 
+                  required
+                  value={slot}
+                  onChange={(e) => setSlot(e.target.value)}
+                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none font-mono"
+                />
+              </div>
+            </div>
+
+            <button 
+              type="submit"
+              disabled={submitting || !selectedVehicle || !slot}
+              className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-3"
+            >
+              {submitting ? <RefreshCw className="animate-spin" size={18} /> : (
+                <>
+                  Commit Booking
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                    <ChevronRight size={14} />
+                  </div>
+                </>
+              )}
+            </button>
+          </form>
+        </motion.div>
+      </div>
+  );
+}
+
 function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, navigate: (v: AppView) => void }) {
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [nearby, setNearby] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const [selectedStation, setSelectedStation] = useState<Business | null>(null);
 
   useEffect(() => {
     // Attempt to get customer location
@@ -1819,7 +1972,8 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
             rating: 4.9,
             lat: -1.286389,
             lng: 36.817223,
-            ownerUid: 'system'
+            ownerUid: 'system',
+            pricing: { sedan: 2500, suv: 3500, truck: 5000 }
           } as Business,
           {
             id: 'sample-2',
@@ -1829,7 +1983,8 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
             rating: 4.7,
             lat: -1.300000,
             lng: 36.790000,
-            ownerUid: 'system'
+            ownerUid: 'system',
+            pricing: { sedan: 2000, suv: 3000, truck: 4500 }
           } as Business,
           {
             id: 'sample-3',
@@ -1839,7 +1994,8 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
             rating: 4.8,
             lat: -1.270000,
             lng: 36.830000,
-            ownerUid: 'system'
+            ownerUid: 'system',
+            pricing: { sedan: 3000, suv: 4000, truck: 6000 }
           } as Business,
           {
             id: 'sample-4',
@@ -1850,6 +2006,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
             lat: -1.290000,
             lng: 36.800000,
             ownerUid: 'system',
+            pricing: { sedan: 2200, suv: 3200, truck: 4800 }
           } as Business
         ];
       }
@@ -1875,6 +2032,16 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-8 md:space-y-12 pb-12">
+      <AnimatePresence>
+        {selectedStation && (
+          <BookingModal 
+            isOpen={selectedStation !== null}
+            onClose={() => setSelectedStation(null)}
+            station={selectedStation}
+            profile={profile}
+          />
+        )}
+      </AnimatePresence>
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Your Hub.</h2>
@@ -1951,6 +2118,50 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
         </div>
       </div>
       
+      {/* Stations for Booking */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Store className="text-accent" />
+            <h3 className="text-2xl font-black text-text-main uppercase tracking-tighter">Nearby Stations</h3>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {nearby.map((station) => (
+            <div key={station.id} className="bento-card group p-0 overflow-hidden hover:translate-y-[-4px] transition-all">
+              <div className="h-40 overflow-hidden relative">
+                <img src={station.image} alt={station.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <div className="absolute top-4 left-4 bg-bg/90 backdrop-blur px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xl">
+                  <Star size={12} className="text-accent fill-accent" />
+                  <span className="text-[10px] font-black">{station.rating}</span>
+                </div>
+              </div>
+              <div className="p-6">
+                <h4 className="font-black text-text-main uppercase tracking-tight truncate">{station.name}</h4>
+                <div className="flex items-center gap-1 text-text-dim text-[10px] font-bold mt-1 uppercase tracking-widest truncate">
+                  <MapPin size={10} />
+                  {station.location}
+                </div>
+                
+                <div className="mt-6 pt-6 border-t border-border flex items-center justify-between">
+                  <div>
+                    <span className="text-[8px] font-black text-text-dim uppercase tracking-widest block opacity-50">Starts at</span>
+                    <span className="text-sm font-black text-text-main">{formatCurrency(station.pricing?.sedan || 2000)}</span>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedStation(station)}
+                    className="bg-accent text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition shadow-lg shadow-accent/20"
+                  >
+                    Details & Book
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Your Fleet */}
       <section className="space-y-6">
         <div className="flex items-center justify-between">
@@ -2379,17 +2590,43 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
                 </div>
                 <div className="flex items-center gap-3">
                   {(profile.role === 'owner' || profile.permissions?.canManageTeam) && !booking.workerId && workers.length > 0 && (
-                    <select 
-                      disabled={assigningId === booking.id}
-                      value=""
-                      onChange={(e) => handleAssignWorker(booking, e.target.value)}
-                      className="bg-bg/50 text-text-main px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40 font-black shadow-lg"
+                    <div className="flex flex-col gap-2">
+                      <select 
+                        disabled={assigningId === booking.id}
+                        value=""
+                        onChange={(e) => handleAssignWorker(booking, e.target.value)}
+                        className="bg-bg/50 text-text-main px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-widest border border-border outline-none focus:ring-1 focus:ring-accent cursor-pointer transition-all hover:border-accent/40 font-black shadow-lg"
+                      >
+                        <option value="" disabled className="bg-card text-text-main">Approve & Assign</option>
+                        {workers.map(w => (
+                          <option key={w.uid} value={w.uid} className="bg-card text-text-main">{w.name}</option>
+                        ))}
+                      </select>
+                      <button 
+                        onClick={async () => {
+                          if (confirm("Reject this booking request?")) {
+                            await updateDoc(doc(db, 'bookings', booking.id), { status: 'canceled' });
+                          }
+                        }}
+                        className="text-[8px] font-black uppercase text-red-500 hover:underline"
+                      >
+                        Reject Request
+                      </button>
+                    </div>
+                  )}
+                  {booking.workerId && booking.status === 'confirmed' && (
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-[8px] font-black uppercase text-success bg-success/10 px-2 py-0.5 rounded">Confirmed</span>
+                      <span className="text-[7px] font-bold text-text-dim uppercase tracking-widest">Worker: {workers.find(w => w.uid === booking.workerId)?.name || 'Assigned'}</span>
+                    </div>
+                  )}
+                  {booking.status === 'pending' && !booking.workerId && (profile.role === 'worker' && !profile.permissions?.canManageTeam) && (
+                    <button 
+                      onClick={() => handleAssignWorker(booking, profile.uid)}
+                      className="bg-accent text-white px-4 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest transition shadow-xl shadow-accent/20 hover:brightness-110 flex items-center justify-center gap-2"
                     >
-                      <option value="" disabled className="bg-card text-text-main">Assign Pro</option>
-                      {workers.map(w => (
-                        <option key={w.uid} value={w.uid} className="bg-card text-text-main">{w.name}</option>
-                      ))}
-                    </select>
+                      Accept Job
+                    </button>
                   )}
                   <button 
                     onClick={() => onLogWash({ 
@@ -2592,305 +2829,6 @@ function RoleCard({ icon, title, desc, onClick, highlight, loading, disabled }: 
   );
 }
 
-function BookingModal({ business, profile, onClose }: { business: Business, profile: UserProfile, onClose: () => void }) {
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<'basic' | 'premium'>('basic');
-  const [serviceType, setServiceType] = useState<'in-station' | 'home-service'>('in-station');
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [selectedTime, setSelectedTime] = useState<string>("");
-
-  const handleConfirm = async () => {
-    if (!selectedDate || !selectedTime || !selectedVehicle) return;
-    
-    setLoading(true);
-    try {
-      const slot = new Date(`${selectedDate}T${selectedTime}`);
-      const bookingData: Partial<Booking> = {
-        userId: profile.uid,
-        vehicleId: selectedVehicle,
-        vehicleInfo: `${selectedVehicle}`,
-        businessId: business.id,
-        stationId: business.ownerUid,
-        businessName: business.name,
-        slot: Timestamp.fromDate(slot),
-        status: 'pending',
-        serviceType: serviceType,
-        price: (selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0),
-        createdAt: serverTimestamp() as Timestamp
-      };
-
-      await addDoc(collection(db, 'bookings'), bookingData);
-      
-      // Send Notifications
-      try {
-        // Notify Customer
-        const customerNote = generateBookingNotification(bookingData, profile.name, 'customer');
-        sendEmail({ to: profile.email, ...customerNote });
-
-        // Notify Owner
-        const ownerDoc = await getDoc(doc(db, 'users', business.ownerUid));
-        if (ownerDoc.exists()) {
-          const ownerData = ownerDoc.data() as UserProfile;
-          const ownerNote = generateBookingNotification(bookingData, ownerData.name, 'owner');
-          sendEmail({ to: ownerData.email, ...ownerNote });
-        }
-      } catch (notifyError) {
-        console.warn("Notification error:", notifyError);
-      }
-
-      alert(`Booking Confirmed! ${serviceType === 'home-service' ? "Our professional will arrive at your location." : "See you at the station!"}`);
-      onClose();
-    } catch (error: any) {
-      console.error("Booking failed:", error);
-      alert(`Booking Error: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const vehicles = profile.vehicles || [];
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0 }} 
-        animate={{ opacity: 1 }} 
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-bg/90 backdrop-blur-2xl"
-      />
-      
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-xl bg-card border border-border rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto scrollable-dropdown"
-      >
-        <div className="p-8 md:p-12">
-          <header className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <h3 className="text-3xl md:text-4xl font-black text-text-main uppercase tracking-tighter leading-none">Book at {business.name}</h3>
-              <p className="text-text-dim text-sm mt-3 font-bold uppercase tracking-wider">Step {step} of 4 — {
-                step === 1 ? 'Choose Vehicle' : 
-                step === 2 ? 'Select Tier' : 
-                step === 3 ? 'Service Mode' : 
-                'Finalize Slot'
-              }</p>
-            </div>
-            <button onClick={onClose} className="hidden md:flex p-3 bg-text-main/5 rounded-full hover:bg-text-main/10 transition text-text-dim hover:text-text-main">
-              <X size={20} />
-            </button>
-          </header>
-
-          {step === 1 && (
-            <div className="space-y-6">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block ml-1 text-center md:text-left">Select your vehicle</label>
-              {vehicles.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {vehicles.map((v, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => setSelectedVehicle(`${v.make} ${v.model} (${v.plate})`)}
-                      className={cn(
-                        "flex items-center justify-between p-6 rounded-[2rem] border transition-all duration-300 group touch-target",
-                        selectedVehicle?.includes(v.plate) 
-                          ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20 scale-[1.02]" 
-                          : "bg-white/5 border-border text-text-dim hover:border-white/20 hover:bg-white/[0.07]"
-                      )}
-                    >
-                      <div className="flex items-center gap-5">
-                        <div className={cn(
-                          "w-14 h-14 rounded-2xl flex items-center justify-center transition-colors",
-                          selectedVehicle?.includes(v.plate) ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white"
-                        )}>
-                          <CarFront size={28} strokeWidth={1.5} />
-                        </div>
-                        <div className="text-left">
-                          <p className="font-black text-xl tracking-tighter uppercase leading-none mb-1">{v.make} {v.model}</p>
-                          <p className={cn("text-xs font-black tracking-widest font-mono", selectedVehicle?.includes(v.plate) ? "text-white/70" : "text-text-dim/60")}>{v.plate}</p>
-                        </div>
-                      </div>
-                      {selectedVehicle?.includes(v.plate) && (
-                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-accent shadow-lg">
-                          <Check size={18} strokeWidth={3} />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-16 border-2 border-dashed border-border rounded-[2.5rem] text-center space-y-6">
-                  <CarFront className="mx-auto opacity-20" size={56} />
-                  <div>
-                    <h4 className="text-text-main font-black uppercase tracking-tighter text-xl">Garage Vacant</h4>
-                    <p className="text-sm text-text-dim mt-2 lowercase max-w-xs mx-auto">Initialize a vehicle unit in your garage first to begin the booking flow.</p>
-                  </div>
-                  <button onClick={onClose} className="text-accent text-[10px] font-black uppercase tracking-widest border-b border-accent/20 pb-1">Assemble Unit Now →</button>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {step === 2 && (
-            <div className="space-y-6">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Service Tier Selection</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button 
-                  onClick={() => setSelectedPlan('basic')}
-                  className={cn(
-                    "p-6 rounded-[2rem] border transition text-left touch-target relative overflow-hidden group",
-                    selectedPlan === 'basic' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
-                  )}
-                >
-                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'basic' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
-                    <Zap size={24} />
-                  </div>
-                  <p className="font-black text-sm uppercase tracking-widest mb-1">Basic Wash</p>
-                  <p className="text-3xl font-black tracking-tighter text-text-main">$15</p>
-                </button>
-                <button 
-                  onClick={() => setSelectedPlan('premium')}
-                  className={cn(
-                    "p-6 rounded-[2rem] border transition text-left touch-target relative overflow-hidden group",
-                    selectedPlan === 'premium' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
-                  )}
-                >
-                  <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors", selectedPlan === 'premium' ? "bg-white/20 text-white" : "bg-bg text-text-dim group-hover:text-white")}>
-                    <Sparkles size={24} />
-                  </div>
-                  <p className="font-black text-sm uppercase tracking-widest mb-1">Premium Care</p>
-                  <p className="text-3xl font-black tracking-tighter text-text-main">$25</p>
-                  <div className="absolute top-4 right-4 bg-white text-accent px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest shadow-lg">Elite</div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-6">
-              <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Delivery Method</label>
-              <div className="grid grid-cols-1 gap-4">
-                <button 
-                  onClick={() => setServiceType('in-station')}
-                  className={cn(
-                    "p-8 rounded-[2rem] border transition flex items-center gap-5 touch-target group",
-                    serviceType === 'in-station' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
-                  )}
-                >
-                   <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-colors", serviceType === 'in-station' ? "bg-white/20 text-white" : "bg-bg text-text-dim font-bold")}>
-                    <Store size={28} />
-                   </div>
-                   <div className="text-left flex-1">
-                     <p className="font-black text-lg uppercase tracking-tighter leading-none mb-1">In-Station</p>
-                     <p className={cn("text-xs lowercase", serviceType === 'in-station' ? "text-white/70" : "text-text-dim")}>Visit {business.name} and get served instantly.</p>
-                   </div>
-                   <div className={cn("text-sm font-black", serviceType === 'in-station' ? "text-white" : "text-accent")}>FREE</div>
-                </button>
-                <button 
-                  onClick={() => setServiceType('home-service')}
-                  className={cn(
-                    "p-8 rounded-[2rem] border transition flex items-center gap-5 touch-target group",
-                    serviceType === 'home-service' ? "bg-accent border-transparent text-white shadow-xl shadow-accent/20" : "bg-white/5 border-border text-text-dim hover:border-white/20"
-                  )}
-                >
-                   <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-colors", serviceType === 'home-service' ? "bg-white/20 text-white" : "bg-bg text-text-dim")}>
-                    <MapPin size={28} />
-                   </div>
-                   <div className="text-left flex-1">
-                     <p className="font-black text-lg uppercase tracking-tighter leading-none mb-1">Mobile Service</p>
-                     <p className={cn("text-xs lowercase", serviceType === 'home-service' ? "text-white/70" : "text-text-dim")}>Our professional comes to your specific location.</p>
-                   </div>
-                   <div className={cn("text-sm font-black", serviceType === 'home-service' ? "text-white" : "text-accent")}>+$10</div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-8">
-              <div className="space-y-6">
-                <label className="text-[10px] font-black text-accent uppercase tracking-widest block mb-1 text-center md:text-left">Temporal Shard Selection</label>
-                <div className="flex flex-col md:flex-row gap-4">
-                   <div className="flex-1 space-y-2">
-                      <label className="text-[9px] font-black text-text-dim uppercase tracking-[0.2em] ml-1">Calendar Date</label>
-                      <input 
-                        type="date" 
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-text-main text-base font-bold focus:border-accent outline-none transition-all touch-target" 
-                      />
-                   </div>
-                   <div className="flex-1 space-y-2">
-                      <label className="text-[9px] font-black text-text-dim uppercase tracking-[0.2em] ml-1">Arrival Time</label>
-                      <input 
-                        type="time" 
-                        value={selectedTime}
-                        onChange={(e) => setSelectedTime(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-text-main text-base font-bold focus:border-accent outline-none transition-all touch-target" 
-                      />
-                   </div>
-                </div>
-              </div>
-              <div className="p-8 bg-accent/10 border border-accent/20 rounded-[2rem] shadow-inner">
-                <p className="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-6 text-center md:text-left">Operation Summary</p>
-                <div className="space-y-4">
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="font-bold text-text-main/50 lowercase">Unit ID</span>
-                      <span className="text-text-main font-black uppercase tracking-tighter truncate max-w-[150px]">{selectedVehicle}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="font-bold text-text-main/50 lowercase">Engagement</span>
-                      <span className="text-text-main font-black uppercase tracking-tighter">{serviceType.replace('-', ' ')}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-sm">
-                      <span className="font-bold text-text-main/50 lowercase">Service Tier</span>
-                      <span className="text-text-main font-black uppercase tracking-tighter">{selectedPlan}</span>
-                   </div>
-                   <div className="border-t border-accent/20 my-4 pt-4 flex justify-between items-end">
-                      <span className="text-sm font-black text-text-main uppercase tracking-tighter">Total Due</span>
-                      <span className="text-xl font-black text-accent">
-                        {formatCurrency((selectedPlan === 'premium' ? 25 : 15) + (serviceType === 'home-service' ? 10 : 0))}
-                      </span>
-                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-10 flex gap-4">
-            {step > 1 && (
-              <button 
-                onClick={() => setStep(step - 1)}
-                className="flex-1 bg-white/5 text-text-dim py-4 rounded-xl font-black text-[10px] uppercase tracking-widest border border-border hover:text-white transition"
-              >
-                Back
-              </button>
-            )}
-            <button 
-              onClick={() => {
-                if (step < 4) {
-                  if (step === 1 && !selectedVehicle) {
-                    alert("Please select a vehicle or add one to your garage.");
-                    return;
-                  }
-                  setStep(step + 1);
-                } else {
-                  handleConfirm();
-                }
-              }}
-              disabled={loading}
-              className="flex-[2] bg-accent text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition disabled:opacity-50 shadow-xl shadow-accent/20"
-            >
-              {loading ? "Processing..." : step === 4 ? "Confirm Reservation" : "Continue"}
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 /* Redundant business management views consolidated into SettingsView for better operating environment management */
 
@@ -3138,9 +3076,10 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
       <AnimatePresence>
         {selectedBusiness && (
           <BookingModal 
-            business={selectedBusiness} 
-            profile={profile} 
-            onClose={() => setSelectedBusiness(null)} 
+            isOpen={selectedBusiness !== null}
+            onClose={() => setSelectedBusiness(null)}
+            station={selectedBusiness}
+            profile={profile}
           />
         )}
       </AnimatePresence>
