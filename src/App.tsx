@@ -426,11 +426,11 @@ export default function App() {
             const checkEmail = u.email || data.email;
             if (checkEmail && (data.role === 'customer' || data.role === 'owner' || !data.stationId)) {
               const normalizedEmail = checkEmail.toLowerCase();
-              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
-              const authWorkerSnap = await getDocs(authWorkerQuery);
+              const authDocRef = doc(db, 'authorized_workers', normalizedEmail);
+              const authDocSnap = await getDoc(authDocRef);
               
-              if (!authWorkerSnap.empty) {
-                const authData = authWorkerSnap.docs[0].data();
+              if (authDocSnap.exists()) {
+                const authData = authDocSnap.data();
                 if (data.role !== 'worker' || data.stationId !== authData.stationId) {
                   const updatedData = { ...data, role: 'worker' as const, stationId: authData.stationId };
                   await updateDoc(docRef, { role: 'worker', stationId: authData.stationId });
@@ -456,10 +456,10 @@ export default function App() {
 
             if (u.email) {
               const normalizedEmail = u.email.toLowerCase();
-              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
-              const authWorkerSnap = await getDocs(authWorkerQuery);
-              if (!authWorkerSnap.empty) {
-                const authData = authWorkerSnap.docs[0].data();
+              const authDocRef = doc(db, 'authorized_workers', normalizedEmail);
+              const authDocSnap = await getDoc(authDocRef);
+              if (authDocSnap.exists()) {
+                const authData = authDocSnap.data();
                 assignedRole = 'worker';
                 assignedStationId = authData.stationId;
               }
@@ -671,7 +671,6 @@ export default function App() {
     try {
       if (isSignUp) {
         if (isBusiness) {
-          // Store intent to be an owner for the profile creation logic in onAuthStateChanged
           localStorage.setItem('pending_owner_signup', 'true');
           localStorage.setItem('onboarding_active', 'true');
         }
@@ -680,7 +679,41 @@ export default function App() {
           await updateProfile(userCredential.user, { displayName: name });
         }
       } else {
-        await signInWithEmailAndPassword(auth, email, pass);
+        try {
+          await signInWithEmailAndPassword(auth, email, pass);
+        } catch (signInError: any) {
+          // Check if this is a provisioned worker claiming their account for the first time
+          if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/wrong-password') {
+             const normalizedEmail = email.toLowerCase();
+             // We can check Firestore because we updated the rules to allow public 'get' on this collection
+             const authRef = doc(db, 'authorized_workers', normalizedEmail);
+             const authSnap = await getDoc(authRef);
+             
+             if (authSnap.exists()) {
+               const authData = authSnap.data();
+               // If the "password" provided matches the provisioned PIN, we treat it as an enrollment
+               if (authData.pin === pass) {
+                 try {
+                   // Create the real Auth user with this PIN as their initial password
+                   const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                   if (userCredential.user) {
+                     await updateProfile(userCredential.user, { displayName: authData.name });
+                     // Profile will be auto-linked to worker role by our onAuthStateChanged logic
+                     alert(`Authorized operative detected: ${authData.name}. Your account has been initialized.`);
+                     return;
+                   }
+                 } catch (createErr: any) {
+                   if (createErr.code === 'auth/email-already-in-use') {
+                      // Account actually exists but PIN might be wrong or they changed password
+                      throw new Error("Account exists. Please use your updated password or contact your manager.");
+                   }
+                   throw createErr;
+                 }
+               }
+             }
+          }
+          throw signInError;
+        }
       }
     } catch (error: any) {
       console.error("Email auth error:", error);
@@ -688,6 +721,8 @@ export default function App() {
         alert("Registration Error: Email/Password login is currently restricted by Firebase Admin. Please enable it in your Firebase Console (Authentication -> Sign-in Method) or use Google Login for instant access.");
       } else if (error.code === 'auth/email-already-in-use') {
         alert("This email is already registered. Please log in instead.");
+      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        alert("Authentication failed: Invalid credentials. If you are a provisioned worker, ensure you are using the correct Station PIN.");
       } else {
         alert("Authentication failed: " + error.message);
       }
@@ -1395,6 +1430,11 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
                     onChange={e => setPassword(e.target.value)}
                     className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
                   />
+                  {mode === 'business' && isLogin && (
+                    <p className="text-[8px] text-accent font-black uppercase tracking-widest mt-1.5 ml-1 animate-pulse">
+                      Workers: Enter the 6-digit PIN provided by your manager
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
@@ -6567,13 +6607,16 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
 }
 
 function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClose: () => void, stationId: string }) {
-  const [form, setForm] = useState({ email: '', name: '' });
+  const [form, setForm] = useState({ email: '', name: '', pin: '' });
   const [loading, setLoading] = useState(false);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedEmail = form.email.trim().toLowerCase();
-    if (!normalizedEmail || !form.name) return;
+    if (!normalizedEmail || !form.name || form.pin.length < 6) {
+      alert("Please provide name, email, and a 6-digit security PIN.");
+      return;
+    }
     setLoading(true);
     try {
       const workerDocId = normalizedEmail; // Use email as ID for easier security rules
@@ -6583,8 +6626,8 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
         stationId,
         createdAt: serverTimestamp()
       });
-      alert("Operative Provisioned Successfully. They can now login with their email.");
-      setForm({ email: '', name: '' });
+      alert(`Operative Provisioned. Pass this PIN to them as their initial password: ${form.pin}`);
+      setForm({ email: '', name: '', pin: '' });
       onClose();
     } catch (error) {
        console.error("Provision error:", error);
@@ -6618,33 +6661,42 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           </button>
         </div>
 
-        <form onSubmit={handleAdd} className="p-8 space-y-8">
-          <div className="space-y-6">
-            <div className="space-y-3">
+        <form onSubmit={handleAdd} className="p-8 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1">Operative Full Name</label>
               <input 
                 required
                 value={form.name}
                 onChange={e => setForm({...form, name: e.target.value})}
                 placeholder="e.g. JOHN DOE"
-                className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase"
+                className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-sm text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-black uppercase"
               />
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1">Protocol Email Address</label>
-              <div className="relative">
-                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-accent" size={20} />
-                <input 
-                  required
-                  type="email"
-                  value={form.email}
-                  onChange={e => setForm({...form, email: e.target.value})}
-                  placeholder="operative@washflow.systems"
-                  className="w-full bg-bg pl-16 pr-6 py-5 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-base font-black touch-target uppercase"
-                />
-              </div>
+              <input 
+                required
+                type="email"
+                value={form.email}
+                onChange={e => setForm({...form, email: e.target.value})}
+                placeholder="operative@washflow.systems"
+                className="w-full bg-bg px-6 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-sm font-black touch-target uppercase"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-main uppercase tracking-[0.2em] ml-1">Access PIN (6 Digits)</label>
+              <input 
+                required
+                type="text"
+                maxLength={6}
+                value={form.pin}
+                onChange={e => setForm({...form, pin: e.target.value.replace(/\D/g, '')})}
+                placeholder="123456"
+                className="w-full bg-bg px-6 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none text-text-main text-sm font-black touch-target tracking-[0.5em]"
+              />
               <p className="text-[9px] text-text-dim/60 font-black uppercase tracking-widest mt-2 px-2">
-                Note: Operative must use this exact Google Email to authenticate.
+                This will be their initial password for first-time login.
               </p>
             </div>
           </div>
@@ -6652,12 +6704,12 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-accent text-white py-6 rounded-3xl font-black uppercase tracking-[0.25em] shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target flex items-center justify-center gap-3"
+            className="w-full bg-accent text-white py-5 rounded-3xl font-black uppercase tracking-[0.25em] shadow-xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target flex items-center justify-center gap-3"
           >
             {loading ? <RefreshCw className="animate-spin" size={18} /> : (
               <>
                 <ShieldCheck size={20} />
-                CONFIRM REGISTRY DATA →
+                PROVISION UNIT →
               </>
             )}
           </button>

@@ -117,7 +117,8 @@ service cloud.firestore {
     }
 
     match /authorized_workers/{id} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.stationId || request.auth.token.email == resource.data.email || isAdmin());
+      allow get: if true;
+      allow list: if isSignedIn() && (request.auth.uid == resource.data.stationId || request.auth.token.email == id || isAdmin());
       allow create, delete: if isSignedIn() && (isStationOwner() || isAdmin());
     }
 
