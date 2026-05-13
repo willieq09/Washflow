@@ -1266,6 +1266,7 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(false);
+  const [isWorkerEnrollment, setIsWorkerEnrollment] = useState(false);
   const [justRegistered, setJustRegistered] = useState(false);
 
   // Auto-detect if registration was successful locally to show next step feel
@@ -1294,7 +1295,7 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
       alert("Please provide a valid " + (isLogin ? "" : "name, ") + "email and password (min 6 chars)");
       return;
     }
-    onEmailLogin(name, email, password, !isLogin, mode === 'business');
+    onEmailLogin(name, email, password, isWorkerEnrollment ? false : !isLogin, mode === 'business');
   };
 
   if (justRegistered && authLoading) {
@@ -1354,7 +1355,7 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
               I HAVE A CAR
             </button>
             <button 
-              onClick={() => { setMode('business'); setIsLogin(false); }}
+              onClick={() => { setMode('business'); setIsLogin(false); setIsWorkerEnrollment(false); }}
               className={cn(
                 "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
                 mode === 'business' ? "bg-accent text-white shadow-lg" : "text-text-dim hover:text-text-main"
@@ -1365,25 +1366,49 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
           </div>
 
           {mode === 'business' && (
-            <div className="flex justify-center gap-4 mb-6">
-              <button 
-                onClick={() => setAuthMethod('phone')}
-                className={cn(
-                  "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
-                  authMethod === 'phone' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
-                )}
-              >
-                Phone
-              </button>
-              <button 
-                onClick={() => setAuthMethod('email')}
-                className={cn(
-                  "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
-                  authMethod === 'email' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
-                )}
-              >
-                Email
-              </button>
+            <div className="space-y-6 mb-8">
+              {!isWorkerEnrollment ? (
+                <div className="flex flex-col gap-4">
+                   <div className="flex justify-center gap-4">
+                    <button 
+                      onClick={() => setAuthMethod('phone')}
+                      className={cn(
+                        "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
+                        authMethod === 'phone' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
+                      )}
+                    >
+                      Phone
+                    </button>
+                    <button 
+                      onClick={() => setAuthMethod('email')}
+                      className={cn(
+                        "text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg border transition-all",
+                        authMethod === 'email' ? "bg-text-main text-bg border-text-main" : "text-text-dim border-border hover:border-text-dim"
+                      )}
+                    >
+                      Email
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => { setIsWorkerEnrollment(true); setAuthMethod('email'); setIsLogin(true); }}
+                    className="text-[10px] font-black uppercase tracking-widest text-accent hover:underline flex items-center justify-center gap-2"
+                  >
+                    <Users size={14} /> Claim Worker Account (PIN Access)
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-accent/10 p-4 rounded-xl border border-accent/20">
+                  <p className="text-[10px] font-black text-accent uppercase tracking-widest leading-relaxed">
+                    Operative Onboarding: Use the Email and PIN provided by your station manager to initialize your account.
+                  </p>
+                  <button 
+                    onClick={() => setIsWorkerEnrollment(false)}
+                    className="text-[9px] font-bold text-text-dim mt-2 hover:text-text-main uppercase tracking-widest"
+                  >
+                    Back to Owner Access
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1421,16 +1446,18 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
                   />
                 </div>
                 <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Password</label>
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">
+                    {isWorkerEnrollment ? 'Manager-Provided PIN' : 'Password'}
+                  </label>
                   <input 
                     type="password" 
-                    placeholder="••••••••"
+                    placeholder={isWorkerEnrollment ? "6-Digit PIN" : "••••••••"}
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
                   />
-                  {mode === 'business' && isLogin && (
+                  {mode === 'business' && isLogin && !isWorkerEnrollment && (
                     <p className="text-[8px] text-accent font-black uppercase tracking-widest mt-1.5 ml-1 animate-pulse">
                       Workers: Enter the 6-digit PIN provided by your manager
                     </p>
@@ -4720,11 +4747,28 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
 }
 function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: UserProfile, onComplete: () => void, navigate: (v: AppView) => void, preFill?: { carModel: string, plateNumber: string, bookingId?: string } | null }) {
   const [form, setForm] = useState({ 
-    carModel: preFill?.carModel || '', 
+    make: '',
+    model: '',
     plateNumber: preFill?.plateNumber || '', 
     customerPhone: '',
     price: profile.pricing?.sedan?.toString() || '2000' 
   });
+
+  // Try to parse preFill.carModel into make/model if possible
+  useEffect(() => {
+    if (preFill?.carModel) {
+      const parts = preFill.carModel.split(' ');
+      const possibleMake = parts[0];
+      const possibleModel = parts.slice(1).join(' ');
+      
+      if (VEHICLE_DATA[possibleMake as keyof typeof VEHICLE_DATA]) {
+        setForm(prev => ({ ...prev, make: possibleMake, model: possibleModel }));
+      } else {
+        // Fallback or just leave as is (though user wants standardization)
+        setForm(prev => ({ ...prev, model: preFill.carModel }));
+      }
+    }
+  }, [preFill]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [foundCustomer, setFoundCustomer] = useState<{ name: string, credits: number, id: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -4765,7 +4809,12 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
         
         // Auto-fill car if they only have one
         if (u.vehicles && u.vehicles.length === 1) {
-          setForm(prev => ({ ...prev, carModel: `${u.vehicles[0].make} ${u.vehicles[0].model}`, plateNumber: u.vehicles[0].plate }));
+          setForm(prev => ({ 
+            ...prev, 
+            make: u.vehicles[0].make,
+            model: u.vehicles[0].model,
+            plateNumber: u.vehicles[0].plate 
+          }));
         }
       } else {
         alert("Customer not found. They can sign up instantly on the home screen using their phone number.");
@@ -4968,7 +5017,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
         workerId: selectedWorker.uid,
         workerName: selectedWorker.name,
         stationId: stationId,
-        carModel: form.carModel,
+        carModel: `${form.make} ${form.model}`.trim() || 'Unspecified',
         plateNumber: form.plateNumber,
         price: washPrice,
         commission: commission,
@@ -5021,7 +5070,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
                <Award size={16} className="text-accent" />
                <span className="text-[10px] font-black text-accent uppercase tracking-widest">Maintenance Tip for Customer</span>
              </div>
-             <p className="text-text-main font-medium leading-relaxed">"{profile.name} recommends: Get regular waxing for that {form.carModel} to protect the finish."</p>
+             <p className="text-text-main font-medium leading-relaxed">"{profile.name} recommends: Get regular waxing for that {`${form.make} ${form.model}`.trim()} to protect the finish."</p>
           </div>
 
           <div className="flex gap-4">
@@ -5179,14 +5228,21 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
             )}
           </div>
 
-          <div className="space-y-3">
-            <label className="block text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Car Model</label>
-            <input 
-              required
-              placeholder="e.g. Toyota Hilux"
-              value={form.carModel}
-              onChange={e => setForm({...form, carModel: e.target.value})}
-              className="w-full bg-bg px-5 py-4 rounded-2xl border border-border focus:ring-2 focus:ring-accent focus:border-transparent outline-none transition text-text-main font-bold"
+          <div className="grid grid-cols-2 gap-4">
+            <SearchableSelect 
+              label="Make"
+              placeholder="Select Make"
+              value={form.make}
+              options={Object.keys(VEHICLE_DATA)}
+              onChange={(val) => setForm({ ...form, make: val, model: '' })}
+            />
+            <SearchableSelect 
+              label="Model"
+              placeholder="Select Model"
+              value={form.model}
+              options={form.make ? (VEHICLE_DATA[form.make as keyof typeof VEHICLE_DATA] || []) : []}
+              onChange={(val) => setForm({ ...form, model: val })}
+              disabled={!form.make}
             />
           </div>
           <div className="space-y-3">
@@ -5251,7 +5307,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
 
         <button 
           type="submit" 
-          disabled={submitting || !form.carModel || !form.plateNumber}
+          disabled={submitting || !form.make || !form.model || !form.plateNumber}
           className="w-full py-6 bg-accent text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-accent/20 hover:brightness-110 transition-all disabled:opacity-50 touch-target mt-4"
         >
           {submitting ? (
@@ -6722,7 +6778,7 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
 function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navigate: (v: AppView) => void, onLog: (data: { carModel: string, plateNumber: string }) => void }) {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
-  const [result, setResult] = useState<{ plate: string, vehicle: string } | null>(null);
+  const [result, setResult] = useState<{ plate: string, make: string, model: string } | null>(null);
   const [showGarage, setShowGarage] = useState(false);
   const [feedback, setFeedback] = useState<{
     lighting: 'too-dark' | 'good' | 'too-bright';
@@ -6820,7 +6876,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
   };
 
   const handleManualSelection = (vehicle: any) => {
-    setResult({ plate: vehicle.plate, vehicle: `${vehicle.make} ${vehicle.model}` });
+    setResult({ plate: vehicle.plate, make: vehicle.make, model: vehicle.model });
     setShowGarage(false);
     stopCamera();
   };
@@ -6959,7 +7015,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                </div>
                {!result && (
                  <button 
-                   onClick={() => setResult({ plate: '', vehicle: '' })}
+                   onClick={() => setResult({ plate: '', make: '', model: '' })}
                    className="text-[10px] font-black text-text-dim hover:text-white uppercase tracking-widest"
                  >
                    Manual Entry
@@ -6980,23 +7036,28 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                       )}
                     />
                  </div>
-                 <div>
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1 block">Vehicle Model</label>
-                    <input 
-                      value={result.vehicle}
-                      placeholder="VEHICLE MODEL"
-                      onChange={e => setResult({...result, vehicle: e.target.value})}
-                      className={cn(
-                        "w-full text-2xl font-black uppercase tracking-tighter bg-bg p-4 rounded-xl border outline-none focus:ring-2 focus:ring-accent transition",
-                        result.vehicle ? "text-text-main border-border" : "text-yellow-500 border-yellow-500/40 animate-pulse"
-                      )}
+                 <div className="grid grid-cols-2 gap-4">
+                    <SearchableSelect 
+                      label="Make"
+                      placeholder="Select Make"
+                      value={result.make}
+                      options={Object.keys(VEHICLE_DATA)}
+                      onChange={(val) => setResult({...result, make: val, model: ''})}
+                    />
+                    <SearchableSelect 
+                      label="Model"
+                      placeholder="Select Model"
+                      value={result.model}
+                      options={result.make ? (VEHICLE_DATA[result.make as keyof typeof VEHICLE_DATA] || []) : []}
+                      onChange={(val) => setResult({...result, model: val})}
+                      disabled={!result.make}
                     />
                  </div>
                  
                  <div className="mt-auto pt-6 space-y-3">
                    <button 
-                    disabled={!result.plate || !result.vehicle}
-                    onClick={() => onLog({ carModel: result.vehicle, plateNumber: result.plate })}
+                    disabled={!result.plate || !result.make || !result.model}
+                    onClick={() => onLog({ carModel: `${result.make} ${result.model}`.trim(), plateNumber: result.plate })}
                     className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-text-main hover:text-bg transition disabled:opacity-50"
                    >
                      Log This Wash
