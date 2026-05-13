@@ -1083,7 +1083,7 @@ function SearchableSelect({
                   autoFocus
                   type="text"
                   placeholder="Query data..."
-                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-accent font-bold uppercase tracking-wider placeholder:text-text-dim/20"
+                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-4 py-2 text-xs text-text-main outline-none focus:border-accent font-bold uppercase tracking-wider placeholder:text-text-dim/20"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   onClick={e => e.stopPropagation()}
@@ -3272,7 +3272,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
           </div>
           <button 
             onClick={() => navigate('business')}
-            className="px-8 py-4 bg-white text-bg rounded-xl font-black text-xs uppercase tracking-widest hover:bg-accent hover:text-white transition-all shadow-xl group-hover:scale-105"
+            className="px-8 py-4 bg-text-main text-bg rounded-xl font-black text-xs uppercase tracking-widest hover:bg-accent hover:text-white transition-all shadow-xl group-hover:scale-105"
           >
             Manage Station <ChevronRight size={14} className="inline ml-1" />
           </button>
@@ -3311,7 +3311,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
               <motion.div key={b.id} whileHover={{ y: -5 }} className="bg-card rounded-[2rem] border border-border overflow-hidden group">
                 <div className="h-48 overflow-hidden relative">
                   <img src={b.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" referrerPolicy="no-referrer" />
-                  <div className="absolute top-4 right-4 bg-bg/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black text-white">
+                  <div className="absolute top-4 right-4 bg-bg/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black text-text-main">
                     <Star size={12} className="text-yellow-400 fill-yellow-400" /> {b.rating}
                   </div>
                 </div>
@@ -3322,7 +3322,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
                   </div>
                   <button 
                     onClick={() => setSelectedBusiness(b)}
-                    className="w-full bg-white text-bg py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent hover:text-white transition"
+                    className="w-full bg-text-main text-bg py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent hover:text-white transition"
                   >
                     Book A Wash <ChevronRight size={14} />
                   </button>
@@ -3404,7 +3404,7 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
             >
               <div className="aspect-square rounded-3xl mb-4 overflow-hidden relative bg-bg/50">
                 <img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                <div className="absolute bottom-4 left-4 bg-white px-3 py-1.5 rounded-xl font-black text-bg shadow-xl text-xs">
+                <div className="absolute bottom-4 left-4 bg-text-main px-3 py-1.5 rounded-xl font-black text-bg shadow-xl text-xs">
                   {formatCurrency(item.price)}
                 </div>
               </div>
@@ -3664,7 +3664,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
         </div>
         <button 
           onClick={() => setShowAdd(!showAdd)}
-          className="w-full md:w-auto bg-accent text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-white hover:text-bg transition shadow-xl shadow-accent/20 flex items-center justify-center gap-3 touch-target"
+          className="w-full md:w-auto bg-accent text-white px-10 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-text-main hover:text-bg transition shadow-xl shadow-accent/20 flex items-center justify-center gap-3 touch-target"
         >
           {showAdd ? <X size={18} /> : <Plus size={18} />}
           {showAdd ? "Close Uplink" : "Add New Unit"}
@@ -3821,7 +3821,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
                     placeholder="ABC-1234"
                     value={newVehicle.plate}
                     onChange={(e) => setNewVehicle({...newVehicle, plate: e.target.value.toUpperCase()})}
-                    className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 font-mono"
+                    className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:border-accent/40 font-mono"
                   />
                 </div>
 
@@ -3831,7 +3831,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
                     <select 
                       value={newVehicle.intensity}
                       onChange={(e) => setNewVehicle({...newVehicle, intensity: e.target.value as any})}
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:border-accent/40 appearance-none"
                     >
                       <option value="low" className="bg-card text-text-main">Low (Commute)</option>
                       <option value="high" className="bg-card text-text-main">High (Commercial)</option>
@@ -3842,7 +3842,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
                     <select 
                       value={newVehicle.dirtLevel}
                       onChange={(e) => setNewVehicle({...newVehicle, dirtLevel: e.target.value as any})}
-                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 appearance-none"
+                      className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main outline-none focus:border-accent/40 appearance-none"
                     >
                       <option value="low" className="bg-card text-text-main">Low (Clean)</option>
                       <option value="medium" className="bg-card text-text-main">Medium</option>
@@ -3854,7 +3854,7 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
                 <button 
                   onClick={handleAddVehicle}
                   disabled={saving}
-                  className="w-full bg-white text-bg py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-accent hover:text-white transition-all shadow-xl shadow-white/5 flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full bg-text-main text-bg py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-accent hover:text-white transition-all shadow-xl shadow-white/5 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {saving ? <RefreshCw className="animate-spin" size={16} /> : <Plus size={16} strokeWidth={3} />}
                   Authorize Registry
@@ -4007,7 +4007,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
           
           <button 
             onClick={() => setShowAdd(true)}
-            className="bg-white text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center justify-center gap-2 shadow-xl shadow-white/5 active:scale-95"
+            className="bg-text-main text-bg px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-accent hover:text-white transition flex items-center justify-center gap-2 shadow-xl shadow-white/5 active:scale-95"
           >
              <Plus size={16} strokeWidth={3} /> Add To Garage
           </button>
@@ -4110,7 +4110,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
                                 onClick={() => setNewVehicle(v => ({ ...v, year }))}
                                 className={cn(
                                   "w-full py-3 text-center text-sm font-bold snap-center transition-all",
-                                  newVehicle.year === year ? "text-accent scale-110" : "text-text-dim/40 hover:text-white"
+                                  newVehicle.year === year ? "text-accent scale-110" : "text-text-dim/40 hover:text-text-main"
                                 )}
                               >
                                 {year}
@@ -4140,7 +4140,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
                 <button 
                   onClick={handleAddVehicle}
                   disabled={saving}
-                  className="w-full bg-white text-bg py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-xl active:scale-[0.98] disabled:opacity-50"
+                  className="w-full bg-text-main text-bg py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-xl active:scale-[0.98] disabled:opacity-50"
                 >
                    {saving ? "Registering..." : "Sync To Fleet"}
                 </button>
@@ -4158,7 +4158,7 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
           <p className="text-text-dim text-sm mb-8 lowercase max-w-xs mx-auto text-balance">Add your car to your dashboard to track performance.</p>
           <button 
             onClick={() => setShowAdd(true)}
-            className="bg-white text-bg px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl active:scale-95"
+            className="bg-text-main text-bg px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-white transition shadow-2xl active:scale-95"
           >
              Initialize Registry
           </button>
@@ -4314,7 +4314,7 @@ function StarRating({ value, onChange, size = 24 }: { value: number, onChange: (
   return (
     <div className="flex gap-3">
       {[1, 2, 3, 4, 5].map((s) => (
-        <button key={s} onClick={() => onChange(s)} className={cn("transition-all duration-300 transform", value >= s ? "text-yellow-400 scale-110" : "text-white/10 hover:text-white/30")}>
+        <button key={s} onClick={() => onChange(s)} className={cn("transition-all duration-300 transform", value >= s ? "text-yellow-400 scale-110" : "text-text-dim/40 hover:text-text-main")}>
           <Star size={size} fill={value >= s ? "currentColor" : "none"} strokeWidth={2.5} />
         </button>
       ))}
@@ -4609,8 +4609,8 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
               className={cn(
                 "w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 touch-target shadow-2xl",
                 (tier.id === 'elite' || tier.id === 'unlimited_wash') 
-                  ? "bg-bg text-white hover:bg-accent" 
-                  : "bg-white text-bg hover:bg-accent hover:text-white"
+                  ? "bg-text-main text-bg hover:bg-accent hover:text-white" 
+                  : "bg-text-main text-bg hover:bg-accent hover:text-white"
               )}
             >
               {loading === tier.id ? "Initialising..." : profile.plan === tier.id ? "Active Infrastructure" : `Deploy ${tier.name}`}
@@ -4621,7 +4621,7 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
 
       <div className="mt-20 text-center">
         <p className="text-text-dim text-sm max-w-lg mx-auto leading-relaxed">
-          Secure billing powered by <span className="text-white font-bold">Paystack</span>. 
+          Secure billing powered by <span className="text-text-main font-bold">Paystack</span>. 
           Plans can be cancelled or upgraded at any time from your dashboard.
         </p>
       </div>
@@ -5779,7 +5779,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
                     setFilters({ startDate: '', endDate: '', workerId: 'all', status: 'all' });
                     setSort({ field: 'timestamp', desc: true });
                   }}
-                  className="w-full bg-bg border border-border text-text-dim hover:text-white py-2 rounded-lg text-xs font-bold transition"
+                  className="w-full bg-bg border border-border text-text-dim hover:text-text-main py-2 rounded-lg text-xs font-bold transition"
                 >
                   Reset Defaults
                 </button>
@@ -6836,7 +6836,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                  <button 
                   onClick={captureAndScan}
                   disabled={isScanning}
-                  className="w-full bg-white text-bg py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition disabled:opacity-50"
+                  className="w-full bg-text-main text-bg py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition disabled:opacity-50"
                  >
                    {isScanning ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} />}
                    {isScanning ? "Processing Data..." : "Analyze Stream"}
@@ -6893,7 +6893,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                    <button 
                     disabled={!result.plate || !result.vehicle}
                     onClick={() => onLog({ carModel: result.vehicle, plateNumber: result.plate })}
-                    className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-bg transition disabled:opacity-50"
+                    className="w-full bg-accent text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-text-main hover:text-bg transition disabled:opacity-50"
                    >
                      Log This Wash
                    </button>
@@ -6901,7 +6901,7 @@ function ScannerView({ profile, navigate, onLog }: { profile: UserProfile, navig
                    {profile.vehicles && profile.vehicles.length > 0 && (
                      <button 
                        onClick={() => setShowGarage(true)}
-                       className="w-full bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-white transition"
+                       className="w-full bg-white/5 text-text-dim py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:text-text-main transition"
                      >
                        Select From Garage
                      </button>
