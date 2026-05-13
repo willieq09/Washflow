@@ -60,10 +60,17 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
              data.uid == request.auth.uid &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && data.email.size() > 0 &&
+             data.email is string && // Allow empty email for phone users
              data.role in ['owner', 'worker', 'customer', 'admin'] &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 25)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string || data.photoUrl == null)) &&
              (!('stationId' in data) || (data.stationId is string || data.stationId == null)) &&
+             (!('credits' in data) || data.credits is number) &&
+             (!('theme' in data) || data.theme in ['light', 'dark']) &&
+             (!('status' in data) || data.status in ['active', 'suspended']) &&
+             (!('plan' in data) || data.plan is string) &&
+             (!('pricing' in data) || data.pricing is map) &&
              (!('vehicles' in data) || data.vehicles is list);
     }
 
@@ -86,11 +93,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (
+      allow read, list: if isSignedIn() && (
         isOwner(userId) || 
         isAdmin() || 
         (isStationOwner() && (resource.data.stationId == request.auth.uid || resource.data.uid == request.auth.uid)) ||
-        (isWorker() && resource.data.stationId == getUserData().stationId)
+        (isWorker() && resource.data.stationId == getUserData().stationId) ||
+        // Allow looking up own profile by UID (already covered by isOwner) 
+        // or searching by phone (for the migration/login logic in App.tsx)
+        (resource == null || resource.data.phone != null) 
       );
       allow create: if isSignedIn() && (
         (isOwner(userId) && isValidUser(incoming())) ||
