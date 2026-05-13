@@ -493,16 +493,19 @@ export default function App() {
     }
   }, [profile]);
 
-  const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean) => {
+  const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean, isBusiness?: boolean) => {
     setAuthLoading(true);
     try {
+      // Robust Nigerian phone formatting: handle leading 0 or 234.
       const cleanDigits = phone.trim().replace(/\D/g, '');
       const stripped = cleanDigits.replace(/^234/, '').replace(/^0+/, '');
       const formattedPhone = '+234' + stripped;
 
       if (stripped.length < 10) {
-        throw new Error("Phone number is too short. Please include your network prefix (e.g. 803...)");
+        throw new Error("Phone number is too short. Please include your network prefix (e.g. 803...) and the rest of the digits (10-11 digits total).");
       }
+
+      console.log("Attempting phone registration for:", formattedPhone);
 
       const cred = await signInAnonymously(auth);
       const u = cred.user;
@@ -525,18 +528,19 @@ export default function App() {
           });
         }
         
-        setProfile({
+        const updatedProfile = {
           ...existingData,
           uid: u.uid,
           name: isLogin ? existingData.name : name
-        });
+        };
+        setProfile(updatedProfile);
       } else {
         // Create brand new profile
         const newProfile: UserProfile = {
           uid: u.uid,
           name: name,
           phone: formattedPhone,
-          role: 'customer',
+          role: isBusiness ? 'owner' : 'customer',
           email: '',
           credits: 0,
           vehicles: [],
@@ -545,17 +549,30 @@ export default function App() {
         await setDoc(doc(db, 'users', u.uid), { ...newProfile, createdAt: serverTimestamp() });
         setProfile(newProfile);
       }
+      
+      // Set intent for business owners to go to settings
+      if (isBusiness) {
+        localStorage.setItem('onboarding_active', 'true');
+      }
+
       setUser(u);
     } catch (error: any) {
       console.error("Phone login error:", error);
-      alert("Registration failed: " + (error.message || "Please check your connection."));
+      if (error.code === 'auth/admin-restricted-operation') {
+        alert("Registration Blocked: Anonymous/Phone login is disabled in your Firebase Settings. Please enable it in 'Firebase Console -> Authentication -> Sign-in Method' or use Google Login instead.");
+      } else {
+        alert("Registration failed: " + (error.message || "Please check your connection."));
+      }
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const login = async () => {
+  const login = async (isBusiness?: boolean) => {
     setAuthLoading(true);
+    if (isBusiness) {
+      localStorage.setItem('pending_owner_signup', 'true');
+    }
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     
@@ -594,6 +611,7 @@ export default function App() {
         if (isBusiness) {
           // Store intent to be an owner for the profile creation logic in onAuthStateChanged
           localStorage.setItem('pending_owner_signup', 'true');
+          localStorage.setItem('onboarding_active', 'true');
         }
         const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
         if (userCredential.user) {
@@ -604,7 +622,13 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Email auth error:", error);
-      alert("Authentication failed: " + error.message);
+      if (error.code === 'auth/admin-restricted-operation') {
+        alert("Registration Error: Email/Password login is currently restricted by Firebase Admin. Please enable it in your Firebase Console (Authentication -> Sign-in Method) or use Google Login for instant access.");
+      } else if (error.code === 'auth/email-already-in-use') {
+        alert("This email is already registered. Please log in instead.");
+      } else {
+        alert("Authentication failed: " + error.message);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -623,6 +647,17 @@ export default function App() {
     }, 6000);
     return () => clearTimeout(timer);
   }, [loading]);
+
+  useEffect(() => {
+    // If owner just signed up, force them into onboarding (settings)
+    if (profile?.role === 'owner' && (localStorage.getItem('onboarding_active') === 'true' || !profile.businessName) && view !== 'settings') {
+      setView('settings');
+      // Only keep onboarding_active for the first landing
+      if (!profile.businessName) {
+         localStorage.removeItem('onboarding_active');
+      }
+    }
+  }, [profile, view]);
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-bg p-6 text-center">
@@ -666,7 +701,7 @@ export default function App() {
     );
   }
 
-  if (!user) return <LandingPage onLogin={login} onPhoneLogin={handlePhoneLogin} onEmailLogin={handleEmailLogin} authLoading={authLoading} />;
+  if (!user) return <LandingPage onLogin={() => login(false)} onBusinessLogin={() => login(true)} onPhoneLogin={handlePhoneLogin} onEmailLogin={handleEmailLogin} authLoading={authLoading} />;
 
   if (profile && !profile.role) {
     return <RoleSelection uid={profile.uid} name={profile.name} email={profile.email} />;
@@ -1020,7 +1055,7 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onBusinessLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean, isBusiness: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => void, authLoading: boolean }) {
   const [mode, setMode] = useState<'business' | 'personal'>('personal');
   const [authMethod, setAuthMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
@@ -1028,14 +1063,22 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
+
+  // Auto-detect if registration was successful locally to show next step feel
+  useEffect(() => {
+    if (authLoading) {
+      setJustRegistered(true);
+    }
+  }, [authLoading]);
 
   const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (phone.length < 10 || (!isLogin && !name)) {
-      alert("Please provide a valid " + (isLogin ? "" : "name and ") + "phone number");
+      alert("Please provide a valid " + (isLogin ? "" : "name and ") + "phone number (10-11 digits)");
       return;
     }
-    onPhoneLogin(name || 'Returning User', phone, isLogin);
+    onPhoneLogin(name || 'Returning User', phone, isLogin, mode === 'business');
   };
 
   const handleEmailSubmit = (e: React.FormEvent) => {
@@ -1046,6 +1089,31 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
     }
     onEmailLogin(name, email, password, !isLogin, mode === 'business');
   };
+
+  if (justRegistered && authLoading) {
+     return (
+       <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 text-center">
+         <motion.div
+           initial={{ opacity: 0, scale: 0.9 }}
+           animate={{ opacity: 1, scale: 1 }}
+           className="space-y-6"
+         >
+           <div className="w-20 h-20 bg-accent rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-accent/20 animate-bounce">
+              <Zap size={32} className="text-white fill-white" />
+           </div>
+           <div>
+             <h2 className="text-3xl font-black text-text-main uppercase tracking-tighter">Initializing Session...</h2>
+             <p className="text-text-dim mt-2 font-bold uppercase tracking-widest text-[10px]">Preparing your {mode} dashboard</p>
+           </div>
+           <div className="flex gap-1 justify-center">
+             <div className="w-1 h-1 bg-accent rounded-full animate-ping" />
+             <div className="w-1 h-1 bg-accent rounded-full animate-ping delay-75" />
+             <div className="w-1 h-1 bg-accent rounded-full animate-ping delay-150" />
+           </div>
+         </motion.div>
+       </div>
+     );
+  }
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4 md:p-6 text-text-main text-center pb-12">
@@ -1178,10 +1246,10 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-text-dim font-black text-sm">+234</span>
                     <input 
                       type="tel" 
-                      placeholder="8012345678"
+                      placeholder="801 234 5678"
                       required
                       value={phone}
-                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
                       className="w-full bg-card border border-border rounded-2xl pl-16 pr-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
                     />
                   </div>
@@ -1214,7 +1282,7 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
               {mode === 'business' && (
                 <button 
                   type="button"
-                  onClick={onLogin}
+                  onClick={onBusinessLogin}
                   className="text-[10px] text-text-dim font-black uppercase tracking-widest hover:text-text-main transition-colors"
                 >
                   Or continue with Google
@@ -1262,7 +1330,7 @@ function LandingPage({ onLogin, onPhoneLogin, onEmailLogin, authLoading }: { onL
              <p className="text-text-dim max-w-md mx-auto font-bold">No contracts, no hidden fees. Just pure operational excellence.</p>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              <div className="bento-card border-none bg-accent text-white p-10 flex flex-col justify-between group cursor-pointer active:scale-95 transition" onClick={onLogin}>
+              <div className="bento-card border-none bg-accent text-white p-10 flex flex-col justify-between group cursor-pointer active:scale-95 transition" onClick={onBusinessLogin}>
                  <div>
                     <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">I WASH CARS (Owners)</span>
                     <h3 className="text-3xl font-black mt-4 uppercase">Pro Accelerator</h3>
