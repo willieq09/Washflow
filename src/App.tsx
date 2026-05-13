@@ -2259,7 +2259,7 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
                 <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
                   <Phone size={14} />
                 </div>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Link your phone number (OPay / Moniepoint) for verified updates.</p>
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Link your phone number for verified updates.</p>
               </div>
               <button onClick={() => navigate('settings')} className="text-[10px] font-black text-amber-500 uppercase underline whitespace-nowrap">Bind Now</button>
             </div>
