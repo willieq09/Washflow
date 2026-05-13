@@ -28,7 +28,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, ChevronDown, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -1019,6 +1019,109 @@ function MobileNavItem({ icon, label, active, onClick, badge }: { icon: React.Re
   );
 }
 
+function SearchableSelect({ 
+  value, 
+  onChange, 
+  options, 
+  placeholder, 
+  label,
+  disabled = false
+}: { 
+  value: string, 
+  onChange: (v: string) => void, 
+  options: string[], 
+  placeholder: string,
+  label: string,
+  disabled?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filteredOptions = useMemo(() => {
+    if (!search) return options;
+    return options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+  }, [options, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="space-y-2 relative" ref={containerRef}>
+      <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">{label}</label>
+      <div 
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={cn(
+          "w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40 cursor-pointer flex justify-between items-center transition-all",
+          disabled && "opacity-50 cursor-not-allowed",
+          isOpen && "border-accent/60 bg-white/10 shadow-lg shadow-accent/5"
+        )}
+      >
+        <span className={cn(!value && "text-white/20")}>{value || placeholder}</span>
+        <ChevronDown size={14} className={cn("text-text-dim transition-transform duration-300", isOpen && "rotate-180 text-accent")} />
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-[100] left-0 right-0 mt-2 bg-[#1A1A1A] border border-border rounded-2xl shadow-2xl overflow-hidden max-h-60 flex flex-col backdrop-blur-xl"
+          >
+            <div className="p-3 border-b border-border bg-white/5">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-accent" />
+                <input 
+                  autoFocus
+                  type="text"
+                  placeholder="Query data..."
+                  className="w-full bg-bg border border-border rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-accent font-bold uppercase tracking-wider placeholder:text-text-dim/20"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+            </div>
+            <div className="overflow-y-auto no-scrollbar py-2">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => {
+                      onChange(opt);
+                      setIsOpen(false);
+                      setSearch('');
+                    }}
+                    className={cn(
+                      "w-full px-5 py-3 text-left text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-between",
+                      value === opt ? "text-accent bg-accent/5" : "text-text-dim hover:text-white hover:bg-white/5 hover:translate-x-1"
+                    )}
+                  >
+                    {opt}
+                    {value === opt && <Check size={12} />}
+                  </button>
+                ))
+              ) : (
+                <div className="px-5 py-8 text-center">
+                  <p className="text-[10px] font-black text-text-dim/30 uppercase tracking-[0.2em]">No Results Found</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function Skeleton({ className, ...props }: { className?: string; [key: string]: any }) {
   return <div className={cn("animate-pulse bg-white/5 rounded-xl", className)} {...props} />;
 }
@@ -1396,18 +1499,24 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
 }
 
 const VEHICLE_DATA = {
-  "Toyota": ["Camry", "Corolla", "RAV4", "Hilux", "Prado", "Land Cruiser", "Vitz", "Aqua"],
-  "Mercedes-Benz": ["C-Class", "E-Class", "S-Class", "GLE", "G-Wagon", "GLC", "A-Class"],
-  "BMW": ["3 Series", "5 Series", "7 Series", "X3", "X5", "X6", "M4"],
-  "Tesla": ["Model 3", "Model Y", "Model S", "Model X"],
-  "Honda": ["Civic", "Accord", "CR-V", "HR-V", "Fit", "Vezel"],
-  "Ford": ["F-150", "Mustang", "Ranger", "Everest", "Explorer"],
-  "Nissan": ["Patrol", "Navara", "X-Trail", "Leaf", "Note", "Tiida"],
-  "Volkswagen": ["Golf", "Tiguan", "Passat", "Polo", "Touareg"],
-  "Hyundai": ["Tucson", "Santa Fe", "Elantra", "Sonata", "Kona"],
-  "Kia": ["Sportage", "Sorento", "Cerato", "Rio", "Stinger"],
-  "Land Rover": ["Range Rover", "Range Rover Sport", "Defender", "Discovery"],
-  "Lexus": ["RX", "NX", "LX", "IS", "ES"]
+  "Toyota": ["Camry", "Corolla", "RAV4", "Hilux", "Prado", "Land Cruiser", "Vitz", "Aqua", "Highlander", "Sienna", "Yaris", "Avalon", "Tacoma", "Tundra"],
+  "Mercedes-Benz": ["C-Class", "E-Class", "S-Class", "GLE", "G-Wagon", "GLC", "A-Class", "CLA", "GLA", "ML-Class", "Sprinter"],
+  "BMW": ["3 Series", "5 Series", "7 Series", "X3", "X5", "X6", "M4", "X1", "X7", "4 Series"],
+  "Tesla": ["Model 3", "Model Y", "Model S", "Model X", "Cybertruck"],
+  "Honda": ["Civic", "Accord", "CR-V", "HR-V", "Fit", "Vezel", "Pilot", "Odyssey"],
+  "Ford": ["F-150", "Mustang", "Ranger", "Everest", "Explorer", "Edge", "Escape", "Focus"],
+  "Nissan": ["Patrol", "Navara", "X-Trail", "Leaf", "Note", "Tiida", "Altima", "Sentra", "Pathfinder", "Murano"],
+  "Volkswagen": ["Golf", "Tiguan", "Passat", "Polo", "Touareg", "Atlas", "Jetta", "Arteon"],
+  "Hyundai": ["Tucson", "Santa Fe", "Elantra", "Sonata", "Kona", "Palisade", "Accent", "Creta"],
+  "Kia": ["Sportage", "Sorento", "Cerato", "Rio", "Stinger", "Telluride", "Picanto", "Seltos"],
+  "Land Rover": ["Range Rover", "Range Rover Sport", "Defender", "Discovery", "Evoque", "Velar"],
+  "Lexus": ["RX", "NX", "LX", "IS", "ES", "GX", "GS", "UX"],
+  "Audi": ["A3", "A4", "A6", "Q3", "Q5", "Q7", "Q8", "e-tron"],
+  "Mazda": ["CX-5", "CX-9", "Mazda3", "Mazda6", "CX-30", "BT-50"],
+  "Mitsubishi": ["Pajero", "L200", "Outlander", "ASX", "Eclipse Cross"],
+  "Peugeot": ["301", "3008", "5008", "208", "508"],
+  "Suzuki": ["Swift", "Vitara", "Jimny", "Baleno", "Ertiga"],
+  "Volvo": ["XC60", "XC90", "S90", "V90", "XC40"]
 };
 
 function FeatureCard({ title, desc }: { title: string, desc: string }) {
@@ -3688,26 +3797,21 @@ function MyCarsView({ profile, navigate, onUpdate }: { profile: UserProfile, nav
 
               <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
-                    <input 
-                      type="text"
-                      placeholder="e.g. Toyota"
-                      value={newVehicle.make}
-                      onChange={(e) => setNewVehicle({...newVehicle, make: e.target.value})}
-                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
-                    <input 
-                      type="text"
-                      placeholder="e.g. Hilux"
-                      value={newVehicle.model}
-                      onChange={(e) => setNewVehicle({...newVehicle, model: e.target.value})}
-                      className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-accent/40"
-                    />
-                  </div>
+                  <SearchableSelect 
+                    label="Make"
+                    placeholder="e.g. Toyota"
+                    value={newVehicle.make}
+                    options={Object.keys(VEHICLE_DATA)}
+                    onChange={(val) => setNewVehicle({...newVehicle, make: val, model: ''})}
+                  />
+                  <SearchableSelect 
+                    label="Model"
+                    placeholder="e.g. Hilux"
+                    value={newVehicle.model}
+                    options={newVehicle.make ? (VEHICLE_DATA[newVehicle.make as keyof typeof VEHICLE_DATA] || []) : []}
+                    onChange={(val) => setNewVehicle({...newVehicle, model: val})}
+                    disabled={!newVehicle.make}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -3978,43 +4082,21 @@ function CustomerVehicleView({ profile, navigate, onUpdate }: { profile: UserPro
                   <>
                     <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Make</label>
-                         <select 
-                           value={newVehicle.make} 
-                           onChange={e => setNewVehicle(v => ({ ...v, make: e.target.value, model: '' }))} 
-                           className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none"
-                         >
-                           <option value="" className="bg-card">Select Make</option>
-                           {Object.keys(VEHICLE_DATA).map(m => (
-                             <option key={m} value={m} className="bg-card text-white">{m}</option>
-                           ))}
-                           <option value="Other" className="bg-card">Other</option>
-                         </select>
-                      </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Model</label>
-                         {newVehicle.make === 'Other' ? (
-                           <input 
-                             value={newVehicle.model} 
-                             onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
-                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none" 
-                             placeholder="Enter model" 
-                           />
-                         ) : (
-                           <select 
-                             value={newVehicle.model} 
-                             onChange={e => setNewVehicle(v => ({ ...v, model: e.target.value }))} 
-                             disabled={!newVehicle.make}
-                             className="w-full bg-bg border border-border rounded-2xl px-5 py-4 text-sm text-text-main focus:border-accent outline-none appearance-none disabled:opacity-50"
-                           >
-                             <option value="" className="bg-card">Select Model</option>
-                             {newVehicle.make && VEHICLE_DATA[newVehicle.make as keyof typeof VEHICLE_DATA]?.map(m => (
-                               <option key={m} value={m} className="bg-card text-white">{m}</option>
-                             ))}
-                           </select>
-                         )}
-                      </div>
+                      <SearchableSelect 
+                        label="Make"
+                        placeholder="Select Make"
+                        value={newVehicle.make}
+                        options={Object.keys(VEHICLE_DATA)}
+                        onChange={(val) => setNewVehicle(v => ({ ...v, make: val, model: '' }))}
+                      />
+                      <SearchableSelect 
+                        label="Model"
+                        placeholder="Select Model"
+                        value={newVehicle.model}
+                        options={newVehicle.make ? (VEHICLE_DATA[newVehicle.make as keyof typeof VEHICLE_DATA] || []) : []}
+                        onChange={(val) => setNewVehicle(v => ({ ...v, model: val }))}
+                        disabled={!newVehicle.make}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
