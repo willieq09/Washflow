@@ -420,7 +420,30 @@ export default function App() {
           const docRef = doc(db, 'users', u.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const data = docSnap.data() as UserProfile;
+            
+            // Sync check for workers: if they are in authorized_workers, ensure their role is worker
+            const checkEmail = u.email || data.email;
+            if (checkEmail && (data.role === 'customer' || data.role === 'owner' || !data.stationId)) {
+              const normalizedEmail = checkEmail.toLowerCase();
+              const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
+              const authWorkerSnap = await getDocs(authWorkerQuery);
+              
+              if (!authWorkerSnap.empty) {
+                const authData = authWorkerSnap.docs[0].data();
+                if (data.role !== 'worker' || data.stationId !== authData.stationId) {
+                  const updatedData = { ...data, role: 'worker' as const, stationId: authData.stationId };
+                  await updateDoc(docRef, { role: 'worker', stationId: authData.stationId });
+                  setProfile(updatedData);
+                } else {
+                  setProfile(data);
+                }
+              } else {
+                setProfile(data);
+              }
+            } else {
+              setProfile(data);
+            }
           } else {
             const isOwnerEmail = u.email && (ADMIN_EMAILS.includes(u.email) || localStorage.getItem('pending_owner_signup') === 'true');
             if (localStorage.getItem('pending_owner_signup')) {
@@ -428,10 +451,10 @@ export default function App() {
             }
             
             // Check if this email is an authorized worker
-            let assignedRole: any = isOwnerEmail ? 'owner' : null;
+            let assignedRole: any = null;
             let assignedStationId: string | null = null;
 
-            if (!assignedRole && u.email) {
+            if (u.email) {
               const normalizedEmail = u.email.toLowerCase();
               const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
               const authWorkerSnap = await getDocs(authWorkerQuery);
@@ -440,6 +463,10 @@ export default function App() {
                 assignedRole = 'worker';
                 assignedStationId = authData.stationId;
               }
+            }
+
+            if (!assignedRole && isOwnerEmail) {
+              assignedRole = 'owner';
             }
 
             const newProfile: any = {
@@ -556,11 +583,26 @@ export default function App() {
         setProfile(updatedProfile);
       } else {
         // Create brand new profile
+        let assignedRole: UserRole = isBusiness ? 'owner' : 'customer';
+        let assignedStationId: string | null = null;
+        
+        if (email) {
+          const normalizedEmail = email.toLowerCase();
+          const authWorkerQuery = query(collection(db, 'authorized_workers'), where('email', '==', normalizedEmail));
+          const authWorkerSnap = await getDocs(authWorkerQuery);
+          if (!authWorkerSnap.empty) {
+            const authData = authWorkerSnap.docs[0].data();
+            assignedRole = 'worker';
+            assignedStationId = authData.stationId;
+          }
+        }
+
         const newProfile: UserProfile = {
           uid: u.uid,
           name: name,
           phone: formattedPhone,
-          role: isBusiness ? 'owner' : 'customer',
+          role: assignedRole,
+          stationId: assignedStationId || undefined,
           email: email || '',
           credits: 0,
           vehicles: [],
@@ -6534,7 +6576,8 @@ function AddWorkerModal({ isOpen, onClose, stationId }: { isOpen: boolean, onClo
     if (!normalizedEmail || !form.name) return;
     setLoading(true);
     try {
-      await addDoc(collection(db, 'authorized_workers'), {
+      const workerDocId = normalizedEmail; // Use email as ID for easier security rules
+      await setDoc(doc(db, 'authorized_workers', workerDocId), {
         ...form,
         email: normalizedEmail,
         stationId,
