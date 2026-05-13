@@ -1,4 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import * as React from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  format, 
+  addDays, 
+  startOfToday, 
+  eachDayOfInterval, 
+  isSameDay,
+} from 'date-fns';
 import { 
   auth, db, OperationType, handleFirestoreError 
 } from './lib/firebase';
@@ -440,7 +448,8 @@ export default function App() {
               email: u.email || '',
               role: assignedRole || 'customer', // Default to customer for phone/anonymous users
               stationId: assignedStationId,
-              photoUrl: u.photoURL || null
+              photoUrl: u.photoURL || null,
+              createdAt: new Date()
             };
             
             if (assignedRole || u.isAnonymous || u.email) {
@@ -494,7 +503,7 @@ export default function App() {
     }
   }, [profile]);
 
-  const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean, isBusiness?: boolean) => {
+  const handlePhoneLogin = async (name: string, phone: string, isLogin?: boolean, isBusiness?: boolean, email?: string) => {
     setAuthLoading(true);
     try {
       // Robust Nigerian phone formatting: handle leading 0 or 234.
@@ -525,6 +534,7 @@ export default function App() {
             ...existingData,
             uid: u.uid,
             name: isLogin ? existingData.name : name, // Update name if provided
+            email: isLogin ? existingData.email : (email || existingData.email || ''),
             updatedAt: serverTimestamp()
           });
         }
@@ -532,7 +542,8 @@ export default function App() {
         const updatedProfile = {
           ...existingData,
           uid: u.uid,
-          name: isLogin ? existingData.name : name
+          name: isLogin ? existingData.name : name,
+          email: isLogin ? existingData.email : (email || existingData.email || '')
         };
         setProfile(updatedProfile);
       } else {
@@ -542,7 +553,7 @@ export default function App() {
           name: name,
           phone: formattedPhone,
           role: isBusiness ? 'owner' : 'customer',
-          email: '',
+          email: email || '',
           credits: 0,
           vehicles: [],
           theme: 'dark'
@@ -924,6 +935,7 @@ export default function App() {
               <SettingsView key="settings" profile={profile} onUpdate={(p) => setProfile(p)} />
             )}
             {view === 'my-cars' && <MyCarsView key="my-cars" profile={profile!} navigate={navigate} onUpdate={(p) => setProfile(p)} />}
+            {view === 'marketplace' && profile && <MarketplaceView key="marketplace" profile={profile} navigate={navigate} />}
             {view === 'scanner' && profile && (
               <ScannerView key="scanner" profile={profile} navigate={navigate} onLog={(data) => {
                 setPreFillWash(data);
@@ -932,11 +944,13 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <FeedbackModal 
-            isOpen={isFeedbackOpen} 
-            onClose={() => setIsFeedbackOpen(false)} 
-            userProfile={profile} 
-          />
+          {profile && (
+            <FeedbackModal 
+              isOpen={isFeedbackOpen} 
+              onClose={() => setIsFeedbackOpen(false)} 
+              userProfile={profile} 
+            />
+          )}
 
           {/* Floating Feedback Trigger */}
           <button 
@@ -1056,7 +1070,7 @@ function SyncStatus({ isOnline, pendingCount }: { isOnline: boolean, pendingCoun
 }
 
 
-function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onBusinessLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean, isBusiness: boolean) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => void, authLoading: boolean }) {
+function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, authLoading }: { onLogin: () => void, onBusinessLogin: () => void, onPhoneLogin: (name: string, phone: string, isLogin: boolean, isBusiness: boolean, email?: string) => void, onEmailLogin: (name: string, email: string, pass: string, isSignUp: boolean, isBusiness: boolean) => void, authLoading: boolean }) {
   const [mode, setMode] = useState<'business' | 'personal'>('personal');
   const [authMethod, setAuthMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
@@ -1079,7 +1093,11 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
       alert("Please provide a valid " + (isLogin ? "" : "name and ") + "phone number (10-11 digits)");
       return;
     }
-    onPhoneLogin(name || 'Returning User', phone, isLogin, mode === 'business');
+    if (!isLogin && !email) {
+      alert("Please provide an email address for important updates.");
+      return;
+    }
+    onPhoneLogin(name || 'Returning User', phone, isLogin, mode === 'business', email);
   };
 
   const handleEmailSubmit = (e: React.FormEvent) => {
@@ -1255,6 +1273,19 @@ function LandingPage({ onLogin, onBusinessLogin, onPhoneLogin, onEmailLogin, aut
                     />
                   </div>
                 </div>
+                {!isLogin && (
+                  <div className="space-y-2 text-left">
+                    <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      placeholder="Enter your email"
+                      required
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full bg-card border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none placeholder:text-text-dim/20"
+                    />
+                  </div>
+                )}
               </>
             )}
             
@@ -1786,8 +1817,26 @@ function BookingModal({
   profile: UserProfile 
 }) {
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
-  const [slot, setSlot] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
+  const [selectedTime, setSelectedTime] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  const availableDates = useMemo(() => {
+    const today = startOfToday();
+    return eachDayOfInterval({
+      start: today,
+      end: addDays(today, 13) // Next 2 weeks
+    });
+  }, []);
+
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let i = 8; i <= 18; i++) { // 8 AM to 6 PM
+      slots.push(`${i.toString().padStart(2, '0')}:00`);
+      if (i < 18) slots.push(`${i.toString().padStart(2, '0')}:30`);
+    }
+    return slots;
+  }, []);
 
   useEffect(() => {
     if (isOpen && profile.vehicles && profile.vehicles.length > 0) {
@@ -1797,7 +1846,7 @@ function BookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!station || !selectedVehicle || !slot) return;
+    if (!station || !selectedVehicle || !selectedTime) return;
     
     setSubmitting(true);
     const path = 'bookings';
@@ -1812,6 +1861,10 @@ function BookingModal({
         price = (station.pricing as any)[vehicleType] || price;
       }
 
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const bookingSlot = new Date(selectedDate);
+      bookingSlot.setHours(hours, minutes, 0, 0);
+
       await addDoc(collection(db, 'bookings'), {
         userId: profile.uid,
         vehicleId: selectedVehicle,
@@ -1819,7 +1872,7 @@ function BookingModal({
         businessId: station.id,
         stationId: station.ownerUid,
         businessName: station.name,
-        slot: Timestamp.fromDate(new Date(slot)),
+        slot: Timestamp.fromDate(bookingSlot),
         status: 'pending',
         serviceType: 'in-station',
         price,
@@ -1850,7 +1903,7 @@ function BookingModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-lg bg-card border border-border p-8 md:p-10 rounded-[3rem] shadow-2xl"
+        className="relative w-full max-w-lg bg-card border border-border p-8 md:p-10 rounded-[3rem] shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-hide"
       >
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -1861,7 +1914,8 @@ function BookingModal({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="space-y-6">
+            <div className="space-y-8">
+              {/* Vehicle Selection */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Vehicle</label>
                 {profile.vehicles && profile.vehicles.length > 0 ? (
@@ -1894,21 +1948,65 @@ function BookingModal({
                 )}
               </div>
 
+              {/* Date Selection */}
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Schedule Slot</label>
-                <input 
-                  type="datetime-local" 
-                  required
-                  value={slot}
-                  onChange={(e) => setSlot(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-2xl px-6 py-4 text-sm font-bold text-text-main focus:border-accent outline-none font-mono"
-                />
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Choose Date</label>
+                <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+                  {availableDates.map((date, i) => {
+                    const isSelected = isSameDay(date, selectedDate);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedDate(date)}
+                        className={cn(
+                          "flex-shrink-0 w-16 py-4 rounded-2xl border transition-all flex flex-col items-center gap-1",
+                          isSelected 
+                            ? "border-accent bg-accent text-white shadow-lg shadow-accent/20" 
+                            : "border-border bg-bg text-text-dim hover:border-text-dim/50"
+                        )}
+                      >
+                        <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
+                          {format(date, 'EEE')}
+                        </span>
+                        <span className="text-lg font-black leading-none">
+                          {format(date, 'd')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Time Selection */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Pick Time</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {timeSlots.map((time, i) => {
+                    const isSelected = selectedTime === time;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedTime(time)}
+                        className={cn(
+                          "py-3 rounded-xl border text-[10px] font-black transition-all",
+                          isSelected 
+                            ? "border-accent bg-accent/5 text-accent shadow-sm" 
+                            : "border-border bg-bg text-text-dim hover:border-text-dim/50"
+                        )}
+                      >
+                        {time}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             <button 
               type="submit"
-              disabled={submitting || !selectedVehicle || !slot}
+              disabled={submitting || !selectedVehicle || !selectedTime}
               className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-3"
             >
               {submitting ? <RefreshCw className="animate-spin" size={18} /> : (
@@ -4476,8 +4574,8 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
     }
   }, [profile]);
 
-  const videoRef = React.useRef<HTMLVideoElement>(null);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [stationInfo, setStationInfo] = useState<any>(null);
 

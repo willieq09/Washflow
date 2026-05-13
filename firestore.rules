@@ -60,7 +60,7 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
              data.uid == request.auth.uid &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.email is string && // Allow empty email for phone users
+             data.email is string && 
              data.role in ['owner', 'worker', 'customer', 'admin'] &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
              (!('phone' in data) || (data.phone is string && data.phone.size() <= 25)) &&
@@ -71,16 +71,18 @@ service cloud.firestore {
              (!('status' in data) || data.status in ['active', 'suspended']) &&
              (!('plan' in data) || data.plan is string) &&
              (!('pricing' in data) || data.pricing is map) &&
-             (!('vehicles' in data) || data.vehicles is list);
+             (!('vehicles' in data) || data.vehicles is list) &&
+             (!('updatedAt' in data) || (data.updatedAt == request.time || data.updatedAt.toMillis() > 0));
     }
 
     function isValidBooking(data) {
-      return data.keys().hasAll(['userId', 'businessId', 'stationId', 'slot', 'status', 'createdAt']) &&
+      return data.keys().hasAll(['userId', 'businessId', 'stationId', 'slot', 'status', 'createdAt', 'vehicleInfo']) &&
              data.userId == request.auth.uid &&
              data.businessId is string &&
              data.stationId is string &&
              data.slot is timestamp &&
              data.status in ['pending', 'confirmed', 'completed', 'canceled'] &&
+             data.vehicleInfo is string &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0);
     }
 
