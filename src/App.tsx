@@ -46,10 +46,12 @@ const MIN_WITHDRAWAL = 1000;
 const ADMIN_EMAILS = ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'];
 
 // --- Types ---
+type UserRole = 'owner' | 'worker' | 'customer' | 'admin';
+
 interface UserProfile {
   uid: string;
   name: string;
-  role: 'owner' | 'worker' | 'customer' | 'admin';
+  role: UserRole;
   email: string;
   phone?: string;
   photoUrl?: string;
@@ -5085,7 +5087,7 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
                Rating Link
              </button>
              <button 
-               onClick={() => { setLastLoggedId(null); setForm({ carModel: '', plateNumber: '', customerPhone: '', price: '2000' }); }}
+               onClick={() => { setLastLoggedId(null); setForm({ make: '', model: '', plateNumber: '', customerPhone: '', price: profile.pricing?.sedan?.toString() || '2000' }); }}
                className="flex-1 bg-card border border-border text-text-main font-black py-4 rounded-xl hover:bg-text-main/5 transition"
              >
                Next Wash
