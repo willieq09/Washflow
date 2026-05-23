@@ -37,10 +37,11 @@ import {
 import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { sendEmail, generateBookingNotification } from './services/notificationService';
-import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
+import { TomTomMap } from './components/TomTomMap';
 
 // --- Constants ---
 const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY || '';
 const COMMISSION_RATE = 0.075; // 7.5% Platform Fee, 92.5% Owner Split
 const MIN_WITHDRAWAL = 1000;
 const ADMIN_EMAILS = ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'];
@@ -6165,8 +6166,20 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         
         let address = settings.businessAddress;
         
-        // Attempt to reverse geocode if Google Maps is loaded
-        if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+        // Attempt to reverse geocode if TomTom or Google Maps is loaded
+        if (TOMTOM_API_KEY) {
+          try {
+            const response = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${TOMTOM_API_KEY}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.addresses && data.addresses[0] && data.addresses[0].address) {
+                address = data.addresses[0].address.freeformAddress || address;
+              }
+            }
+          } catch (error) {
+            console.error("TomTom reverse geocoding failed:", error);
+          }
+        } else if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
           try {
             const geocoder = new google.maps.Geocoder();
             const response = await geocoder.geocode({ location: { lat, lng } });
@@ -6411,35 +6424,20 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   </p>
                 </div>
 
-                {API_KEY && API_KEY !== 'YOUR_API_KEY' ? (
-                  <APIProvider apiKey={API_KEY} version="weekly">
-                    <div className="w-full h-72 rounded-[2rem] overflow-hidden border border-border shadow-2xl relative group mb-6">
-                      <Map
-                        defaultCenter={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }}
-                        center={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }}
-                        defaultZoom={15}
-                        mapId="STATION_LOCATOR"
-                        disableDefaultUI={true}
-                        zoomControl={true}
-                        gestureHandling="greedy"
-                        internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                      >
-                        <AdvancedMarker position={{ lat: settings.businessLat || 0, lng: settings.businessLng || 0 }} draggable={true} onDragEnd={(e) => {
-                          if (e.latLng) {
-                            const newLat = e.latLng.lat();
-                            const newLng = e.latLng.lng();
-                            setSettings(prev => ({ ...prev, businessLat: newLat, businessLng: newLng }));
-                          }
-                        }}>
-                          <Pin background="#EAB308" glyphColor="#fff" borderColor="#EAB308" />
-                        </AdvancedMarker>
-                      </Map>
-                      <div className="absolute inset-0 pointer-events-none border-4 border-accent/20 rounded-[2rem] z-10 transition-opacity opacity-50 group-hover:opacity-100" />
-                      <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 uppercase text-[8px] font-black text-white tracking-widest">
-                        STATION RADAR ACTIVE
-                      </div>
+                {TOMTOM_API_KEY && TOMTOM_API_KEY !== 'YOUR_API_KEY' ? (
+                  <div className="w-full h-72 rounded-[2rem] overflow-hidden border border-border shadow-2xl relative mb-6">
+                    <TomTomMap
+                      apiKey={TOMTOM_API_KEY}
+                      lat={settings.businessLat || 0}
+                      lng={settings.businessLng || 0}
+                      onDragEnd={(newLat, newLng) => {
+                        setSettings(prev => ({ ...prev, businessLat: newLat, businessLng: newLng }));
+                      }}
+                    />
+                    <div className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 uppercase text-[8px] font-black text-white tracking-widest pointer-events-none">
+                      TOMTOM STATION RADAR ACTIVE
                     </div>
-                  </APIProvider>
+                  </div>
                 ) : (
                   <div className="w-full py-12 bg-bg border border-dashed border-border rounded-[2rem] mb-6 flex flex-col items-center justify-center gap-4 text-center px-6">
                     <div className="p-4 bg-accent/10 rounded-full text-accent">
@@ -6447,7 +6445,7 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                     </div>
                     <div>
                       <p className="text-sm font-black text-text-main uppercase tracking-widest">Maps Integration Pending</p>
-                      <p className="text-[10px] text-text-main/60 font-medium max-w-xs mt-1">Configure `GOOGLE_MAPS_PLATFORM_KEY` in Secrets to enable interactive station mapping.</p>
+                      <p className="text-[10px] text-text-main/60 font-medium max-w-xs mt-1">Configure `TOMTOM_API_KEY` in Secrets to enable interactive station mapping.</p>
                     </div>
                   </div>
                 )}
