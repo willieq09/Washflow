@@ -44,6 +44,12 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", paystack: !!PAYSTACK_SECRET });
 });
 
+app.get("/api/config", (req, res) => {
+  res.json({
+    tomtom_api_key: (process.env.TOMTOM_API_KEY || process.env.VITE_TOMTOM_API_KEY || "").trim()
+  });
+});
+
 app.get("/api/paystack/test-connectivity", async (req, res) => {
   try {
     const response = await axios.get("https://api.paystack.co/bank", {

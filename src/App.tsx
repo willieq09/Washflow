@@ -64,7 +64,6 @@ interface UserProfile {
   businessLng?: number;
   businessRadius?: number;
   businessImage?: string;
-  tomtomApiKey?: string;
   pricing?: {
     sedan: number;
     suv: number;
@@ -6118,8 +6117,7 @@ function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, 
     businessRadius: profile.businessRadius || 500,
     businessImage: profile.businessImage || 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&q=80&w=800',
     pricing: profile.pricing || { sedan: 2000, suv: 4500, truck: 7000 },
-    theme: profile.theme || 'dark',
-    tomtomApiKey: profile.tomtomApiKey || ''
+    theme: profile.theme || 'dark'
   });
 
   useEffect(() => {
@@ -6180,10 +6178,9 @@ function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, 
         let address = settings.businessAddress;
         
         // Attempt to reverse geocode if TomTom is loaded
-        const liveKey = settings.tomtomApiKey || tomtomKey;
-        if (liveKey) {
+        if (tomtomKey) {
           try {
-            const response = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${liveKey}`);
+            const response = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${tomtomKey}`);
             if (response.ok) {
               const data = await response.json();
               if (data && data.addresses && data.addresses[0] && data.addresses[0].address) {
@@ -6424,28 +6421,14 @@ function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, 
                 </label>
                 <div className="bg-accent/5 p-6 rounded-2xl border border-accent/20">
                   <p className="text-sm text-text-main leading-relaxed font-black">
-                    <span className="text-accent uppercase">What is this?</span> The Operational Geofence is a virtual perimeter for your business. It ensures workers can only log washes when they are physically at the station, preventing fraudulent logs and verifying operational integrity.
+                     <span className="text-accent uppercase">What is this?</span> The Operational Geofence is a virtual perimeter for your business. It ensures workers can only log washes when they are physically at the station, preventing fraudulent logs and verifying operational integrity.
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-text-main uppercase tracking-widest ml-1">Custom TomTom Maps API Key</label>
-                  <input 
-                    type="text"
-                    value={settings.tomtomApiKey}
-                    onChange={e => setSettings(prev => ({ ...prev, tomtomApiKey: e.target.value }))}
-                    placeholder="e.g. jBq7YF4qO2lM8..."
-                    className="w-full bg-bg border border-border rounded-2xl px-6 py-5 text-base text-text-main outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent shadow-inner touch-target font-mono"
-                  />
-                  <p className="text-[10px] text-text-main/60 font-medium leading-normal mt-1">
-                    If configured on your cloud system as an environment variable, it is automatically resolved. Otherwise, paste your TomTom API key directly here and click <strong>SAVE OPERATION ENVIRONMENT</strong> below to activate and map the location dynamically.
-                  </p>
-                </div>
-
-                {(settings.tomtomApiKey || tomtomKey) && (settings.tomtomApiKey || tomtomKey) !== 'YOUR_API_KEY' ? (
+                {tomtomKey && tomtomKey !== 'YOUR_API_KEY' ? (
                   <div className="w-full h-72 rounded-[2rem] overflow-hidden border border-border shadow-2xl relative mb-6">
                     <TomTomMap
-                      apiKey={settings.tomtomApiKey || tomtomKey}
+                      apiKey={tomtomKey}
                       lat={settings.businessLat || 0}
                       lng={settings.businessLng || 0}
                       onDragEnd={(newLat, newLng) => {
@@ -6463,7 +6446,7 @@ function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, 
                     </div>
                     <div>
                       <p className="text-sm font-black text-text-main uppercase tracking-widest">Maps Integration Pending</p>
-                      <p className="text-[10px] text-text-main/60 font-medium max-w-xs mt-1">Input your TomTom API Key or configure it in secrets to activate interactive mapping.</p>
+                      <p className="text-[10px] text-text-main/60 font-medium max-w-xs mt-1">Configure `TOMTOM_API_KEY` in Secrets to enable interactive station mapping.</p>
                     </div>
                   </div>
                 )}
