@@ -40,7 +40,6 @@ import { sendEmail, generateBookingNotification } from './services/notificationS
 import { TomTomMap } from './components/TomTomMap';
 
 // --- Constants ---
-const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY || '';
 const COMMISSION_RATE = 0.075; // 7.5% Platform Fee, 92.5% Owner Split
 const MIN_WITHDRAWAL = 1000;
@@ -349,6 +348,18 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<AppView>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [tomtomKey, setTomtomKey] = useState<string>(TOMTOM_API_KEY);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.tomtom_api_key) {
+          setTomtomKey(data.tomtom_api_key);
+        }
+      })
+      .catch(err => console.error("Error fetching live config:", err));
+  }, []);
 
   useEffect(() => {
     if (profile?.theme === 'light') {
@@ -1020,7 +1031,7 @@ export default function App() {
               <SubscriptionView key="subscription" profile={profile} />
             )}
             {view === 'settings' && profile && (
-              <SettingsView key="settings" profile={profile} onUpdate={(p) => setProfile(p)} />
+              <SettingsView key="settings" profile={profile} onUpdate={(p) => setProfile(p)} tomtomKey={tomtomKey} />
             )}
             {view === 'my-cars' && <MyCarsView key="my-cars" profile={profile!} navigate={navigate} onUpdate={(p) => setProfile(p)} />}
             {view === 'marketplace' && profile && <MarketplaceView key="marketplace" profile={profile} navigate={navigate} />}
@@ -6091,7 +6102,7 @@ function HistoryView({ profile }: { profile: UserProfile }) {
   );
 }
 
-function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (p: UserProfile) => void }) {
+function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, onUpdate: (p: UserProfile) => void, tomtomKey: string }) {
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
   const [authorizedEmails, setAuthorizedEmails] = useState<any[]>([]);
@@ -6166,10 +6177,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
         
         let address = settings.businessAddress;
         
-        // Attempt to reverse geocode if TomTom or Google Maps is loaded
-        if (TOMTOM_API_KEY) {
+        // Attempt to reverse geocode if TomTom is loaded
+        if (tomtomKey) {
           try {
-            const response = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${TOMTOM_API_KEY}`);
+            const response = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${tomtomKey}`);
             if (response.ok) {
               const data = await response.json();
               if (data && data.addresses && data.addresses[0] && data.addresses[0].address) {
@@ -6178,16 +6189,6 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
             }
           } catch (error) {
             console.error("TomTom reverse geocoding failed:", error);
-          }
-        } else if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
-          try {
-            const geocoder = new google.maps.Geocoder();
-            const response = await geocoder.geocode({ location: { lat, lng } });
-            if (response.results[0]) {
-              address = response.results[0].formatted_address;
-            }
-          } catch (error) {
-            console.error("Reverse geocoding failed:", error);
           }
         }
 
@@ -6424,10 +6425,10 @@ function SettingsView({ profile, onUpdate }: { profile: UserProfile, onUpdate: (
                   </p>
                 </div>
 
-                {TOMTOM_API_KEY && TOMTOM_API_KEY !== 'YOUR_API_KEY' ? (
+                {tomtomKey && tomtomKey !== 'YOUR_API_KEY' ? (
                   <div className="w-full h-72 rounded-[2rem] overflow-hidden border border-border shadow-2xl relative mb-6">
                     <TomTomMap
-                      apiKey={TOMTOM_API_KEY}
+                      apiKey={tomtomKey}
                       lat={settings.businessLat || 0}
                       lng={settings.businessLng || 0}
                       onDragEnd={(newLat, newLng) => {
