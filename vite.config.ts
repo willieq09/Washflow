@@ -15,8 +15,8 @@ export default defineConfig(({mode}) => {
     },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(env.GOOGLE_MAPS_PLATFORM_KEY || env.VITE_GOOGLE_MAPS_PLATFORM_KEY || ''),
-      'process.env.TOMTOM_API_KEY': JSON.stringify(env.TOMTOM_API_KEY || env.VITE_TOMTOM_API_KEY || ''),
+      'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(env.GOOGLE_MAPS_PLATFORM_KEY || env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || process.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || ''),
+      'process.env.TOMTOM_API_KEY': JSON.stringify(env.TOMTOM_API_KEY || env.VITE_TOMTOM_API_KEY || process.env.TOMTOM_API_KEY || process.env.VITE_TOMTOM_API_KEY || ''),
     },
     resolve: {
       alias: {
