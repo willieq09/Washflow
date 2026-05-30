@@ -2061,6 +2061,16 @@ function BookingModal({
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Check if user has saved vehicles in fleet
+  const hasSavedVehicles = useMemo(() => profile.vehicles && profile.vehicles.length > 0, [profile.vehicles]);
+  const [vehicleEntryMode, setVehicleEntryMode] = useState<'select' | 'manual'>(
+    hasSavedVehicles ? 'select' : 'manual'
+  );
+
+  const [manualMake, setManualMake] = useState('');
+  const [manualModel, setManualModel] = useState('');
+  const [manualPlate, setManualPlate] = useState('');
+
   const availableDates = useMemo(() => {
     const today = startOfToday();
     return eachDayOfInterval({
@@ -2086,17 +2096,42 @@ function BookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!station || !selectedVehicle || !selectedTime) return;
-    
+    if (!station || !selectedTime) {
+      alert("Please ensure a station and a timeslot are selected.");
+      return;
+    }
+
+    const isManual = vehicleEntryMode === 'manual' || !hasSavedVehicles;
+    const finalVehiclePlate = isManual ? manualPlate.trim().toUpperCase() : selectedVehicle;
+
+    if (!finalVehiclePlate) {
+      alert("Please select or specify a vehicle plate number.");
+      return;
+    }
+
     setSubmitting(true);
     const path = 'bookings';
     try {
-      const vehicle = profile.vehicles?.find(v => v.plate === selectedVehicle);
-      const vehicleInfo = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.plate})` : selectedVehicle;
-      
+      let finalVehicleInfo = "";
+      let finalModel = "sedan";
+
+      if (isManual) {
+        if (!manualMake.trim() || !manualModel.trim() || !manualPlate.trim()) {
+          alert("Please fill in the Make, Model, and Plate Number for your vehicle.");
+          setSubmitting(false);
+          return;
+        }
+        finalVehicleInfo = `${manualMake.trim()} ${manualModel.trim()} (${manualPlate.trim().toUpperCase()})`;
+        finalModel = manualModel.toLowerCase();
+      } else {
+        const vehicle = profile.vehicles?.find(v => v.plate === selectedVehicle);
+        finalVehicleInfo = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.plate})` : selectedVehicle;
+        finalModel = vehicle ? vehicle.model.toLowerCase() : "sedan";
+      }
+
       let price = station.pricing?.sedan || 2500; // fallback
-      const vehicleType = vehicle?.model.toLowerCase().includes('suv') ? 'suv' : 
-                          vehicle?.make.toLowerCase().includes('truck') ? 'truck' : 'sedan';
+      const vehicleType = finalModel.includes('suv') ? 'suv' : 
+                          finalModel.includes('truck') ? 'truck' : 'sedan';
       if (station.pricing) {
         price = (station.pricing as any)[vehicleType] || price;
       }
@@ -2105,10 +2140,11 @@ function BookingModal({
       const bookingSlot = new Date(selectedDate);
       bookingSlot.setHours(hours, minutes, 0, 0);
 
+      // Create Booking
       await addDoc(collection(db, 'bookings'), {
         userId: profile.uid,
-        vehicleId: selectedVehicle,
-        vehicleInfo,
+        vehicleId: finalVehiclePlate,
+        vehicleInfo: finalVehicleInfo,
         businessId: station.id,
         stationId: station.ownerUid,
         businessName: station.name,
@@ -2119,6 +2155,29 @@ function BookingModal({
         createdAt: serverTimestamp()
       });
 
+      // Automatically persist added vehicle to user profile so they can choose it instantly next time!
+      if (isManual) {
+        try {
+          const newVeh = {
+            make: manualMake.trim(),
+            model: manualModel.trim(),
+            plate: manualPlate.trim().toUpperCase(),
+            year: new Date().getFullYear(),
+            intensity: 'low' as const,
+            tirePressure: 'Normal',
+            dirtLevel: 'low' as const
+          };
+          const currentVehicles = profile.vehicles || [];
+          if (!currentVehicles.some(v => v.plate.toUpperCase() === newVeh.plate)) {
+            const updatedVehicles = [...currentVehicles, newVeh];
+            await updateDoc(doc(db, 'users', profile.uid), { vehicles: updatedVehicles });
+            profile.vehicles = updatedVehicles;
+          }
+        } catch (saveError) {
+          console.warn("Could not save vehicle info to profile:", saveError);
+        }
+      }
+
       alert("Booking transmitted. Awaiting station confirmation.");
       onClose();
     } catch (err: any) {
@@ -2127,6 +2186,12 @@ function BookingModal({
       setSubmitting(false);
     }
   };
+
+  const isButtonDisabled = submitting || !selectedTime || (
+    vehicleEntryMode === 'select' && !selectedVehicle
+  ) || (
+    vehicleEntryMode === 'manual' && (!manualMake.trim() || !manualModel.trim() || !manualPlate.trim())
+  );
 
   if (!isOpen || !station) return null;
 
@@ -2155,12 +2220,43 @@ function BookingModal({
 
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="space-y-8">
-              {/* Vehicle Selection */}
+              {/* Vehicle Selection Header / Tabs if saved vehicles exist */}
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Select Vehicle</label>
-                {profile.vehicles && profile.vehicles.length > 0 ? (
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">Vehicle Details</label>
+                  {hasSavedVehicles && (
+                    <div className="flex bg-bg rounded-xl p-0.5 border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setVehicleEntryMode('select')}
+                        className={cn(
+                          "px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all",
+                          vehicleEntryMode === 'select'
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-text-dim hover:text-text-main"
+                        )}
+                      >
+                        Saved Fleet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVehicleEntryMode('manual')}
+                        className={cn(
+                          "px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all",
+                          vehicleEntryMode === 'manual'
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-text-dim hover:text-text-main"
+                        )}
+                      >
+                        New Entry
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {vehicleEntryMode === 'select' && hasSavedVehicles ? (
                   <div className="grid grid-cols-1 gap-3">
-                    {profile.vehicles.map((v, i) => (
+                    {profile.vehicles?.map((v, i) => (
                       <button
                         key={i}
                         type="button"
@@ -2184,7 +2280,48 @@ function BookingModal({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-amber-500 font-bold uppercase italic">No vehicles enlisted in your profile.</p>
+                  <div className="bg-bg border border-border p-5 rounded-2xl space-y-4">
+                    {!hasSavedVehicles && (
+                      <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-normal mb-2">
+                        No vehicles in your fleet. Let's record your vehicle for this booking (we'll save it to your profile for next time!).
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-text-dim ml-1">Make</label>
+                        <input
+                          type="text"
+                          required
+                          value={manualMake}
+                          onChange={(e) => setManualMake(e.target.value)}
+                          placeholder="e.g. Toyota"
+                          className="w-full bg-card border border-border rounded-xl px-4 py-3 text-xs text-text-main font-bold outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-text-dim ml-1">Model</label>
+                        <input
+                          type="text"
+                          required
+                          value={manualModel}
+                          onChange={(e) => setManualModel(e.target.value)}
+                          placeholder="e.g. Corolla"
+                          className="w-full bg-card border border-border rounded-xl px-4 py-3 text-xs text-text-main font-bold outline-none focus:border-accent"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-widest text-text-dim ml-1">Plate Number</label>
+                      <input
+                        type="text"
+                        required
+                        value={manualPlate}
+                        onChange={(e) => setManualPlate(e.target.value)}
+                        placeholder="e.g. KCB 123A"
+                        className="w-full bg-card border border-border rounded-xl px-4 py-3 text-xs text-text-main font-mono text-center tracking-widest uppercase font-bold outline-none focus:border-accent"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -2246,7 +2383,7 @@ function BookingModal({
 
             <button 
               type="submit"
-              disabled={submitting || !selectedVehicle || !selectedTime}
+              disabled={isButtonDisabled}
               className="w-full bg-accent text-white py-6 rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-accent/20 hover:brightness-110 active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-3"
             >
               {submitting ? <RefreshCw className="animate-spin" size={18} /> : (
