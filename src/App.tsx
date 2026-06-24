@@ -2123,7 +2123,244 @@ function AdminDashboardView() {
            </button>
         </div>
       </div>
+
+      <div className="mt-10">
+        <TransactionRepairPanel currentProfile={{} as any} isAdminMode={true} />
+      </div>
     </motion.div>
+  );
+}
+
+function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { currentProfile: UserProfile, isAdminMode?: boolean }) {
+  const [refInput, setRefInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<any | null>(null);
+  const [repairStatus, setRepairStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const [repairMessage, setRepairMessage] = useState('');
+
+  const handleVerify = async () => {
+    if (!refInput.trim()) {
+      alert("Please enter a valid Paystack reference.");
+      return;
+    }
+    setVerifying(true);
+    setVerifyResult(null);
+    setRepairStatus('idle');
+    setRepairMessage('');
+    try {
+      const response = await fetch(`/api/paystack/verify/${encodeURIComponent(refInput.trim())}`);
+      const data = await response.json();
+      if (response.ok && data && data.status === 'success') {
+        setVerifyResult(data);
+      } else {
+        alert(data.error || "Transaction verification failed or transaction not found on Paystack.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to communicate with the verification server: " + err.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleSyncLedger = async () => {
+    if (!verifyResult) return;
+    setRepairStatus('running');
+    try {
+      const metadata = verifyResult.metadata || {};
+      const amountPaid = verifyResult.amount / 100;
+      
+      // Determine what type of payment this was
+      const isSubscription = metadata.plan || (verifyResult.metadata && ('plan' in verifyResult.metadata));
+      const isMarketplace = metadata.type === 'marketplace_item' || (verifyResult.metadata && ('itemId' in verifyResult.metadata));
+      
+      const targetUserId = metadata.userId || (isAdminMode ? '' : currentProfile.uid); // Fallback to current user if missing in metadata
+      
+      if (!targetUserId && !isAdminMode) {
+        throw new Error("Could not determine user association. Metadata is missing target user UID.");
+      }
+
+      // Check if target user profile actually exists (or let admin specify if they want to override)
+      let resolvedUserId = targetUserId;
+      if (!resolvedUserId) {
+        // Prompt admin for User ID if missing from metadata
+        const inputUid = prompt("Enter the User UID (from Users Registry) to award this transaction to:");
+        if (!inputUid) {
+          throw new Error("Reconciliation cancelled: User UID is required to record the ledger entry.");
+        }
+        resolvedUserId = inputUid.trim();
+      }
+
+      if (isSubscription || (!isMarketplace && window.confirm("This appears to be a subscription/plan payment. Synchronize as a Subscription?"))) {
+        const activePlan = metadata.plan || 'basic_wash'; // default fallback
+        let creditsToAward = 0;
+        if (activePlan === 'basic_wash') creditsToAward = 2;
+        if (activePlan === 'premium_wash') creditsToAward = 5;
+        if (activePlan === 'unlimited_wash') creditsToAward = 16;
+        
+        // 1. Write the subscription document to firestore
+        const subId = `sub_${verifyResult.reference}`;
+        await setDoc(doc(db, 'subscriptions', subId), {
+          userId: resolvedUserId,
+          planId: activePlan,
+          providerRef: verifyResult.reference,
+          state: 'active',
+          amount: amountPaid,
+          timestamp: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+
+        // 2. Update User Profile
+        const userRef = doc(db, 'users', resolvedUserId);
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        
+        const updateData: any = { plan: activePlan };
+        if (creditsToAward > 0) {
+          updateData.credits = (userData.credits || 0) + creditsToAward;
+        }
+        await setDoc(userRef, updateData, { merge: true });
+
+        setRepairStatus('success');
+        setRepairMessage(`Subscription (${activePlan}) successfully synchronized & registered to User ID ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
+      } else {
+        // Marketplace item order
+        const itemId = metadata.itemId || 'unknown';
+        const itemName = metadata.itemName || 'Marketplace Accessory';
+        const businessId = metadata.businessId || '';
+        const ownerUid = metadata.ownerUid || '';
+
+        const orderId = `order_${verifyResult.reference}`;
+        await setDoc(doc(db, 'orders', orderId), {
+          userId: resolvedUserId,
+          itemId: itemId,
+          itemName: itemName,
+          amount: amountPaid,
+          status: 'completed',
+          paymentRef: verifyResult.reference,
+          businessId: businessId,
+          ownerId: ownerUid,
+          timestamp: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+
+        setRepairStatus('success');
+        setRepairMessage(`Marketplace order for "${itemName}" (₦${amountPaid.toLocaleString()}) successfully synchronized & registered to user ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setRepairStatus('error');
+      setRepairMessage(err.message || "Failed to finalize ledger synchronization.");
+    }
+  };
+
+  return (
+    <div className="bento-card bg-card border border-border p-6 md:p-8 space-y-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-left">
+      <div className="flex items-center gap-3">
+        <Activity className="text-accent" />
+        <h3 className="text-xl font-black text-text-main uppercase">Paystack Ledger Reconciliation</h3>
+      </div>
+      
+      <p className="text-text-dim text-xs lowercase leading-relaxed max-w-xl">
+        {isAdminMode 
+          ? "Manually query Paystack APIs for any reference code to verify, reconstruct, and synchronize missing transactions directly back into the live Firestore ledger."
+          : "Missing credit or plan activation? Enter your transaction reference code here. We will instantly query the payment gateway and activate your plan/order."
+        }
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input 
+          type="text" 
+          value={refInput}
+          onChange={(e) => setRefInput(e.target.value)}
+          placeholder="e.g., ORD-171923456789 or reference code..."
+          className="flex-1 bg-bg border border-border rounded-xl px-4 py-3 text-sm text-text-main font-mono outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+        />
+        <button
+          onClick={handleVerify}
+          disabled={verifying}
+          className="bg-accent text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition disabled:opacity-50"
+        >
+          {verifying ? "Querying API..." : "Verify Reference"}
+        </button>
+      </div>
+
+      {verifyResult && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="bg-accent/5 p-5 border border-accent/20 rounded-2xl space-y-4"
+        >
+          <div className="flex items-center justify-between border-b border-accent/10 pb-3">
+            <span className="text-xs font-black text-accent uppercase tracking-widest">Gateway Verified</span>
+            <span className="px-2.5 py-0.5 bg-success/20 text-success text-[9px] font-black uppercase rounded-full border border-success/20">
+              {verifyResult.gateway_response || 'Success'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <span className="text-[9px] text-text-dim uppercase tracking-wider block">Customer Mail</span>
+              <span className="font-bold text-text-main">{verifyResult.customer?.email}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-text-dim uppercase tracking-wider block">Verified Amount</span>
+              <span className="font-bold text-text-main font-mono">₦{(verifyResult.amount / 100).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-text-dim uppercase tracking-wider block">Reference Code</span>
+              <span className="font-bold text-text-main font-mono">{verifyResult.reference}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-text-dim uppercase tracking-wider block">Charge Created</span>
+              <span className="font-bold text-text-main">{verifyResult.paid_at ? new Date(verifyResult.paid_at).toLocaleString() : 'N/A'}</span>
+            </div>
+          </div>
+
+          {/* Metadata Insight */}
+          <div className="bg-bg p-3 rounded-xl border border-border text-[10px] space-y-1">
+            <div className="text-[9px] text-text-dim uppercase font-black tracking-widest mb-1">Payload Metadata</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-text-dim block">Associated UID:</span>
+                <span className="text-text-main font-mono truncate block">{verifyResult.metadata?.userId || 'None'}</span>
+              </div>
+              <div>
+                <span className="text-text-dim block">Detected Plan/Item:</span>
+                <span className="text-text-main font-bold block">{verifyResult.metadata?.plan || verifyResult.metadata?.itemName || 'Generic Payment'}</span>
+              </div>
+            </div>
+          </div>
+
+          {repairStatus === 'idle' && (
+            <button
+              onClick={handleSyncLedger}
+              className="w-full bg-success text-white py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 shadow-lg shadow-success/15"
+            >
+              <CheckCircle size={14} /> Sync & Inject into Ledger
+            </button>
+          )}
+
+          {repairStatus === 'running' && (
+            <div className="p-3 text-center text-xs font-black uppercase tracking-widest animate-pulse text-accent">
+              Writing to Cloud Ledger...
+            </div>
+          )}
+
+          {repairStatus === 'success' && (
+            <div className="p-3.5 bg-success/15 text-success border border-success/30 rounded-xl text-xs font-medium leading-relaxed">
+              <strong>✔ Ledger Synchronized:</strong> {repairMessage}
+            </div>
+          )}
+
+          {repairStatus === 'error' && (
+            <div className="p-3.5 bg-red-500/15 text-red-500 border border-red-500/30 rounded-xl text-xs font-medium leading-relaxed">
+              <strong>✕ Reconciliation Error:</strong> {repairMessage}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </div>
   );
 }
 
@@ -4998,6 +5235,10 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="mt-16 max-w-xl mx-auto">
+        <TransactionRepairPanel currentProfile={profile} isAdminMode={false} />
       </div>
 
       <div className="mt-20 text-center">

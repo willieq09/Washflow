@@ -136,7 +136,7 @@ service cloud.firestore {
 
     match /subscriptions/{id} {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow create: if isSignedIn() && (isOwner(incoming().userId) || isAdmin());
       allow update: if isAdmin();
     }
 
@@ -203,7 +203,7 @@ service cloud.firestore {
 
     match /orders/{id} {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || (isStationOwner() && resource.data.businessId == get(/databases/$(database)/documents/wash_businesses/$(request.auth.uid)).id));
-      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow create: if isSignedIn() && (isOwner(incoming().userId) || isAdmin());
       allow update: if isAdmin();
     }
   }
