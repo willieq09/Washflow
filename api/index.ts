@@ -106,7 +106,7 @@ function getOrigin(req: express.Request) {
 
 app.post("/api/paystack/initialize-order", async (req, res) => {
   try {
-    const { email, amount, itemId, itemName, userId } = req.body;
+    const { email, amount, itemId, itemName, userId, businessId, ownerUid } = req.body;
     const reference = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
     const origin = getOrigin(req);
@@ -117,7 +117,7 @@ app.post("/api/paystack/initialize-order", async (req, res) => {
       currency: "NGN",
       reference,
       callback_url: `${origin}/?paystack_success=true&order_type=item&item_id=${itemId}&ref=${reference}`,
-      metadata: { userId, itemId, itemName, type: 'marketplace_item' },
+      metadata: { userId, itemId, itemName, businessId, ownerUid, type: 'marketplace_item' },
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer']
     }, {
       headers: { 
@@ -218,6 +218,25 @@ app.post("/api/paystack/transfer", async (req, res) => {
     res.json(transferRes.data);
   } catch (error: any) {
     res.status(error.response?.status || 500).json({ error: error.message });
+  }
+});
+
+app.get("/api/paystack/verify/:reference", async (req, res) => {
+  try {
+    const { reference } = req.params;
+    if (!PAYSTACK_SECRET) return res.status(500).json({ error: "Secret missing" });
+    
+    const response = await axios.get(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` }
+    });
+    
+    if (response.data && response.data.status) {
+      res.json(response.data.data);
+    } else {
+      res.status(400).json({ error: response.data?.message || "Failed to verify transaction" });
+    }
+  } catch (error: any) {
+    res.status(error.response?.status || 500).json({ error: error.response?.data?.message || error.message });
   }
 });
 

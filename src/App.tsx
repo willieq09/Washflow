@@ -518,29 +518,98 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const success = params.get('success') || params.get('paystack_success');
+    const reference = params.get('ref') || params.get('reference');
     const plan = params.get('plan') as any;
+    const orderType = params.get('order_type');
     
-    if (success === 'true' && profile) {
-      if (plan) {
-        let creditsToAward = 0;
-        if (plan === 'basic_wash') creditsToAward = 2;
-        if (plan === 'premium_wash') creditsToAward = 5;
-        if (plan === 'unlimited_wash') creditsToAward = 16;
-
-        const updateData: any = { plan };
-        if (creditsToAward > 0) {
-          updateData.credits = (profile.credits || 0) + creditsToAward;
-        }
-
-        updateDoc(doc(db, 'users', profile.uid), updateData).then(() => {
-          setProfile(prev => prev ? { ...prev, ...updateData } : null);
-          window.history.replaceState({}, '', window.location.pathname);
-          alert(creditsToAward > 0 
-            ? `Successfully subscribed to ${plan}. ${creditsToAward} credits have been added to your dashboard.` 
-            : `Successfully upgraded to ${plan} plan.`
-          );
-        });
+    if (success === 'true' && reference && profile) {
+      const processedKey = `paystack_processed_${reference}`;
+      if (sessionStorage.getItem(processedKey)) {
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
       }
+      
+      sessionStorage.setItem(processedKey, 'pending');
+      
+      // Let's verify with backend
+      fetch(`/api/paystack/verify/${encodeURIComponent(reference)}`)
+        .then(res => res.json())
+        .then(async (verifyData) => {
+          if (verifyData && verifyData.status === 'success') {
+            const metadata = verifyData.metadata || {};
+            
+            // Check if it's a subscription or custom plan
+            if (plan || metadata.plan) {
+              const activePlan = plan || metadata.plan;
+              let creditsToAward = 0;
+              if (activePlan === 'basic_wash') creditsToAward = 2;
+              if (activePlan === 'premium_wash') creditsToAward = 5;
+              if (activePlan === 'unlimited_wash') creditsToAward = 16;
+              
+              const updateData: any = { plan: activePlan };
+              if (creditsToAward > 0) {
+                updateData.credits = (profile.credits || 0) + creditsToAward;
+              }
+              
+              // 1. Update User Profile
+              await updateDoc(doc(db, 'users', profile.uid), updateData);
+              setProfile(prev => prev ? { ...prev, ...updateData } : null);
+              
+              // 2. Log in Subscriptions collection
+              const subId = `sub_${reference}`;
+              await setDoc(doc(db, 'subscriptions', subId), {
+                userId: profile.uid,
+                planId: activePlan,
+                providerRef: reference,
+                state: 'active',
+                amount: verifyData.amount / 100,
+                timestamp: serverTimestamp(),
+                createdAt: serverTimestamp()
+              });
+              
+              sessionStorage.setItem(processedKey, 'done');
+              window.history.replaceState({}, '', window.location.pathname);
+              alert(creditsToAward > 0 
+                ? `Successfully subscribed to ${activePlan}. ${creditsToAward} credits have been added to your dashboard.` 
+                : `Successfully upgraded to ${activePlan} plan.`
+              );
+            } 
+            // Check if it's a marketplace item purchase
+            else if (orderType === 'item' || metadata.type === 'marketplace_item') {
+              const itemId = params.get('item_id') || metadata.itemId;
+              const itemName = metadata.itemName || 'Marketplace Item';
+              const businessId = metadata.businessId || '';
+              const ownerUid = metadata.ownerUid || '';
+              const amountPaid = verifyData.amount / 100;
+              
+              // 1. Create an Order in Firestore orders collection
+              const orderId = `order_${reference}`;
+              await setDoc(doc(db, 'orders', orderId), {
+                userId: profile.uid,
+                itemId: itemId || 'unknown',
+                itemName: itemName,
+                amount: amountPaid,
+                status: 'completed',
+                paymentRef: reference,
+                businessId: businessId,
+                ownerId: ownerUid,
+                timestamp: serverTimestamp(),
+                createdAt: serverTimestamp()
+              });
+              
+              sessionStorage.setItem(processedKey, 'done');
+              window.history.replaceState({}, '', window.location.pathname);
+              alert(`Successfully purchased ${itemName}! Your payment of ₦${amountPaid.toLocaleString()} was confirmed.`);
+            }
+          } else {
+            console.error("Paystack verification failed:", verifyData);
+            sessionStorage.removeItem(processedKey);
+          }
+        })
+        .catch(err => {
+          console.error("Error during Paystack verification:", err);
+          sessionStorage.removeItem(processedKey);
+        });
     }
   }, [profile]);
 
@@ -1815,39 +1884,54 @@ function AdminDashboardView() {
       const unsubWashes = onSnapshot(query(collection(db, 'washes')), (washSnap) => {
         const washes = washSnap.docs.map(d => d.data());
 
-        const owners = users.filter((u: any) => u.role === 'owner');
-        const workers = users.filter((u: any) => u.role === 'worker');
-        const customers = users.filter((u: any) => u.role === 'customer');
-        const allCars = customers.reduce((acc, curr: any) => acc + (curr.vehicles?.length || 0), 0);
-        
-        let totalMrr = 0;
-        owners.forEach((o: any) => {
-          if (o.plan === 'starter') totalMrr += 19;
-          if (o.plan === 'standard') totalMrr += 49;
-          if (o.plan === 'elite') totalMrr += 99;
-        });
-        customers.forEach((o: any) => {
-          if (o.plan === 'basic_wash') totalMrr += 15;
-          if (o.plan === 'premium_wash') totalMrr += 35;
-          if (o.plan === 'unlimited_wash') totalMrr += 75;
-        });
+        const unsubSubs = onSnapshot(query(collection(db, 'subscriptions')), (subsSnap) => {
+          const subs = subsSnap.docs.map(d => d.data());
 
-        const totalRevenue = washes.reduce((acc, curr: any) => acc + (curr.price || 0), 0);
+          const unsubOrders = onSnapshot(query(collection(db, 'orders')), (ordersSnap) => {
+            const orders = ordersSnap.docs.map(d => d.data());
 
-        const workerStats = workers.map((w: any) => {
-          const wWashes = washes.filter(wash => wash.workerId === w.uid);
-          return { name: w.name, count: wWashes.length, revenue: wWashes.reduce((a, b: any) => a + (b.price || 0), 0) };
-        }).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+            const owners = users.filter((u: any) => u.role === 'owner');
+            const workers = users.filter((u: any) => u.role === 'worker');
+            const customers = users.filter((u: any) => u.role === 'customer');
+            const allCars = customers.reduce((acc, curr: any) => acc + (curr.vehicles?.length || 0), 0);
+            
+            let totalMrr = 0;
+            owners.forEach((o: any) => {
+              if (o.plan === 'starter') totalMrr += 19;
+              if (o.plan === 'standard') totalMrr += 49;
+              if (o.plan === 'elite') totalMrr += 99;
+            });
+            customers.forEach((o: any) => {
+              if (o.plan === 'basic_wash') totalMrr += 15;
+              if (o.plan === 'premium_wash') totalMrr += 35;
+              if (o.plan === 'unlimited_wash') totalMrr += 75;
+            });
 
-        setStats({
-          mrr: totalMrr,
-          totalWasher: workers.length,
-          totalCars: allCars,
-          totalOwners: owners.length,
-          totalRevenue
+            // Sum up actual verified payments
+            const subRevenue = subs.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+            const orderRevenue = orders.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+            const washRevenue = washes.reduce((acc, curr: any) => acc + (curr.price || 0), 0);
+
+            const totalRevenue = washRevenue + subRevenue + orderRevenue;
+
+            const workerStats = workers.map((w: any) => {
+              const wWashes = washes.filter(wash => wash.workerId === w.uid);
+              return { name: w.name, count: wWashes.length, revenue: wWashes.reduce((a, b: any) => a + (b.price || 0), 0) };
+            }).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+
+            setStats({
+              mrr: totalMrr,
+              totalWasher: workers.length,
+              totalCars: allCars,
+              totalOwners: owners.length,
+              totalRevenue
+            });
+            setTopEntities({ owners: [], workers: workerStats });
+            setLoading(false);
+          });
+          return () => unsubOrders();
         });
-        setTopEntities({ owners: [], workers: workerStats });
-        setLoading(false);
+        return () => unsubSubs();
       });
       return () => unsubWashes();
     });
@@ -2701,6 +2785,8 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
     pendingEscrow: 0 
   });
   const [recentWashes, setRecentWashes] = useState<WashJob[]>([]);
+  const [ordersRevenue, setOrdersRevenue] = useState(0);
+  const [todayOrdersRevenue, setTodayOrdersRevenue] = useState(0);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [workers, setWorkers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2847,15 +2933,40 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
       setLoading(false); // First time bookings/washes load, we are ready
     });
 
+    // Sync Orders for Business Owner to include in Revenue
+    let unsubOrders = () => {};
+    if (profile.role === 'owner') {
+      const qOrders = query(collection(db, 'orders'), where('ownerId', '==', profile.uid));
+      unsubOrders = onSnapshot(qOrders, (orderSnap) => {
+        const orders = orderSnap.docs.map(d => d.data());
+        const total = orders.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+        setOrdersRevenue(total);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayOrders = orders.filter((o: any) => {
+          if (!o.timestamp) return true;
+          try {
+            return o.timestamp.toDate() >= today;
+          } catch (e) {
+            return true;
+          }
+        });
+        const todayTotal = todayOrders.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+        setTodayOrdersRevenue(todayTotal);
+      });
+    }
+
     return () => {
       unsubWashes();
       unsubBookings();
       unsubWithdrawals();
+      unsubOrders();
     };
   }, [profile]);
 
   // Combined stats calculation for balance
-  const availableBalance = stats.ownerRevenue - stats.totalWithdrawn;
+  const availableBalance = (stats.ownerRevenue + ordersRevenue) - stats.totalWithdrawn;
 
   useEffect(() => {
     if (profile.role === 'worker') {
@@ -2912,7 +3023,7 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
             <span className="text-[9px] md:text-[10px] font-black text-accent uppercase tracking-[0.2em]">
               {profile.role === 'worker' ? "Personal Unit Output" : "Live: Today's Revenue"}
             </span>
-            <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(stats.todayRevenue)}</div>
+            <div className="text-5xl md:text-6xl font-black mt-2 tracking-tighter text-text-main">{formatCurrency(stats.todayRevenue + todayOrdersRevenue)}</div>
             <p className="text-[10px] md:text-xs text-text-main mt-2 font-black">Synced from {stats.todayCount} service units completed today.</p>
           </div>
           <div className="mt-8 flex items-end gap-1.5 h-16">
@@ -3371,7 +3482,9 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
           amount: Math.round(item.price * 100),
           itemId: item.id,
           itemName: item.name,
-          userId: profile.uid
+          userId: profile.uid,
+          businessId: item.businessId || '',
+          ownerUid: item.ownerUid || ''
         })
       });
 

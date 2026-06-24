@@ -135,8 +135,9 @@ service cloud.firestore {
     }
 
     match /subscriptions/{id} {
-      allow read: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
-      allow write: if isAdmin();
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update: if isAdmin();
     }
 
     match /bookings/{id} {
