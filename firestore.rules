@@ -58,7 +58,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
-             (data.uid == request.auth.uid || isAdmin()) &&
+             (data.uid == request.auth.uid || isStationOwner() || isAdmin()) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && 
              data.role in ['owner', 'worker', 'customer', 'admin'] &&
@@ -107,7 +107,7 @@ service cloud.firestore {
         // Auto-provisioned workers on first login
         (incoming().role == 'worker' && exists(/databases/$(database)/documents/authorized_workers/$(incoming().email)))
       );
-      allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && 
+      allow update: if isSignedIn() && (isOwner(userId) || isStationOwner() || isAdmin()) && 
                     incoming().uid == existing().uid &&
                     (
                       incoming().role == existing().role || 
@@ -135,9 +135,9 @@ service cloud.firestore {
     }
 
     match /subscriptions/{id} {
-      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
-      allow create: if isSignedIn() && (isOwner(incoming().userId) || isAdmin());
-      allow update: if isAdmin();
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isStationOwner() || isAdmin());
+      allow create: if isSignedIn() && (isOwner(incoming().userId) || isStationOwner() || isAdmin());
+      allow update: if isStationOwner() || isAdmin();
     }
 
     match /bookings/{id} {
@@ -202,9 +202,9 @@ service cloud.firestore {
     }
 
     match /orders/{id} {
-      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || (isStationOwner() && resource.data.businessId == get(/databases/$(database)/documents/wash_businesses/$(request.auth.uid)).id));
-      allow create: if isSignedIn() && (isOwner(incoming().userId) || isAdmin());
-      allow update: if isAdmin();
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isStationOwner());
+      allow create: if isSignedIn() && (isOwner(incoming().userId) || isStationOwner() || isAdmin());
+      allow update: if isStationOwner() || isAdmin();
     }
   }
 }
