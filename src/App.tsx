@@ -2200,26 +2200,39 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
         
         // 1. Write the subscription document to firestore
         const subId = `sub_${verifyResult.reference}`;
-        await setDoc(doc(db, 'subscriptions', subId), {
-          userId: resolvedUserId,
-          planId: activePlan,
-          providerRef: verifyResult.reference,
-          state: 'active',
-          amount: amountPaid,
-          timestamp: serverTimestamp(),
-          createdAt: serverTimestamp()
-        });
+        try {
+          await setDoc(doc(db, 'subscriptions', subId), {
+            userId: resolvedUserId,
+            planId: activePlan,
+            providerRef: verifyResult.reference,
+            state: 'active',
+            amount: amountPaid,
+            timestamp: serverTimestamp(),
+            createdAt: serverTimestamp()
+          });
+        } catch (err: any) {
+          handleFirestoreError(err, OperationType.CREATE, `subscriptions/${subId}`);
+        }
 
         // 2. Update User Profile
         const userRef = doc(db, 'users', resolvedUserId);
-        const userDoc = await getDoc(userRef);
+        let userDoc;
+        try {
+          userDoc = await getDoc(userRef);
+        } catch (err: any) {
+          handleFirestoreError(err, OperationType.GET, `users/${resolvedUserId}`);
+        }
         const userData = userDoc.exists() ? userDoc.data() : {};
         
         const updateData: any = { plan: activePlan };
         if (creditsToAward > 0) {
           updateData.credits = (userData.credits || 0) + creditsToAward;
         }
-        await setDoc(userRef, updateData, { merge: true });
+        try {
+          await setDoc(userRef, updateData, { merge: true });
+        } catch (err: any) {
+          handleFirestoreError(err, OperationType.WRITE, `users/${resolvedUserId}`);
+        }
 
         setRepairStatus('success');
         setRepairMessage(`Subscription (${activePlan}) successfully synchronized & registered to User ID ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
@@ -2231,18 +2244,22 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
         const ownerUid = metadata.ownerUid || '';
 
         const orderId = `order_${verifyResult.reference}`;
-        await setDoc(doc(db, 'orders', orderId), {
-          userId: resolvedUserId,
-          itemId: itemId,
-          itemName: itemName,
-          amount: amountPaid,
-          status: 'completed',
-          paymentRef: verifyResult.reference,
-          businessId: businessId,
-          ownerId: ownerUid,
-          timestamp: serverTimestamp(),
-          createdAt: serverTimestamp()
-        });
+        try {
+          await setDoc(doc(db, 'orders', orderId), {
+            userId: resolvedUserId,
+            itemId: itemId,
+            itemName: itemName,
+            amount: amountPaid,
+            status: 'completed',
+            paymentRef: verifyResult.reference,
+            businessId: businessId,
+            ownerId: ownerUid,
+            timestamp: serverTimestamp(),
+            createdAt: serverTimestamp()
+          });
+        } catch (err: any) {
+          handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
+        }
 
         setRepairStatus('success');
         setRepairMessage(`Marketplace order for "${itemName}" (₦${amountPaid.toLocaleString()}) successfully synchronized & registered to user ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
@@ -2250,7 +2267,14 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
     } catch (err: any) {
       console.error(err);
       setRepairStatus('error');
-      setRepairMessage(err.message || "Failed to finalize ledger synchronization.");
+      let msg = err.message || "Failed to finalize ledger synchronization.";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) {
+          msg = `Firestore Permission Denied: ${parsed.error} on operation ${parsed.operationType} at path ${parsed.path}`;
+        }
+      } catch (e) {}
+      setRepairMessage(msg);
     }
   };
 
