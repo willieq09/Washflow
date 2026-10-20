@@ -28,7 +28,7 @@ import {
   doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, ChevronDown, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, ChevronDown, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail, Copy, ExternalLink, Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -161,6 +161,477 @@ interface Incentive {
   amount: number;
   reason: string;
   timestamp: Timestamp;
+}
+
+interface AppNotification {
+  id: string;
+  userId: string;
+  recipient: 'user' | 'admin' | 'all';
+  type: 'payment_confirmation' | 'booking' | 'system';
+  title: string;
+  message: string;
+  amount?: number;
+  reference?: string;
+  planId?: string;
+  itemName?: string;
+  customerEmail?: string;
+  customerName?: string;
+  read: boolean;
+  createdAt: any;
+}
+
+function playPaymentChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (e) {}
+}
+
+async function recordPaymentNotifications({
+  userId,
+  customerName,
+  customerEmail,
+  amount,
+  reference,
+  planId,
+  itemName,
+  creditsAwarded
+}: {
+  userId: string;
+  customerName?: string;
+  customerEmail?: string;
+  amount: number;
+  reference: string;
+  planId?: string;
+  itemName?: string;
+  creditsAwarded?: number;
+}) {
+  const planOrItem = planId 
+    ? (planId.replace(/_/g, ' ').toUpperCase() + ' PLAN')
+    : (itemName || 'PURCHASE');
+
+  const titleCustomer = `Payment Confirmed: ₦${amount.toLocaleString()}`;
+  const msgCustomer = `Your payment of ₦${amount.toLocaleString()} for ${planOrItem} was verified and confirmed. ${creditsAwarded ? `${creditsAwarded} wash credits added to your dashboard.` : ''} Ref: ${reference}`;
+
+  const titleAdmin = `New Payment: ₦${amount.toLocaleString()}`;
+  const msgAdmin = `${customerName || 'Customer'} (${customerEmail || 'No Email'}) paid ₦${amount.toLocaleString()} for ${planOrItem}. Ref: ${reference}`;
+
+  // 1. Notification for Customer
+  const custNotifId = `notif_cust_${reference}`;
+  try {
+    await setDoc(doc(db, 'notifications', custNotifId), {
+      userId,
+      recipient: 'user',
+      type: 'payment_confirmation',
+      title: titleCustomer,
+      message: msgCustomer,
+      amount,
+      reference,
+      planId: planId || '',
+      itemName: itemName || '',
+      customerEmail: customerEmail || '',
+      customerName: customerName || '',
+      read: false,
+      createdAt: serverTimestamp()
+    });
+  } catch (err: any) {
+    console.warn("Could not save customer notification:", err);
+  }
+
+  // 2. Notification for Admin
+  const adminNotifId = `notif_adm_${reference}`;
+  try {
+    await setDoc(doc(db, 'notifications', adminNotifId), {
+      userId,
+      recipient: 'admin',
+      type: 'payment_confirmation',
+      title: titleAdmin,
+      message: msgAdmin,
+      amount,
+      reference,
+      planId: planId || '',
+      itemName: itemName || '',
+      customerEmail: customerEmail || '',
+      customerName: customerName || '',
+      read: false,
+      createdAt: serverTimestamp()
+    });
+  } catch (err: any) {
+    console.warn("Could not save admin notification:", err);
+  }
+
+  // 3. Email notice if available
+  if (customerEmail) {
+    sendEmail({
+      to: customerEmail,
+      subject: `Payment Confirmed: ${planOrItem} - ₦${amount.toLocaleString()}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px;">
+          <h2 style="color: #0f172a; margin-bottom: 8px;">AutoLux Verified Receipt</h2>
+          <p style="color: #10b981; font-weight: bold; margin-top: 0;">✔ Payment Gateway Confirmed</p>
+          <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Customer:</strong> ${customerName || 'Valued Member'}</p>
+            <p style="margin: 4px 0;"><strong>Product / Tier:</strong> ${planOrItem}</p>
+            <p style="margin: 4px 0;"><strong>Amount Paid:</strong> ₦${amount.toLocaleString()}</p>
+            <p style="margin: 4px 0;"><strong>Paystack Reference:</strong> ${reference}</p>
+          </div>
+          <p style="font-size: 13px; color: #64748b;">Thank you for your transaction. Your account has been credited and configured.</p>
+        </div>
+      `
+    }).catch(e => console.warn("Email notice skip:", e));
+  }
+}
+
+function PaymentConfirmationModal({ 
+  data, 
+  onClose,
+  onViewReceipt 
+}: { 
+  data: {
+    isOpen: boolean;
+    amount: number;
+    reference: string;
+    planId?: string;
+    itemName?: string;
+    creditsAwarded?: number;
+    customerName?: string;
+    customerEmail?: string;
+  } | null;
+  onClose: () => void;
+  onViewReceipt: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!data || !data.isOpen) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(data.reference);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const planOrItemName = data.planId 
+    ? (data.planId.replace(/_/g, ' ').toUpperCase() + ' SUBSCRIPTION')
+    : (data.itemName || 'PURCHASE');
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={onClose}>
+      <motion.div 
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="bg-card border border-success/30 w-full max-w-md rounded-[2.5rem] p-8 text-center relative overflow-hidden shadow-2xl shadow-success/10"
+      >
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-success via-accent to-success animate-pulse" />
+        
+        <div className="w-20 h-20 bg-success/20 text-success rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-success/20 ring-8 ring-success/10">
+          <CheckCircle size={44} strokeWidth={2.5} className="animate-bounce" />
+        </div>
+
+        <span className="inline-block px-3 py-1 bg-success/10 text-success rounded-full text-[9px] font-black uppercase tracking-widest border border-success/20 mb-3">
+          Payment Confirmed
+        </span>
+
+        <h3 className="text-3xl font-black text-text-main uppercase tracking-tight mb-2">
+          {planOrItemName}
+        </h3>
+        <p className="text-text-dim text-xs font-medium mb-6">
+          Your payment was verified via Paystack and your account ledger has been updated.
+        </p>
+
+        <div className="bg-bg/60 border border-border rounded-2xl p-4 mb-6 space-y-3 text-left">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-text-dim uppercase text-[10px] font-bold">Amount Paid</span>
+            <span className="font-black text-success text-base font-mono">₦{data.amount.toLocaleString()}</span>
+          </div>
+          {data.creditsAwarded && data.creditsAwarded > 0 ? (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-text-dim uppercase text-[10px] font-bold">Wash Credits Added</span>
+              <span className="font-black text-accent text-sm">+{data.creditsAwarded} Credits</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between items-center text-xs pt-2 border-t border-border/50">
+            <span className="text-text-dim uppercase text-[10px] font-bold">Paystack Reference</span>
+            <button 
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 font-mono text-[10px] text-text-main bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-border transition-colors"
+              title="Click to copy"
+            >
+              <span>{data.reference.length > 20 ? `${data.reference.substring(0, 10)}...${data.reference.substring(data.reference.length - 8)}` : data.reference}</span>
+              {copied ? <Check size={12} className="text-success" /> : <Copy size={12} className="text-text-dim" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              onClose();
+              onViewReceipt();
+            }}
+            className="flex-1 py-4 bg-white/5 border border-border text-text-main rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition flex items-center justify-center gap-2"
+          >
+            <Receipt size={14} /> View Receipt
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-4 bg-accent text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 active:scale-95 transition shadow-xl shadow-accent/20"
+          >
+            Continue
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function DigitalReceiptModal({
+  isOpen,
+  onClose,
+  data
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  data: {
+    amount: number;
+    reference: string;
+    planId?: string;
+    itemName?: string;
+    customerName?: string;
+    customerEmail?: string;
+    date?: string;
+  } | null;
+}) {
+  if (!isOpen || !data) return null;
+
+  const planOrItemName = data.planId 
+    ? (data.planId.replace(/_/g, ' ').toUpperCase() + ' MEMBERSHIP')
+    : (data.itemName || 'MARKETPLACE ORDER');
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={onClose}>
+      <motion.div 
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-card border border-border w-full max-w-lg rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl text-text-main print:bg-white print:text-black print:max-w-full print:border-none"
+      >
+        <button 
+          onClick={onClose}
+          className="absolute top-6 right-6 p-2 text-text-dim hover:text-text-main transition-colors print:hidden"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
+            <Car size={20} />
+          </div>
+          <div>
+            <h4 className="text-lg font-black uppercase tracking-tight">AutoLux Digital Receipt</h4>
+            <span className="text-[10px] text-success font-black uppercase tracking-widest flex items-center gap-1">
+              <CheckCircle size={10} /> Payment Verified via Paystack
+            </span>
+          </div>
+        </div>
+
+        <div className="border-t border-b border-border py-4 mb-6 space-y-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-text-dim uppercase text-[10px]">Reference</span>
+            <span className="font-mono font-bold">{data.reference}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-text-dim uppercase text-[10px]">Date & Time</span>
+            <span className="font-medium">{data.date || new Date().toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-text-dim uppercase text-[10px]">Customer</span>
+            <span className="font-bold">{data.customerName || 'Account Holder'}</span>
+          </div>
+          {data.customerEmail && (
+            <div className="flex justify-between">
+              <span className="text-text-dim uppercase text-[10px]">Email</span>
+              <span className="font-medium font-mono text-text-dim">{data.customerEmail}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-bg/60 p-4 rounded-2xl mb-6 space-y-3">
+          <div className="flex justify-between text-sm font-bold">
+            <span>{planOrItemName}</span>
+            <span className="font-mono">₦{data.amount.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-[11px] text-text-dim">
+            <span>Platform Fee (7.5% Included)</span>
+            <span className="font-mono">₦{(data.amount * 0.075).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="pt-3 border-t border-border flex justify-between text-base font-black text-success">
+            <span>Total Paid</span>
+            <span className="font-mono">₦{data.amount.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3 print:hidden">
+          <button 
+            onClick={handlePrint}
+            className="flex-1 py-3.5 bg-white/5 border border-border rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition flex items-center justify-center gap-2"
+          >
+            <Receipt size={14} /> Print / Save PDF
+          </button>
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3.5 bg-accent text-white rounded-xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition shadow-lg shadow-accent/20"
+          >
+            Done
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function NotificationCenterDrawer({
+  isOpen,
+  onClose,
+  notifications,
+  onMarkAllRead,
+  onViewNotificationReceipt,
+  isAdmin = false
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  notifications: AppNotification[];
+  onMarkAllRead: () => void;
+  onViewNotificationReceipt: (notif: AppNotification) => void;
+  isAdmin?: boolean;
+}) {
+  if (!isOpen) return null;
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <motion.div 
+        onClick={(e) => e.stopPropagation()}
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="w-full max-w-md bg-card border-l border-border h-full flex flex-col p-6 shadow-2xl relative"
+      >
+        <div className="flex items-center justify-between pb-6 border-b border-border">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-accent/20 text-accent flex items-center justify-center">
+              <Bell size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-text-main uppercase tracking-tight text-lg">Notifications</h3>
+              <p className="text-[10px] text-text-dim uppercase tracking-widest">
+                {isAdmin ? 'System & Payment Gateway Feed' : 'Your Payment & Account Activity'}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-text-dim hover:text-text-main hover:bg-white/5 rounded-xl transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {unreadCount > 0 && (
+          <div className="py-3 flex items-center justify-between border-b border-border text-xs">
+            <span className="text-[10px] font-bold text-accent uppercase tracking-widest">
+              {unreadCount} Unread Alert{unreadCount > 1 ? 's' : ''}
+            </span>
+            <button 
+              onClick={onMarkAllRead}
+              className="text-[10px] font-black uppercase text-text-dim hover:text-accent tracking-widest transition-colors"
+            >
+              Mark all as read
+            </button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto py-4 space-y-3 custom-scrollbar">
+          {notifications.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6 border border-dashed border-border rounded-3xl my-8">
+              <Bell size={36} className="text-text-dim opacity-20 mb-3" />
+              <p className="text-text-main font-bold uppercase text-xs">No Notifications</p>
+              <p className="text-text-dim text-[11px] lowercase mt-1 max-w-xs">
+                {isAdmin 
+                  ? 'incoming payment confirmations will stream here in real time.' 
+                  : 'confirmed subscriptions and orders will reflect here automatically.'}
+              </p>
+            </div>
+          ) : (
+            notifications.map((n) => {
+              const dateStr = n.createdAt?.toDate 
+                ? n.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                : 'Just now';
+
+              return (
+                <div 
+                  key={n.id}
+                  onClick={() => onViewNotificationReceipt(n)}
+                  className={cn(
+                    "p-4 rounded-2xl border transition-all cursor-pointer group flex flex-col gap-2",
+                    !n.read 
+                      ? "bg-accent/5 border-accent/30 shadow-md shadow-accent/5" 
+                      : "bg-bg/60 border-border hover:border-text-dim/40"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-success/20 text-success flex items-center justify-center shrink-0">
+                        <CheckCircle size={14} />
+                      </div>
+                      <span className="font-black text-text-main uppercase text-xs leading-snug">
+                        {n.title}
+                      </span>
+                    </div>
+                    {n.amount && (
+                      <span className="font-black text-success text-xs font-mono whitespace-nowrap">
+                        ₦{n.amount.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-text-dim leading-relaxed line-clamp-2">
+                    {n.message}
+                  </p>
+
+                  <div className="flex items-center justify-between pt-1 text-[9px] text-text-dim font-mono border-t border-border/30">
+                    <span>{dateStr}</span>
+                    <span className="text-accent group-hover:underline flex items-center gap-1 font-sans font-bold uppercase text-[9px]">
+                      View Details <ChevronRight size={10} />
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
 }
 
 function FeedbackModal({ isOpen, onClose, userProfile }: { isOpen: boolean, onClose: () => void, userProfile: UserProfile }) {
@@ -377,6 +848,65 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSync, setPendingSync] = useState(0);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [paymentConfirmation, setPaymentConfirmation] = useState<{
+    isOpen: boolean;
+    amount: number;
+    reference: string;
+    planId?: string;
+    itemName?: string;
+    creditsAwarded?: number;
+    customerName?: string;
+    customerEmail?: string;
+  } | null>(null);
+  const [activeReceipt, setActiveReceipt] = useState<{
+    amount: number;
+    reference: string;
+    planId?: string;
+    itemName?: string;
+    customerName?: string;
+    customerEmail?: string;
+    date?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user || !profile) {
+      setNotifications([]);
+      return;
+    }
+
+    const isAdminUser = profile.role === 'admin' || (profile.email && ADMIN_EMAILS.includes(profile.email));
+    
+    const qNotif = isAdminUser
+      ? query(collection(db, 'notifications'), where('recipient', 'in', ['admin', 'all']))
+      : query(collection(db, 'notifications'), where('userId', '==', profile.uid));
+
+    const unsub = onSnapshot(qNotif, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppNotification));
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+      setNotifications(list);
+    }, (err) => console.warn("Notifications listener error:", err));
+
+    return () => unsub();
+  }, [user, profile?.uid, profile?.role, profile?.email]);
+
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
+  const handleMarkAllRead = async () => {
+    const unread = notifications.filter(n => !n.read);
+    for (const notif of unread) {
+      try {
+        await updateDoc(doc(db, 'notifications', notif.id), { read: true });
+      } catch (e) {
+        console.warn("Mark read error:", e);
+      }
+    }
+  };
 
   const rateJobId = new URLSearchParams(window.location.search).get('rate');
 
@@ -537,6 +1067,7 @@ export default function App() {
         .then(async (verifyData) => {
           if (verifyData && verifyData.status === 'success') {
             const metadata = verifyData.metadata || {};
+            const amountPaid = verifyData.amount / 100;
             
             // Check if it's a subscription or custom plan
             if (plan || metadata.plan) {
@@ -562,17 +1093,35 @@ export default function App() {
                 planId: activePlan,
                 providerRef: reference,
                 state: 'active',
-                amount: verifyData.amount / 100,
+                amount: amountPaid,
                 timestamp: serverTimestamp(),
                 createdAt: serverTimestamp()
               });
               
+              // 3. Record notifications for both customer and admin dashboards
+              await recordPaymentNotifications({
+                userId: profile.uid,
+                customerName: profile.name,
+                customerEmail: profile.email,
+                amount: amountPaid,
+                reference: reference,
+                planId: activePlan,
+                creditsAwarded: creditsToAward
+              });
+
+              playPaymentChime();
+              setPaymentConfirmation({
+                isOpen: true,
+                amount: amountPaid,
+                reference: reference,
+                planId: activePlan,
+                creditsAwarded: creditsToAward,
+                customerName: profile.name,
+                customerEmail: profile.email
+              });
+
               sessionStorage.setItem(processedKey, 'done');
               window.history.replaceState({}, '', window.location.pathname);
-              alert(creditsToAward > 0 
-                ? `Successfully subscribed to ${activePlan}. ${creditsToAward} credits have been added to your dashboard.` 
-                : `Successfully upgraded to ${activePlan} plan.`
-              );
             } 
             // Check if it's a marketplace item purchase
             else if (orderType === 'item' || metadata.type === 'marketplace_item') {
@@ -580,7 +1129,6 @@ export default function App() {
               const itemName = metadata.itemName || 'Marketplace Item';
               const businessId = metadata.businessId || '';
               const ownerUid = metadata.ownerUid || '';
-              const amountPaid = verifyData.amount / 100;
               
               // 1. Create an Order in Firestore orders collection
               const orderId = `order_${reference}`;
@@ -597,9 +1145,28 @@ export default function App() {
                 createdAt: serverTimestamp()
               });
               
+              // 2. Record notifications for customer and admin
+              await recordPaymentNotifications({
+                userId: profile.uid,
+                customerName: profile.name,
+                customerEmail: profile.email,
+                amount: amountPaid,
+                reference: reference,
+                itemName: itemName
+              });
+
+              playPaymentChime();
+              setPaymentConfirmation({
+                isOpen: true,
+                amount: amountPaid,
+                reference: reference,
+                itemName: itemName,
+                customerName: profile.name,
+                customerEmail: profile.email
+              });
+
               sessionStorage.setItem(processedKey, 'done');
               window.history.replaceState({}, '', window.location.pathname);
-              alert(`Successfully purchased ${itemName}! Your payment of ₦${amountPaid.toLocaleString()} was confirmed.`);
             }
           } else {
             console.error("Paystack verification failed:", verifyData);
@@ -927,12 +1494,26 @@ export default function App() {
             </div>
             <span className="font-bold text-text-main tracking-tight">AutoLux <span className="text-[7px] md:text-[8px] bg-accent/20 text-accent px-1.5 py-0.5 rounded ml-1 font-black uppercase tracking-widest border border-accent/10">BETA</span></span>
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 text-text-dim hover:text-text-main transition-colors"
-          >
-            <Menu size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsNotificationCenterOpen(true)}
+              className="relative p-2.5 text-text-dim hover:text-text-main hover:bg-white/5 rounded-xl transition-colors"
+              title="Payment & System Notifications"
+            >
+              <Bell size={20} className={cn(unreadNotificationsCount > 0 && "text-accent")} />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-accent text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse shadow-md shadow-accent/30">
+                  {unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-text-dim hover:text-text-main transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Sidebar Overlay */}
@@ -1032,6 +1613,13 @@ export default function App() {
                   )}
                 </>
               )}
+              <NavItem 
+                icon={<Bell size={20} />} 
+                label="Alerts & Feed" 
+                active={isNotificationCenterOpen} 
+                onClick={() => setIsNotificationCenterOpen(true)} 
+                badge={unreadNotificationsCount > 0 ? `${unreadNotificationsCount} NEW` : undefined} 
+              />
             </div>
           </div>
 
@@ -1067,10 +1655,68 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 md:pl-64">
+          {/* Top Bar for Desktop */}
+          <div className="hidden md:flex items-center justify-between pb-6 mb-6 border-b border-border/40">
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-black text-text-dim uppercase tracking-[0.2em]">
+                AutoLux OS &bull; <span className="text-text-main font-bold">{profile.businessName || profile.name}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-success/15 text-success border border-success/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" />
+                Live Gateway Sync
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsNotificationCenterOpen(true)}
+                className={cn(
+                  "relative flex items-center gap-2 px-4 py-2.5 rounded-2xl border transition-all text-xs font-black uppercase tracking-wider",
+                  unreadNotificationsCount > 0 
+                    ? "bg-accent/10 border-accent/40 text-accent shadow-lg shadow-accent/10 hover:bg-accent hover:text-white"
+                    : "bg-card border-border text-text-dim hover:text-text-main hover:border-text-dim/40"
+                )}
+              >
+                <Bell size={16} className={cn(unreadNotificationsCount > 0 && "animate-bounce")} />
+                <span>Alerts</span>
+                {unreadNotificationsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-accent text-white text-[9px] font-black">
+                    {unreadNotificationsCount} New
+                  </span>
+                )}
+              </button>
+
+              <button 
+                onClick={() => navigate('settings')}
+                className="flex items-center gap-2 px-3 py-2 bg-card border border-border hover:border-text-dim/40 rounded-2xl transition text-xs font-bold text-text-main"
+              >
+                <div className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[10px] font-black">
+                  {profile.name?.charAt(0) || 'U'}
+                </div>
+                <span className="capitalize">{profile.role}</span>
+              </button>
+            </div>
+          </div>
+
            <AnimatePresence mode="wait">
             {(view === 'dashboard' || view === 'admin') && profile && (
               profile.role === 'customer' 
-                ? <CustomerDashboardView key="customer-dash" profile={profile} navigate={navigate} />
+                ? <CustomerDashboardView 
+                    key="customer-dash" 
+                    profile={profile} 
+                    navigate={navigate} 
+                    onViewReceipt={(notif) => {
+                      setActiveReceipt({
+                        amount: notif.amount || 0,
+                        reference: notif.reference || '',
+                        planId: notif.planId,
+                        itemName: notif.itemName || notif.title,
+                        customerName: notif.customerName || profile.name,
+                        customerEmail: notif.customerEmail || profile.email,
+                        date: notif.createdAt?.toDate ? notif.createdAt.toDate().toLocaleString() : new Date().toLocaleString()
+                      });
+                    }}
+                  />
                 : (profile.role === 'admin' || view === 'admin')
                   ? <AdminDashboardView key="admin-dash" />
                   : <DashboardView key="owner-dash" profile={profile} navigate={navigate} onLogWash={(data) => {
@@ -1119,6 +1765,51 @@ export default function App() {
               userProfile={profile} 
             />
           )}
+
+          <NotificationCenterDrawer 
+            isOpen={isNotificationCenterOpen}
+            onClose={() => setIsNotificationCenterOpen(false)}
+            notifications={notifications}
+            onMarkAllRead={handleMarkAllRead}
+            onViewNotificationReceipt={(notif) => {
+              setActiveReceipt({
+                amount: notif.amount || 0,
+                reference: notif.reference || '',
+                planId: notif.planId,
+                itemName: notif.itemName || notif.title,
+                customerName: notif.customerName || profile.name,
+                customerEmail: notif.customerEmail || profile.email,
+                date: notif.createdAt?.toDate ? notif.createdAt.toDate().toLocaleString() : new Date().toLocaleString()
+              });
+              setIsNotificationCenterOpen(false);
+            }}
+            isAdmin={profile.role === 'admin' || (profile.email && ADMIN_EMAILS.includes(profile.email))}
+          />
+
+          <PaymentConfirmationModal 
+            data={paymentConfirmation}
+            onClose={() => setPaymentConfirmation(null)}
+            onViewReceipt={() => {
+              if (paymentConfirmation) {
+                setActiveReceipt({
+                  amount: paymentConfirmation.amount,
+                  reference: paymentConfirmation.reference,
+                  planId: paymentConfirmation.planId,
+                  itemName: paymentConfirmation.itemName,
+                  customerName: paymentConfirmation.customerName,
+                  customerEmail: paymentConfirmation.customerEmail,
+                  date: new Date().toLocaleString()
+                });
+              }
+              setPaymentConfirmation(null);
+            }}
+          />
+
+          <DigitalReceiptModal 
+            isOpen={activeReceipt !== null}
+            onClose={() => setActiveReceipt(null)}
+            data={activeReceipt}
+          />
 
           {/* Floating Feedback Trigger */}
           <button 
@@ -1876,6 +2567,9 @@ function AdminDashboardView() {
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [topEntities, setTopEntities] = useState<{ owners: any[], workers: any[] }>({ owners: [], workers: [] });
+  const [adminNotifications, setAdminNotifications] = useState<AppNotification[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<AppNotification | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
     const unsubUsers = onSnapshot(query(collection(db, 'users')), (usersSnap) => {
@@ -1940,12 +2634,45 @@ function AdminDashboardView() {
     const unsubW = onSnapshot(qW, (snap) => {
       setPendingWithdrawals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
+
+    const qNotif = query(collection(db, 'notifications'), where('recipient', '==', 'admin'));
+    const unsubNotif = onSnapshot(qNotif, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppNotification));
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+      setAdminNotifications(list);
+    }, (err) => console.warn("Admin notifications err:", err));
     
     return () => {
       unsubUsers();
       unsubW();
+      unsubNotif();
     };
   }, []);
+
+  const handleSimulatePayment = async () => {
+    setSimulating(true);
+    try {
+      const sampleRef = `SUB-basic_wash-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      await recordPaymentNotifications({
+        userId: auth.currentUser?.uid || 'simulated-user',
+        customerName: auth.currentUser?.displayName || 'Test Client',
+        customerEmail: auth.currentUser?.email || 'customer@autolux.ng',
+        amount: 2500,
+        reference: sampleRef,
+        planId: 'basic_wash',
+        creditsAwarded: 2
+      });
+      playPaymentChime();
+    } catch (e: any) {
+      console.error("Simulation error:", e);
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   const handleSettle = async (id: string) => {
     setSettlingId(id);
@@ -2002,10 +2729,133 @@ function AdminDashboardView() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-10 pb-20">
-      <header>
-        <h2 className="text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Console.</h2>
-        <p className="text-text-dim text-lg lowercase mt-2">Platform-wide operation health and mission control.</p>
+      <DigitalReceiptModal 
+        isOpen={selectedReceipt !== null}
+        onClose={() => setSelectedReceipt(null)}
+        data={selectedReceipt ? {
+          amount: selectedReceipt.amount || 0,
+          reference: selectedReceipt.reference || '',
+          planId: selectedReceipt.planId,
+          customerName: selectedReceipt.customerName,
+          customerEmail: selectedReceipt.customerEmail,
+          date: selectedReceipt.createdAt?.toDate ? selectedReceipt.createdAt.toDate().toLocaleString() : new Date().toLocaleString()
+        } : null}
+      />
+
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Console.</h2>
+          <p className="text-text-dim text-lg lowercase mt-2">Platform-wide operation health and mission control.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleSimulatePayment}
+            disabled={simulating}
+            className="bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 shadow-lg shadow-accent/5 disabled:opacity-50"
+          >
+            <Zap size={14} className={cn(simulating && "animate-spin")} />
+            {simulating ? "Transmitting..." : "Simulate Incoming Payment"}
+          </button>
+        </div>
       </header>
+      
+      {/* Live Verified Payment Stream & Notifications */}
+      <section className="bento-card border-success/30 bg-card relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-success/20 text-success flex items-center justify-center shadow-lg shadow-success/20">
+              <DollarSign size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-black text-text-main uppercase">Verified Payment Stream</h3>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-success/20 text-success border border-success/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" /> Live Gateway Sync
+                </span>
+              </div>
+              <p className="text-text-dim text-xs lowercase">Real-time Paystack transaction confirmations and customer payment notices.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {adminNotifications.length > 0 && (
+              <span className="bg-success text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md shadow-success/20">
+                {adminNotifications.length} Transactions Logged
+              </span>
+            )}
+          </div>
+        </div>
+
+        {adminNotifications.length === 0 ? (
+          <div className="p-12 text-center border border-dashed border-border rounded-2xl">
+            <DollarSign size={36} className="text-text-dim opacity-20 mx-auto mb-3" />
+            <p className="text-text-main font-bold uppercase text-xs tracking-wider">Awaiting Live Transactions</p>
+            <p className="text-text-dim text-xs mt-1 lowercase max-w-sm mx-auto">
+              When customers pay via Paystack or reconcile references, notifications and verified amounts reflect here instantaneously.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {adminNotifications.slice(0, 6).map((notif) => {
+              const timeAgo = notif.createdAt?.toDate 
+                ? notif.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                : 'Just now';
+
+              return (
+                <div 
+                  key={notif.id}
+                  className="bg-bg border border-border hover:border-success/40 p-5 rounded-2xl flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-success bg-success/10 px-2 py-0.5 rounded-md border border-success/20">
+                        <CheckCircle size={10} /> Confirmed
+                      </span>
+                      <span className="text-[10px] font-mono text-text-dim">{timeAgo}</span>
+                    </div>
+
+                    <div className="text-2xl font-black text-text-main font-mono mb-1">
+                      ₦{(notif.amount || 0).toLocaleString()}
+                    </div>
+
+                    <div className="text-xs font-black uppercase text-accent truncate mb-3">
+                      {notif.planId ? `${notif.planId.replace(/_/g, ' ')} plan` : 'Marketplace Item'}
+                    </div>
+
+                    <div className="bg-accent-dim p-3 rounded-xl border border-border/60 text-[10px] space-y-1.5 mb-4">
+                      <div className="flex justify-between">
+                        <span className="text-text-dim uppercase">Customer:</span>
+                        <span className="text-text-main font-bold truncate max-w-[140px]">{notif.customerName || 'Customer'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-dim uppercase">Email:</span>
+                        <span className="text-text-main font-mono truncate max-w-[140px]">{notif.customerEmail || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-dim uppercase">Ref Code:</span>
+                        <span className="text-text-main font-mono truncate max-w-[140px]">{notif.reference}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-border/50 text-[10px]">
+                    <div>
+                      <span className="text-text-dim uppercase font-bold block text-[8px]">Fee (7.5%):</span>
+                      <span className="font-mono text-success font-bold">₦{((notif.amount || 0) * 0.075).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedReceipt(notif)}
+                      className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-text-main rounded-lg font-black uppercase text-[9px] tracking-wider transition flex items-center gap-1 border border-border"
+                    >
+                      <Receipt size={12} /> Receipt
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
       
       {/* Withdrawal Queue */}
       <section className="bento-card border-accent/20 bg-accent/5">
@@ -2234,6 +3084,17 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
           handleFirestoreError(err, OperationType.WRITE, `users/${resolvedUserId}`);
         }
 
+        await recordPaymentNotifications({
+          userId: resolvedUserId,
+          customerName: userData.name || verifyResult.customer?.email?.split('@')[0] || 'Member',
+          customerEmail: verifyResult.customer?.email || userData.email || '',
+          amount: amountPaid,
+          reference: verifyResult.reference,
+          planId: activePlan,
+          creditsAwarded: creditsToAward
+        });
+        playPaymentChime();
+
         setRepairStatus('success');
         setRepairMessage(`Subscription (${activePlan}) successfully synchronized & registered to User ID ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
       } else {
@@ -2260,6 +3121,16 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
         } catch (err: any) {
           handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
         }
+
+        await recordPaymentNotifications({
+          userId: resolvedUserId,
+          customerName: verifyResult.customer?.email?.split('@')[0] || 'Customer',
+          customerEmail: verifyResult.customer?.email || '',
+          amount: amountPaid,
+          reference: verifyResult.reference,
+          itemName: itemName
+        });
+        playPaymentChime();
 
         setRepairStatus('success');
         setRepairMessage(`Marketplace order for "${itemName}" (₦${amountPaid.toLocaleString()}) successfully synchronized & registered to user ${resolvedUserId.substring(0,8)}. Ledgers updated!`);
@@ -2746,12 +3617,34 @@ function BookingModal({
   );
 }
 
-function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, navigate: (v: AppView) => void }) {
+function CustomerDashboardView({ profile, navigate, onViewReceipt }: { profile: UserProfile, navigate: (v: AppView) => void, onViewReceipt?: (notif: AppNotification) => void }) {
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [nearby, setNearby] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [selectedStation, setSelectedStation] = useState<Business | null>(null);
+  const [paymentNotifs, setPaymentNotifs] = useState<AppNotification[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<AppNotification | null>(null);
+
+  useEffect(() => {
+    if (!profile?.uid) return;
+    const qNotifs = query(
+      collection(db, 'notifications'),
+      where('userId', '==', profile.uid),
+      where('recipient', '==', 'user')
+    );
+    const unsub = onSnapshot(qNotifs, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppNotification));
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+      setPaymentNotifs(list);
+    }, (err) => console.warn("Customer payment notifs error:", err));
+
+    return () => unsub();
+  }, [profile?.uid]);
 
   useEffect(() => {
     // Attempt to get customer location
@@ -2850,6 +3743,8 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
     };
   }, [profile, location]);
 
+  const activeConfirmedPayment = paymentNotifs.find(n => !n.read) || (paymentNotifs.length > 0 ? paymentNotifs[0] : null);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto space-y-8 md:space-y-12 pb-12">
       <AnimatePresence>
@@ -2862,6 +3757,20 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
           />
         )}
       </AnimatePresence>
+
+      <DigitalReceiptModal 
+        isOpen={selectedReceipt !== null}
+        onClose={() => setSelectedReceipt(null)}
+        data={selectedReceipt ? {
+          amount: selectedReceipt.amount || 0,
+          reference: selectedReceipt.reference || '',
+          planId: selectedReceipt.planId,
+          customerName: profile.name,
+          customerEmail: profile.email,
+          date: selectedReceipt.createdAt?.toDate ? selectedReceipt.createdAt.toDate().toLocaleString() : new Date().toLocaleString()
+        } : null}
+      />
+
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Your Hub.</h2>
@@ -2894,6 +3803,66 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
           </div>
         </div>
       </header>
+
+      {/* Confirmed Payment Notification Banner */}
+      {activeConfirmedPayment && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card border-2 border-success/40 p-6 md:p-8 rounded-[2.5rem] relative overflow-hidden shadow-2xl shadow-success/10"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-5 text-success pointer-events-none">
+            <CheckCircle size={180} />
+          </div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="flex items-start gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-success/20 text-success flex items-center justify-center shrink-0 shadow-lg shadow-success/20 ring-4 ring-success/10">
+                <CheckCircle size={32} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-success/20 text-success border border-success/30">
+                    <span className="w-2 h-2 rounded-full bg-success animate-ping" /> Payment Confirmed
+                  </span>
+                  <span className="text-[10px] text-text-dim font-mono uppercase tracking-widest bg-white/5 px-2.5 py-0.5 rounded-full border border-border">
+                    Ref: {activeConfirmedPayment.reference || 'VERIFIED'}
+                  </span>
+                  {!activeConfirmedPayment.read && (
+                    <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-accent text-white tracking-widest">
+                      New
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-2xl md:text-3xl font-black text-text-main uppercase tracking-tight">
+                  {activeConfirmedPayment.title}
+                </h3>
+                <p className="text-text-dim text-xs mt-1.5 max-w-xl font-medium leading-relaxed">
+                  {activeConfirmedPayment.message}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <button 
+                onClick={() => setSelectedReceipt(activeConfirmedPayment)}
+                className="bg-text-main text-bg hover:bg-accent hover:text-white px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 shadow-lg"
+              >
+                <Receipt size={14} /> View Receipt
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    await updateDoc(doc(db, 'notifications', activeConfirmedPayment.id), { read: true });
+                  } catch (e) {}
+                }}
+                className="p-3.5 text-text-dim hover:text-text-main bg-white/5 hover:bg-white/10 rounded-xl transition"
+                title="Dismiss Banner"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Next Session */}
@@ -3028,6 +3997,85 @@ function CustomerDashboardView({ profile, navigate }: { profile: UserProfile, na
             <span className="text-[10px] font-black uppercase tracking-widest">Enlist Vehicle</span>
           </button>
         </div>
+      </section>
+
+      {/* Verified Payment History & Invoices */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Receipt className="text-accent" size={20} />
+            <h3 className="font-black text-text-main uppercase text-lg tracking-tight">Payment Receipts & Ledgers</h3>
+          </div>
+          {paymentNotifs.length > 0 && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-success bg-success/10 px-3 py-1 rounded-full border border-success/20">
+              {paymentNotifs.length} Verified Transaction{paymentNotifs.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {paymentNotifs.length === 0 ? (
+          <div className="p-8 border border-dashed border-border rounded-[2rem] text-center bg-card/30">
+            <Receipt size={32} className="text-text-dim opacity-20 mx-auto mb-2" />
+            <p className="text-text-main font-bold text-xs uppercase">No Payment Records Yet</p>
+            <p className="text-text-dim text-xs lowercase mt-1">
+              When you purchase wash credits, memberships, or marketplace items, your verified invoices will archive here automatically.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paymentNotifs.map((item) => {
+              const dateStr = item.createdAt?.toDate 
+                ? item.createdAt.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'Recent';
+
+              return (
+                <div 
+                  key={item.id}
+                  className="bg-card border border-border hover:border-accent/40 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-success bg-success/10 px-2 py-0.5 rounded-md border border-success/20">
+                        <CheckCircle size={10} /> Confirmed
+                      </span>
+                      <span className="text-[10px] font-mono text-text-dim">{dateStr}</span>
+                    </div>
+
+                    <div className="text-xl font-black text-text-main font-mono mb-1">
+                      ₦{(item.amount || 0).toLocaleString()}
+                    </div>
+
+                    <p className="text-xs font-black uppercase text-accent truncate mb-2">
+                      {item.planId ? `${item.planId.replace(/_/g, ' ')} Subscription` : (item.itemName || item.title)}
+                    </p>
+
+                    <p className="text-[11px] text-text-dim leading-snug line-clamp-2 mb-4 font-medium">
+                      {item.message}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-border/50 flex items-center justify-between">
+                    <span className="text-[9px] font-mono text-text-dim truncate max-w-[120px]">
+                      {item.reference}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        if (onViewReceipt) {
+                          onViewReceipt(item);
+                        } else {
+                          setSelectedReceipt(item);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-accent/10 hover:bg-accent hover:text-white text-accent rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center gap-1 border border-accent/20"
+                    >
+                      <Receipt size={12} /> Receipt
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </motion.div>
   );

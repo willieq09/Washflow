@@ -24,7 +24,8 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         getUserData().role == 'admin' || 
-        (request.auth.token.email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'] && request.auth.token.email_verified == true)
+        request.auth.token.email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'] ||
+        getUserData().email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com']
       );
     }
 
@@ -84,6 +85,23 @@ service cloud.firestore {
              data.status in ['pending', 'confirmed', 'completed', 'canceled'] &&
              data.vehicleInfo is string &&
              (data.createdAt == request.time || data.createdAt.toMillis() > 0);
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'type', 'title', 'message', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.type is string && data.type.size() <= 50 &&
+             data.title is string && data.title.size() <= 150 &&
+             data.message is string && data.message.size() <= 1000 &&
+             (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
+             (!('recipient' in data) || data.recipient in ['user', 'admin', 'all']) &&
+             (!('amount' in data) || data.amount is number) &&
+             (!('reference' in data) || (data.reference is string && data.reference.size() <= 128)) &&
+             (!('read' in data) || data.read is bool) &&
+             (!('planId' in data) || (data.planId is string && data.planId.size() <= 100)) &&
+             (!('itemName' in data) || (data.itemName is string && data.itemName.size() <= 150)) &&
+             (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 150)) &&
+             (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 150));
     }
 
 
@@ -205,6 +223,20 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isStationOwner());
       allow create: if isSignedIn() && (isOwner(incoming().userId) || isStationOwner() || isAdmin());
       allow update: if isStationOwner() || isAdmin();
+    }
+
+    match /notifications/{id} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.recipient == 'admin' || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isValidNotification(incoming());
+      allow update: if isSignedIn() && (
+        (resource.data.userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read'])) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

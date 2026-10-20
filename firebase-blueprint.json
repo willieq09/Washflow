@@ -206,6 +206,27 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["ownerId", "amount", "bankName", "accountNumber", "accountName", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Payment confirmations and system alerts for users and administrators.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "recipient": { "type": "string", "enum": ["user", "admin"] },
+        "type": { "type": "string", "enum": ["payment_confirmation", "booking", "system"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "amount": { "type": "number" },
+        "reference": { "type": "string" },
+        "read": { "type": "boolean" },
+        "planId": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "title", "message"]
     }
   },
   "firestore": {
@@ -220,6 +241,7 @@
     "/incentives/{id}": { "schema": "Incentive", "description": "Worker bonuses." },
     "/marketplace_items/{id}": { "schema": "MarketplaceItem", "description": "Product and services." },
     "/orders/{id}": { "schema": "Order", "description": "Transaction records." },
-    "/withdrawals/{id}": { "schema": "Withdrawal", "description": "Owner cash-out records." }
+    "/withdrawals/{id}": { "schema": "Withdrawal", "description": "Owner cash-out records." },
+    "/notifications/{id}": { "schema": "Notification", "description": "Payment confirmations and operational notifications." }
   }
 }
