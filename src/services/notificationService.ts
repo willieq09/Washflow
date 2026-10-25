@@ -1,3 +1,4 @@
+import { auth } from '../lib/firebase';
 
 export interface EmailPayload {
   to: string;
@@ -7,10 +8,14 @@ export interface EmailPayload {
 
 export async function sendEmail(payload: EmailPayload) {
   try {
+    // The server only sends emails for signed-in users, so include who we are.
+    const token = await auth.currentUser?.getIdToken().catch(() => null);
+    if (!token) return false;
     const response = await fetch('/api/notify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
     });

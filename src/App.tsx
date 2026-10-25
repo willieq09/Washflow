@@ -25,10 +25,11 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { 
-  doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData
+  doc, getDoc, getDocs, setDoc, collection, query, where, orderBy, onSnapshot, addDoc, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, Query, DocumentData, increment
 } from 'firebase/firestore';
 import { 
-  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, ChevronDown, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail, Copy, ExternalLink, Receipt
+  Car, CarFront, Truck, TrendingUp, Users, LogOut, Plus, Star, Award, ChevronRight, ChevronDown, Gauge, Briefcase, DollarSign, Check, CheckCircle, Share2, Filter, Calendar, ArrowUp, ArrowDown, X, Menu, Camera, RefreshCw, CreditCard, ShieldCheck, Zap, ShoppingBag, MapPin, Settings2, Info, Bell, Search, Heart, Store, Trash2, Sun, Moon, User, Activity, Image as ImageIcon, Phone, Sparkles, Mail, Copy, ExternalLink, Receipt,
+  QrCode,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -38,6 +39,11 @@ import { cn, formatCurrency, calculateDistance } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { sendEmail, generateBookingNotification } from './services/notificationService';
 import { TomTomMap } from './components/TomTomMap';
+import CheckInModal from './components/CheckInModal';
+import QRScanModal from './components/QRScanModal';
+import CheckInQRCard from './components/CheckInQRCard';
+import PayoutSetupCard from './components/PayoutSetupCard';
+import { apiFetch, PENDING_CHECKIN_KEY } from './lib/api';
 
 // --- Constants ---
 const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY || (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_TOMTOM_API_KEY) || '';
@@ -85,6 +91,7 @@ interface UserProfile {
     canAssignTasks?: boolean;
   };
   theme?: 'light' | 'dark';
+  payout?: { subaccountCode?: string; bankName?: string; accountName?: string; accountLast4?: string };
 }
 
 type AppView = 'dashboard' | 'log' | 'history' | 'performance' | 'billing' | 'marketplace' | 'my-cars' | 'settings' | 'subscription' | 'scanner' | 'business' | 'admin';
@@ -99,7 +106,8 @@ interface Booking {
   businessName: string;
   slot: Timestamp;
   status: 'pending' | 'confirmed' | 'completed' | 'canceled';
-  serviceType: 'in-station' | 'home-service';
+  serviceType: 'in-station' | 'home-service' | 'walk-in';
+  checkedInVia?: 'qr';
   price: number;
   createdAt: Timestamp;
   notes?: string;
@@ -908,6 +916,32 @@ export default function App() {
     }
   };
 
+  // QR check-in: a station's QR code opens the app at /?checkin=<businessId>.
+  // Remember it (so it survives the login screen) and clean up the URL.
+  const [pendingCheckIn, setPendingCheckIn] = useState<string | null>(() => {
+    try {
+      // New posters use ?c=<6-character code>; old posters use ?checkin=<station id>.
+      const search = new URLSearchParams(window.location.search);
+      const fromUrl = (search.get('c') || '').toUpperCase() || search.get('checkin');
+      if (fromUrl) {
+        localStorage.setItem(PENDING_CHECKIN_KEY, fromUrl);
+        const params = new URLSearchParams(window.location.search);
+        params.delete('checkin');
+        params.delete('c');
+        const rest = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
+        return fromUrl;
+      }
+      return localStorage.getItem(PENDING_CHECKIN_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const closeCheckIn = () => {
+    try { localStorage.removeItem(PENDING_CHECKIN_KEY); } catch {}
+    setPendingCheckIn(null);
+  };
+
   const rateJobId = new URLSearchParams(window.location.search).get('rate');
 
   useEffect(() => {
@@ -1045,140 +1079,60 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Paystack sends the customer back here after paying. The SERVER verifies
+  // the payment with Paystack and records it (credits, subscription, order);
+  // the browser only shows the result. This way nobody can award themselves
+  // credits by editing the URL or calling Firestore directly.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const success = params.get('success') || params.get('paystack_success');
     const reference = params.get('ref') || params.get('reference');
-    const plan = params.get('plan') as any;
-    const orderType = params.get('order_type');
-    
-    if (success === 'true' && reference && profile) {
-      const processedKey = `paystack_processed_${reference}`;
-      if (sessionStorage.getItem(processedKey)) {
-        window.history.replaceState({}, '', window.location.pathname);
-        return;
-      }
-      
-      sessionStorage.setItem(processedKey, 'pending');
-      
-      // Let's verify with backend
-      fetch(`/api/paystack/verify/${encodeURIComponent(reference)}`)
-        .then(res => res.json())
-        .then(async (verifyData) => {
-          if (verifyData && verifyData.status === 'success') {
-            const metadata = verifyData.metadata || {};
-            const amountPaid = verifyData.amount / 100;
-            
-            // Check if it's a subscription or custom plan
-            if (plan || metadata.plan) {
-              const activePlan = plan || metadata.plan;
-              let creditsToAward = 0;
-              if (activePlan === 'basic_wash') creditsToAward = 2;
-              if (activePlan === 'premium_wash') creditsToAward = 5;
-              if (activePlan === 'unlimited_wash') creditsToAward = 16;
-              
-              const updateData: any = { plan: activePlan };
-              if (creditsToAward > 0) {
-                updateData.credits = (profile.credits || 0) + creditsToAward;
-              }
-              
-              // 1. Update User Profile
-              await updateDoc(doc(db, 'users', profile.uid), updateData);
-              setProfile(prev => prev ? { ...prev, ...updateData } : null);
-              
-              // 2. Log in Subscriptions collection
-              const subId = `sub_${reference}`;
-              await setDoc(doc(db, 'subscriptions', subId), {
-                userId: profile.uid,
-                planId: activePlan,
-                providerRef: reference,
-                state: 'active',
-                amount: amountPaid,
-                timestamp: serverTimestamp(),
-                createdAt: serverTimestamp()
-              });
-              
-              // 3. Record notifications for both customer and admin dashboards
-              await recordPaymentNotifications({
-                userId: profile.uid,
-                customerName: profile.name,
-                customerEmail: profile.email,
-                amount: amountPaid,
-                reference: reference,
-                planId: activePlan,
-                creditsAwarded: creditsToAward
-              });
+    if (success !== 'true' || !reference || !profile) return;
 
-              playPaymentChime();
-              setPaymentConfirmation({
-                isOpen: true,
-                amount: amountPaid,
-                reference: reference,
-                planId: activePlan,
-                creditsAwarded: creditsToAward,
-                customerName: profile.name,
-                customerEmail: profile.email
-              });
-
-              sessionStorage.setItem(processedKey, 'done');
-              window.history.replaceState({}, '', window.location.pathname);
-            } 
-            // Check if it's a marketplace item purchase
-            else if (orderType === 'item' || metadata.type === 'marketplace_item') {
-              const itemId = params.get('item_id') || metadata.itemId;
-              const itemName = metadata.itemName || 'Marketplace Item';
-              const businessId = metadata.businessId || '';
-              const ownerUid = metadata.ownerUid || '';
-              
-              // 1. Create an Order in Firestore orders collection
-              const orderId = `order_${reference}`;
-              await setDoc(doc(db, 'orders', orderId), {
-                userId: profile.uid,
-                itemId: itemId || 'unknown',
-                itemName: itemName,
-                amount: amountPaid,
-                status: 'completed',
-                paymentRef: reference,
-                businessId: businessId,
-                ownerId: ownerUid,
-                timestamp: serverTimestamp(),
-                createdAt: serverTimestamp()
-              });
-              
-              // 2. Record notifications for customer and admin
-              await recordPaymentNotifications({
-                userId: profile.uid,
-                customerName: profile.name,
-                customerEmail: profile.email,
-                amount: amountPaid,
-                reference: reference,
-                itemName: itemName
-              });
-
-              playPaymentChime();
-              setPaymentConfirmation({
-                isOpen: true,
-                amount: amountPaid,
-                reference: reference,
-                itemName: itemName,
-                customerName: profile.name,
-                customerEmail: profile.email
-              });
-
-              sessionStorage.setItem(processedKey, 'done');
-              window.history.replaceState({}, '', window.location.pathname);
-            }
-          } else {
-            console.error("Paystack verification failed:", verifyData);
-            sessionStorage.removeItem(processedKey);
-          }
-        })
-        .catch(err => {
-          console.error("Error during Paystack verification:", err);
-          sessionStorage.removeItem(processedKey);
-        });
+    const processedKey = `paystack_processed_${reference}`;
+    if (sessionStorage.getItem(processedKey)) {
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
     }
-  }, [profile]);
+    sessionStorage.setItem(processedKey, 'pending');
+
+    apiFetch(`/api/paystack/verify/${encodeURIComponent(reference)}`)
+      .then(async (result: any) => {
+        window.history.replaceState({}, '', window.location.pathname);
+        if (result.status !== 'success') {
+          sessionStorage.removeItem(processedKey);
+          alert(`Payment not completed (Paystack status: ${result.status}). You were not charged.`);
+          return;
+        }
+        sessionStorage.setItem(processedKey, 'done');
+        if (!result.washflowFulfilled) {
+          alert(`Your payment was received (ref ${reference}) but could not be matched automatically. Please contact support with this reference.`);
+          return;
+        }
+        // Reload the profile so new credits / plan show immediately.
+        const fresh = await getDoc(doc(db, 'users', profile.uid));
+        if (fresh.exists()) setProfile(fresh.data() as UserProfile);
+
+        // Show the payment receipt (the server has already saved the payment
+        // and the notifications).
+        playPaymentChime();
+        setPaymentConfirmation({
+          isOpen: true,
+          amount: result.amount / 100,
+          reference,
+          ...(result.type === 'subscription'
+            ? { planId: result.plan, creditsAwarded: result.creditsAwarded }
+            : { itemName: result.itemName || 'Marketplace Item' }),
+          customerName: profile.name,
+          customerEmail: profile.email,
+        });
+      })
+      .catch((err) => {
+        console.error('Payment verification error:', err);
+        sessionStorage.removeItem(processedKey);
+        alert(`We could not confirm your payment yet: ${err.message}. If you were charged, it will be recorded automatically within a few minutes.`);
+      });
+  }, [profile?.uid]);
 
   useEffect(() => {
     if (profile?.theme === 'light') {
@@ -1705,6 +1659,10 @@ export default function App() {
                     key="customer-dash" 
                     profile={profile} 
                     navigate={navigate} 
+                    onCheckIn={(ref) => {
+                      try { localStorage.setItem(PENDING_CHECKIN_KEY, ref); } catch {}
+                      setPendingCheckIn(ref);
+                    }}
                     onViewReceipt={(notif) => {
                       setActiveReceipt({
                         amount: notif.amount || 0,
@@ -1757,6 +1715,10 @@ export default function App() {
               }} />
             )}
           </AnimatePresence>
+
+          {profile && pendingCheckIn && (
+            <CheckInModal businessId={pendingCheckIn} profile={profile} onClose={closeCheckIn} />
+          )}
 
           {profile && (
             <FeedbackModal 
@@ -2998,12 +2960,11 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
     setRepairStatus('idle');
     setRepairMessage('');
     try {
-      const response = await fetch(`/api/paystack/verify/${encodeURIComponent(refInput.trim())}`);
-      const data = await response.json();
-      if (response.ok && data && data.status === 'success') {
+      const data: any = await apiFetch(`/api/paystack/verify/${encodeURIComponent(refInput.trim())}`);
+      if (data && data.status === 'success') {
         setVerifyResult(data);
       } else {
-        alert(data.error || "Transaction verification failed or transaction not found on Paystack.");
+        alert(`Paystack reports this transaction as: ${data?.status || 'unknown'}.`);
       }
     } catch (err: any) {
       console.error(err);
@@ -3015,6 +2976,13 @@ function TransactionRepairPanel({ currentProfile, isAdminMode = false }: { curre
 
   const handleSyncLedger = async () => {
     if (!verifyResult) return;
+    // Payments started after the routing fix are recorded by the server the
+    // moment they are verified; never record them a second time here.
+    if (verifyResult.washflowFulfilled) {
+      setRepairStatus('success');
+      setRepairMessage('Already recorded automatically by the server. Nothing to repair.');
+      return;
+    }
     setRepairStatus('running');
     try {
       const metadata = verifyResult.metadata || {};
@@ -3617,7 +3585,8 @@ function BookingModal({
   );
 }
 
-function CustomerDashboardView({ profile, navigate, onViewReceipt }: { profile: UserProfile, navigate: (v: AppView) => void, onViewReceipt?: (notif: AppNotification) => void }) {
+function CustomerDashboardView({ profile, navigate, onViewReceipt, onCheckIn }: { profile: UserProfile, navigate: (v: AppView) => void, onViewReceipt?: (notif: AppNotification) => void, onCheckIn: (stationRef: string) => void }) {
+  const [scanOpen, setScanOpen] = useState(false);
   const [upcoming, setUpcoming] = useState<Booking[]>([]);
   const [nearby, setNearby] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3771,6 +3740,23 @@ function CustomerDashboardView({ profile, navigate, onViewReceipt }: { profile: 
         } : null}
       />
 
+      {scanOpen && (
+        <QRScanModal
+          onClose={() => setScanOpen(false)}
+          onFound={(ref) => { setScanOpen(false); onCheckIn(ref); }}
+        />
+      )}
+      {/* Check in at a station: works on every phone, even ones whose camera can't read QR codes */}
+      <button
+        onClick={() => setScanOpen(true)}
+        className="w-full bg-accent text-white rounded-[2rem] p-5 md:p-6 flex items-center gap-4 shadow-lg shadow-accent/20 hover:brightness-110 active:scale-[0.99] transition text-left"
+      >
+        <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0"><QrCode size={26} /></div>
+        <div className="flex-1">
+          <p className="font-black uppercase tracking-widest text-sm">Check in at a station</p>
+          <p className="text-xs opacity-80 font-bold">At the car wash? Scan its QR code or type its code to join the queue.</p>
+        </div>
+      </button>
       <header className="flex flex-col md:flex-row md:justify-between md:items-end gap-6">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-text-main tracking-tighter uppercase leading-none">Your Hub.</h2>
@@ -4215,9 +4201,9 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
     const qBookings = query(
       collection(db, 'bookings'),
       where('stationId', '==', stationId),
-      where('status', '==', 'pending'),
+      where('status', 'in', ['pending', 'confirmed']),
       orderBy('slot', 'asc'),
-      limit(10)
+      limit(25)
     );
     const unsubBookings = onSnapshot(qBookings, (snap) => {
       let bookings = snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking));
@@ -4248,7 +4234,12 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
       const qOrders = query(collection(db, 'orders'), where('ownerId', '==', profile.uid));
       unsubOrders = onSnapshot(qOrders, (orderSnap) => {
         const orders = orderSnap.docs.map(d => d.data());
-        const total = orders.reduce((acc, curr: any) => acc + (curr.amount || 0), 0);
+        // Orders with routed: true were already split by Paystack and paid
+        // straight into the owner's bank, so they are not withdrawable here.
+        // Older un-routed orders: the owner is owed their share (minus fee).
+        const total = orders
+          .filter((o: any) => !o.routed)
+          .reduce((acc, curr: any) => acc + (curr.ownerShare ?? (curr.amount || 0) * (1 - COMMISSION_RATE)), 0);
         setOrdersRevenue(total);
 
         const today = new Date();
@@ -4478,6 +4469,9 @@ function DashboardView({ profile, navigate, onLogWash }: { profile: UserProfile,
                    </div>
                    <div>
                      <p className="font-black text-sm text-text-main tracking-tight uppercase">{booking.vehicleInfo || 'Service Request'}</p>
+                     {booking.checkedInVia === 'qr' && (
+                       <span className="inline-block text-[8px] font-black uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded mt-1">QR walk-in · on site</span>
+                     )}
                      <p className="text-[10px] font-black uppercase text-text-main tracking-widest opacity-70">
                        Slot: {booking.slot.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                      </p>
@@ -4783,30 +4777,13 @@ function MarketplaceView({ profile, navigate }: { profile: UserProfile, navigate
     }
     setBuying(item.id);
     try {
-      const response = await fetch('/api/paystack/initialize-order', {
+      // The server looks up the real price and the seller's payout account,
+      // so the browser only says WHICH item is being bought.
+      const responseData: any = await apiFetch('/api/paystack/initialize-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: profile.email,
-          amount: Math.round(item.price * 100),
-          itemId: item.id,
-          itemName: item.name,
-          userId: profile.uid,
-          businessId: item.businessId || '',
-          ownerUid: item.ownerUid || ''
-        })
+        body: JSON.stringify({ itemId: item.id })
       });
 
-      const contentType = response.headers.get("content-type");
-      let responseData: any;
-      if (contentType && contentType.includes("application/json")) {
-        responseData = await response.json();
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-
-      if (!response.ok) throw new Error(responseData.error || responseData.message || "Failed to initialize checkout.");
       if (!responseData.authorization_url) throw new Error("No authorization URL received.");
       
       // Use top.location to escape the AI Studio iframe for payments
@@ -6052,37 +6029,11 @@ function SubscriptionView({ profile }: { profile: UserProfile }) {
     setLoading(plan);
     setError(null);
     try {
-      const prices: Record<string, number> = {
-        'starter': 1900000, 'standard': 4900000, 'elite': 9900000,
-        'basic_wash': 250000, 'premium_wash': 1000000, 'unlimited_wash': 4800000
-      };
-
-      const requestedAmount = prices[plan];
-      if (!requestedAmount) throw new Error(`Unknown plan: ${plan}`);
-
-      const response = await fetch('/api/paystack/initialize', {
+      // Plan prices are defined on the server (server/app.ts, PLAN_PRICES_KOBO).
+      const data: any = await apiFetch('/api/paystack/initialize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan,
-          email: profile.email,
-          amount: requestedAmount,
-          userId: profile.uid
-        })
+        body: JSON.stringify({ plan })
       });
-
-      const contentType = response.headers.get("content-type");
-      let data: any;
-      if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
-        const rawText = await response.text();
-        throw new Error(`Server error (${response.status}): ${rawText.substring(0, 100)}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || `Payment initialization failed (${response.status})`);
-      }
 
       if (data && data.authorization_url) {
         // Redirect current window to checkout
@@ -6558,31 +6509,25 @@ function LogWashForm({ profile, onComplete, navigate, preFill }: { profile: User
       let washPrice = parseFloat(form.price);
       let usedCredit = false;
 
-      // Attempt to find customer and deduct credit
-      let customerId = foundCustomer?.id || null;
-      
-      if (!customerId) {
-        const customerQuery = query(collection(db, 'users'), where('role', '==', 'customer'));
-        const customerSnapshot = await getDocs(customerQuery);
-        const customerDoc = customerSnapshot.docs.find(d => {
-          const vehicles = d.data().vehicles || [];
-          return vehicles.some((v: any) => v.plate?.toUpperCase() === form.plateNumber.toUpperCase());
-        });
-        if (customerDoc) {
-          customerId = customerDoc.id;
-        }
-      }
+      // Who is the customer? A booking (QR walk-in or scheduled) already
+      // knows; otherwise use the phone-number lookup done in the form.
+      let customerId: string | null = bookingTarget?.userId || foundCustomer?.id || null;
 
       if (customerId) {
         const cRef = doc(db, 'users', customerId);
-        const cSnap = await getDoc(cRef);
-        const customerData = cSnap.data();
-        if (customerData && customerData.credits > 0) {
-          await updateDoc(cRef, { 
-            credits: customerData.credits - 1 
-          });
-          usedCredit = true;
-          washPrice = 0; // Credit covers it
+        try {
+          const cSnap = await getDoc(cRef);
+          const customerData = cSnap.data();
+          if (customerData && (customerData.credits || 0) > 0) {
+            // increment(-1) is atomic, and firestore.rules only allow staff
+            // to take off exactly one credit.
+            await updateDoc(cRef, { credits: increment(-1) });
+            usedCredit = true;
+            washPrice = 0; // Credit covers it
+          }
+        } catch (creditErr) {
+          // Never block the check-in because of credits; charge normally.
+          console.warn('Could not apply wash credit:', creditErr);
         }
       }
 
@@ -8115,6 +8060,17 @@ function SettingsView({ profile, onUpdate, tomtomKey }: { profile: UserProfile, 
             {loading ? "COMMITTING..." : "COMMIT SETTINGS"}
           </button>
         </div>
+
+        {/* QR check-in + payout routing - Only for Owners */}
+        {profile.role === 'owner' && (
+          <>
+            <CheckInQRCard ownerUid={profile.uid} />
+            <PayoutSetupCard
+              payout={profile.payout}
+              onSaved={(payout) => onUpdate({ ...profile, payout })}
+            />
+          </>
+        )}
 
         {/* Team Delegation - Only for Owners */}
         {profile.role === 'owner' && (

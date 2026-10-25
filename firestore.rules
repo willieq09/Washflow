@@ -7,6 +7,23 @@ service cloud.firestore {
     }
 
     // --- Helper Functions ---
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'type', 'title', 'message', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.type is string && data.type.size() <= 50 &&
+             data.title is string && data.title.size() <= 150 &&
+             data.message is string && data.message.size() <= 1000 &&
+             (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
+             (!('recipient' in data) || data.recipient in ['user', 'admin', 'all']) &&
+             (!('amount' in data) || data.amount is number) &&
+             (!('reference' in data) || (data.reference is string && data.reference.size() <= 128)) &&
+             (!('read' in data) || data.read is bool) &&
+             (!('planId' in data) || (data.planId is string && data.planId.size() <= 100)) &&
+             (!('itemName' in data) || (data.itemName is string && data.itemName.size() <= 150)) &&
+             (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 150)) &&
+             (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 150));
+    }
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -24,8 +41,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         getUserData().role == 'admin' || 
-        request.auth.token.email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'] ||
-        getUserData().email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com']
+        (request.auth.token.email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'] && request.auth.token.email_verified == true)
       );
     }
 
@@ -87,23 +103,6 @@ service cloud.firestore {
              (data.createdAt == request.time || data.createdAt.toMillis() > 0);
     }
 
-    function isValidNotification(data) {
-      return data.keys().hasAll(['userId', 'type', 'title', 'message', 'createdAt']) &&
-             data.userId is string && data.userId.size() <= 128 &&
-             data.type is string && data.type.size() <= 50 &&
-             data.title is string && data.title.size() <= 150 &&
-             data.message is string && data.message.size() <= 1000 &&
-             (data.createdAt == request.time || data.createdAt.toMillis() > 0) &&
-             (!('recipient' in data) || data.recipient in ['user', 'admin', 'all']) &&
-             (!('amount' in data) || data.amount is number) &&
-             (!('reference' in data) || (data.reference is string && data.reference.size() <= 128)) &&
-             (!('read' in data) || data.read is bool) &&
-             (!('planId' in data) || (data.planId is string && data.planId.size() <= 100)) &&
-             (!('itemName' in data) || (data.itemName is string && data.itemName.size() <= 150)) &&
-             (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 150)) &&
-             (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 150));
-    }
-
 
     // --- Match Blocks ---
 
@@ -120,18 +119,46 @@ service cloud.firestore {
         (isWorker() && resource.data.stationId == getUserData().stationId) ||
         (resource == null || resource.data.phone != null) 
       );
-      allow create: if isSignedIn() && (
-        (isOwner(userId) && isValidUser(incoming())) ||
-        // Auto-provisioned workers on first login
-        (incoming().role == 'worker' && exists(/databases/$(database)/documents/authorized_workers/$(incoming().email)))
+      allow create: if isSignedIn() && isOwner(userId) && (
+        // Normal sign-up: customers and station owners only. Nobody can make
+        // themselves an admin or attach themselves to a station.
+        (isValidUser(incoming()) && incoming().role in ['owner', 'customer'] &&
+          (!('stationId' in incoming()) || incoming().stationId == null)) ||
+        // Admin accounts only for the verified admin emails.
+        (isValidUser(incoming()) && incoming().role == 'admin' &&
+          request.auth.token.email in ['oumawillis09@gmail.com', 'autoluxadmin02@gmail.com'] &&
+          request.auth.token.email_verified == true) ||
+        // Auto-provisioned workers on first login, bound to the station that invited them.
+        (incoming().role == 'worker' &&
+          exists(/databases/$(database)/documents/authorized_workers/$(incoming().email)) &&
+          incoming().stationId == get(/databases/$(database)/documents/authorized_workers/$(incoming().email)).data.stationId)
       );
-      allow update: if isSignedIn() && (isOwner(userId) || isStationOwner() || isAdmin()) && 
-                    incoming().uid == existing().uid &&
-                    (
-                      incoming().role == existing().role || 
-                      (incoming().role == 'worker' && exists(/databases/$(database)/documents/authorized_workers/$(incoming().email)))
-                    ) &&
-                    isValidUser(incoming());
+      // Staff can look up a single customer by ID during check-in.
+      allow get: if isSignedIn() && (isWorker() || isStationOwner());
+
+      // A user editing their own profile, or an owner editing their own staff.
+      // Money fields (credits, plan, payout) can ONLY be changed by the server
+      // (Admin SDK) or an admin, never from a browser.
+      allow update: if isSignedIn() && (
+                      isAdmin() ||
+                      (
+                        (isOwner(userId) || (isStationOwner() && existing().stationId == request.auth.uid)) &&
+                        !incoming().diff(existing()).affectedKeys().hasAny(['credits', 'plan', 'payout']) &&
+                        incoming().uid == existing().uid &&
+                        (
+                          incoming().role == existing().role ||
+                          (incoming().role == 'worker' && exists(/databases/$(database)/documents/authorized_workers/$(incoming().email)))
+                        ) &&
+                        isValidUser(incoming())
+                      ) ||
+                      // Station staff may use exactly ONE wash credit when logging a wash.
+                      (
+                        (isWorker() || isStationOwner()) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['credits']) &&
+                        existing().credits is number && existing().credits > 0 &&
+                        incoming().credits == existing().credits - 1
+                      )
+                    );
     }
 
     match /authorized_workers/{id} {
@@ -153,9 +180,9 @@ service cloud.firestore {
     }
 
     match /subscriptions/{id} {
-      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isStationOwner() || isAdmin());
-      allow create: if isSignedIn() && (isOwner(incoming().userId) || isStationOwner() || isAdmin());
-      allow update: if isStationOwner() || isAdmin();
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+      // Created by the server after Paystack confirms payment.
+      allow create, update: if isAdmin();
     }
 
     match /bookings/{id} {
@@ -171,7 +198,11 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         isAdmin() || 
-        (isWorker() && resource.data.stationId == getUserData().stationId && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'workerId'])) ||
+        // Workers can accept a job (confirmed, assigned to themselves) or complete it.
+        (isWorker() && resource.data.stationId == getUserData().stationId &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'workerId']) &&
+          (incoming().status == 'completed' ||
+           (incoming().status == 'confirmed' && incoming().workerId == request.auth.uid))) ||
         (isOwner(existing().userId) && incoming().status == 'canceled' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         (isStationOwner() && resource.data.stationId == request.auth.uid)
       );
@@ -209,8 +240,10 @@ service cloud.firestore {
       allow create: if isSignedIn() && isOwner(incoming().ownerId) && 
                     incoming().keys().hasAll(['ownerId', 'amount', 'bankName', 'status', 'timestamp']) &&
                     incoming().amount is number && incoming().amount > 0 &&
-                    incoming().status == 'processed' &&
+                    incoming().status == 'pending' &&
                     incoming().timestamp == request.time;
+      // Admin marks a request as paid from the Withdrawal Settlement Queue.
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -220,23 +253,32 @@ service cloud.firestore {
     }
 
     match /orders/{id} {
-      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isStationOwner());
-      allow create: if isSignedIn() && (isOwner(incoming().userId) || isStationOwner() || isAdmin());
-      allow update: if isStationOwner() || isAdmin();
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || isAdmin() ||
+        (isStationOwner() && resource.data.ownerId == request.auth.uid)
+      );
+      // Created by the server after Paystack confirms payment.
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isStationOwner() && resource.data.ownerId == request.auth.uid &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['status']));
     }
 
+    // Payment confirmations and alerts. Payment notifications are written by
+    // the server when Paystack confirms a payment; admins may also create them
+    // (Transaction Repair, Simulate Payment). Users can only mark their own as read.
     match /notifications/{id} {
-      allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid || 
-        resource.data.recipient == 'admin' || 
-        isAdmin()
-      );
-      allow create: if isSignedIn() && isValidNotification(incoming());
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() && isValidNotification(incoming());
       allow update: if isSignedIn() && (
-        (resource.data.userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read'])) ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read']))
       );
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Payment intents: server only (Admin SDK). No browser access at all.
+    match /payments/{id} {
+      allow read, write: if false;
     }
   }
 }
